@@ -14,18 +14,11 @@ Including another URLconf
     2. Add a URL to urlpatterns:  url(r'^blog/', include('blog.urls'))
 """
 from django.conf.urls import url
-from django.contrib import admin
-from django.views.generic import TemplateView
-from django.conf.urls import include
-from data import urls as data_urls
-from workspace import urls as workspace_urls
-from tools import urls as tool_urls
+from views import *
+
 
 urlpatterns = [
-    url(r'^admin/', admin.site.urls),
-    url(r'^$', TemplateView.as_view(template_name="tools/tool_detail.html"), name="home"),
-    url(r'^documentation$', TemplateView.as_view(template_name="documentation.html"), name="documentation"),
-    url(r'^tools/', include(tool_urls)),
-    url(r'^data/', include(data_urls)),
-    url(r'^workspace/', include(workspace_urls)),
+    url(r'^history/(?P<history_id>[\w-]+)$', HistoryDetailView.as_view(), name="history_detail"),
+
+
 ]

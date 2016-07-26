@@ -14,18 +14,12 @@ Including another URLconf
     2. Add a URL to urlpatterns:  url(r'^blog/', include('blog.urls'))
 """
 from django.conf.urls import url
-from django.contrib import admin
-from django.views.generic import TemplateView
-from django.conf.urls import include
-from data import urls as data_urls
-from workspace import urls as workspace_urls
-from tools import urls as tool_urls
+from views import *
 
 urlpatterns = [
-    url(r'^admin/', admin.site.urls),
-    url(r'^$', TemplateView.as_view(template_name="tools/tool_detail.html"), name="home"),
-    url(r'^documentation$', TemplateView.as_view(template_name="documentation.html"), name="documentation"),
-    url(r'^tools/', include(tool_urls)),
-    url(r'^data/', include(data_urls)),
-    url(r'^workspace/', include(workspace_urls)),
+    url(r'^upload/$', UploadView.as_view(), name='upload'),
+
+    url(r'^display/(?P<file_id>[\w-]+)$', display_file, name="display_file"),
+    url(r'^download/(?P<file_id>[\w-]+)$', download_file, name="download_file"),
+    url(r'^export/(?P<file_id>[\w-]+)$', export_file, name="export_file"),
 ]

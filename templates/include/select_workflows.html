@@ -1,0 +1,74 @@
+<script type='text/javascript'>
+    function hide_desc(wk_id) {
+        var list = document.getElementsByName("comments");
+        for (i = 0; i < list.length; i++) {
+            if ('desc_' + wk_id == list[i].id) {
+                list[i].style.display = 'inline';
+            }
+            else {
+                list[i].style.display = 'none';
+            }
+        }
+    }
+
+    function create_field(nb) {
+
+        var inputs = document.getElementById('select_input');
+        var insert = document.getElementById("insert");
+        insert.innerHTML = ' ';
+        insert.appendChild(inputs);
+
+        for (i = 2; i <= nb; i++) {
+            clone = inputs.cloneNode(true);
+            clone.children[0].innerHTML = "Input " + i
+            clone.children[1].id = "input_" + i;
+            insert.appendChild(clone);
+        }
+    }
+
+</script>
+<div class="form-group">
+    <label for="select_workflow">Select your workflow:</label>
+    <select id="select_workflow" name="workflow_id" class="form-control"
+            onchange="create_field(select.options[this.selectedIndex].getAttribute('nb_input')); hide_desc(this.value);"
+            form="wklaunchform">
+        {% for workflow in workflows %}
+            {% if not workflow.err %}
+                <option nb_input='{{ workflow.nb_input }}' value='{{ workflow.id }}'> {{ workflow.name }}</option>
+            {% endif %}
+        {% endfor %}
+    </select>
+</div>
+<div class="center-block"">
+<p>
+    {% for workflow in workflows %}
+        <span name="comments" id="desc_{{ workflow.id }}"> {{ workflow.comments }} </span>
+    {% endfor %}
+</p>
+</div>
+<div class="form-group">
+    <label>Select workflow's input(s):</label>
+    <div id="insert">
+        <div id="select_input" class="input-group">
+            <div class="input-group-addon">Input 1</div>
+            <select id="input_1" name="inputs" class="form-control" form="wklaunchform">
+                {% for file in history_content %}
+                    <option value={{ file.id }}>{{ file.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+</div>
+<form id='wklaunchform' action="{% url 'launch_workflow' %}" method="post"
+      onsubmit="this.launch_workflow.disabled = true;">
+    {% csrf_token %}
+    <input type="hidden" name="hist_id" value={{ history_id }}/>
+    <button type='submit' name="launch_workflow" value="" class="btn">Launch analysis</button>
+</form>
+
+<script>
+    // init //
+    var select = document.getElementById('select_workflow');
+    create_field(select.options[select.selectedIndex].getAttribute('nb_input'));
+    hide_desc(document.getElementById('select_workflow').value);
+</script> 

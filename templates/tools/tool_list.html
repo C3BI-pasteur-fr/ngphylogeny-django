@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% load static %}
+{% block nav-home %}class="active"{% endblock %}
+
+{% block content %}
+    <div class="row">
+        <div class="col-md-2"></div>
+        <div class="col-md-8">
+            {% for tool in tool_list %}
+                <li><a href="{%  url 'tool_detail' tool.pk %}">{{ tool.name }}</a>
+                    <a href="{%  url 'tool_detail_json' tool.pk %}">json</a>
+                </li>
+            {% endfor %}
+        </div>
+    </div>
+{% endblock %}

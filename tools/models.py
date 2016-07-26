@@ -14,13 +14,15 @@ class Tool(models.Model):
 
     @property
     def input_data(self):
-        "return the list of input of the tool"
-        return ToolData.objects.filter(tool=self.id, type='i')
+        """return the list of input of the tool"""
+        return self.tooldata_set.filter(type='i')
+
 
     @property
     def output_data(self):
-        "return the list of output of the tool"
-        return ToolData.objects.filter(tool=self.id, type='o')
+        """return the list of output of the tool"""
+        return self.tooldata_set.filter(type='o')
+
 
     @property
     def compatible_tool(self):
@@ -28,20 +30,30 @@ class Tool(models.Model):
             return the list of tools that have inputs compatible with the outputs of the tool
             to create workflow.
 
-            ie: tool.output.format = next_tool.input.format
+            ie: tool.output.format == next_tool.input.format
         """
         outputs = self.output_data
-        outputs_formats = set([o.edam_formats for o in outputs])
+        outputs_formats = outputs.values_list('edam_formats', flat=True)
 
-        return Tool.objects.filter(tooldata__edam_formats__in=outputs_formats, tooldata__type="i")
+        tools_data_input = ToolData.objects.filter(type="i").select_related()
+        tools_compatible = []
 
+        from ast import literal_eval
+        for data_input in tools_data_input:
+
+            list_edam_formats = literal_eval(data_input.edam_formats)
+            for ed in list_edam_formats:
+                if ed in set(outputs_formats):
+                    tools_compatible.append(data_input.tool.pk)
+
+        return Tool.objects.filter(pk__in=tools_compatible)
 
     def __unicode__(self):
         return self.name
 
+
 class ToolData(models.Model):
     """
-
 
     """
     DATA_TYPE_CHOICES = (

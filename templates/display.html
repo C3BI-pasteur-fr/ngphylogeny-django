@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% load static %}
+{% block nav-analysis %}class="active"{% endblock %}
+{% block javascripts %}
+    <script>
+        $(document).ready(function(){
+        $.ajax({
+        url: document.URL,
+        success: function(data) {
+            $('#view').append("<pre>"+data+"</pre>");
+        }});
+        });
+    </script>
+{% endblock %}
+{% block content %}
+    <div id="view" class="row">
+
+    </div>
+{% endblock %}

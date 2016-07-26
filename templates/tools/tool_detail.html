@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% load static %}
+{% block nav-home %}class="active"{% endblock %}
+
+{% block content %}
+    <div class="row">
+        <div class="col-md-2"></div>
+        <div class="col-md-8">
+            {{ tool.name }}{{ tool.input_data }}
+        </div>
+    </div>
+{% endblock %}
