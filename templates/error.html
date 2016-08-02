@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% load static %}
+{% block nav-home %}class="active"{% endblock %}
+{% block jumbotron %}
+    <div class="jumbotron">
+        <div class="text-center"><h2>Phylogeny.fr</h2>
+            <h4>Robust Phylogenetic Analysis For The Non-Specialist</h4>
+        </div>
+    </div>
+    <div class="jumbotron alert-warning text-center">
+            <h4>Error: {{ error.message }}</h4>
+    </div>
+{% endblock %}

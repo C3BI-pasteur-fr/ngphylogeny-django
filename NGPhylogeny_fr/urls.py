@@ -21,9 +21,13 @@ from data import urls as data_urls
 from workspace import urls as workspace_urls
 from tools import urls as tool_urls
 
+
+
+
+
 urlpatterns = [
     url(r'^admin/', admin.site.urls),
-    url(r'^$', TemplateView.as_view(template_name="tools/tool_detail.html"), name="home"),
+    url(r'^$',TemplateView.as_view(template_name="home.html"), name="home"),
     url(r'^documentation$', TemplateView.as_view(template_name="documentation.html"), name="documentation"),
     url(r'^tools/', include(tool_urls)),
     url(r'^data/', include(data_urls)),

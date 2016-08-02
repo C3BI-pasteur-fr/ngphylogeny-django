@@ -6,8 +6,11 @@ from django.core.urlresolvers import reverse_lazy
 from django.http import StreamingHttpResponse
 from django.views.generic import FormView
 from forms import UploadForm
+from django.utils.decorators import method_decorator
+from account.decorator import connection_galaxy
 
 
+@method_decorator(connection_galaxy, name="dispatch")
 class UploadView(FormView):
     """
         Upload file into Galaxy Server
@@ -47,7 +50,7 @@ class UploadView(FormView):
         return super(UploadView, self).form_valid(form)
 
 
-
+@connection_galaxy
 def download_file(request, file_id):
 
     """permet a l'utilisateur de telecharger le fichier grace a l'api"""
@@ -62,7 +65,7 @@ def download_file(request, file_id):
     # TODO test if bigDATA
     return stream_response
 
-
+@connection_galaxy
 def display_file(request, file_id):
     """Affiche le fichier dans le navigateur"""
     if request.is_ajax():
@@ -72,6 +75,6 @@ def display_file(request, file_id):
     else:
         return render(request, 'display.html')
 
-
+@connection_galaxy
 def export_file(request):
     pass

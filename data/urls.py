@@ -16,6 +16,9 @@ Including another URLconf
 from django.conf.urls import url
 from views import *
 
+from account.decorator import connection_galaxy
+
+
 urlpatterns = [
     url(r'^upload/$', UploadView.as_view(), name='upload'),
 

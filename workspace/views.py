@@ -1,9 +1,12 @@
 from django.views.generic import TemplateView
+from django.utils.decorators import method_decorator
+from account.decorator import connection_galaxy
 
 
+@method_decorator(connection_galaxy, name="dispatch")
 class HistoryDetailView(TemplateView):
     """
-        Display Galaxy like histoiry information
+        Display Galaxy like history information
     """
     template_name = 'history.html'
 
