@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="{% static 'css/jquery.filer.css' %}" />
     <script>
         $(document).ready(function () {
-            var myInputFile = $('#id_file');
+            var myInputFile = $(':file');
             var myInputFilename = myInputFile.attr('name');
             myInputFile.filer({
                 showThumbs: true,
