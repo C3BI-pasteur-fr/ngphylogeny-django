@@ -43,11 +43,13 @@ class GalaxyInstanceAnonymous(GalaxyInstance):
 
     def make_get_request(self, url, **kwargs):
         params = kwargs.get('params')
-        if params is not None and params.get('key', False) is False and (self.key is not None):
+        if params is not None and params.get('key', False) is False:
             params['key'] = self.key
         else:
             params = self.default_params
+
+        kwargs['cookies'] = dict(galaxysession=self.galaxysession)
         kwargs['params'] = params
         kwargs.setdefault('verify', self.verify)
-        r = requests.get(url, cookies=dict(galaxysession=self.galaxysession), **kwargs)
+        r = requests.get(url, **kwargs)
         return r

@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% load crispy_forms_tags %}
+{% load static %}
+
+{% block nav-home %}class="active"{% endblock %}
+{% block stylesheet %}
+
+<script type="text/javascript" src="http://underscorejs.org/underscore-min.js "></script>
+<script type="text/javascript" src="http://backbonejs.org/backbone.js"></script>
+<script src="{% static 'js/jquery.filer.min.js' %} "></script>
+<link rel="stylesheet" href="{% static 'css/jquery.filer.css' %}" />
+
+<script>
+    $(document).ready(function () {
+        $(':file').filer({
+            showThumbs: true,
+            changeInput: true,
+        });
+        var conditional_fields = $('[id*=_cond_]');
+        $.each(conditional_fields, function (index, toggle_elt) {
+            var str = toggle_elt.id;
+            str = str.split('_cond_');
+            var m_id = str[0], cond = str[1];
+            var test_field = $('#' + m_id);
+            toggle_condition(test_field, toggle_elt, cond );
+            test_field.change( function(){
+                toggle_condition(test_field, toggle_elt, cond )
+                });
+            });
+        });
+
+        function toggle_condition(test_field, toggle_elt, cond) {
+            console.log(test_field.val(), cond);
+            if (test_field.val() == cond) {
+                $(toggle_elt).show();
+            } else {
+                $(toggle_elt).hide();
+            }
+        };
+
+</script>
+
+{% endblock %}
+{% block content %}
+
+    <div class="row">
+        <div class="col-md-2"></div>
+        <div class="col-md-4 text-center">
+            <h3>{{ tool.name }}</h3>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-2"></div>
+        <div class="col-md-4">
+            {% crispy toolform %}
+        </div>
+    </div>
+{% endblock %}
