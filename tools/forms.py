@@ -1,6 +1,6 @@
 from crispy_forms.bootstrap import FormActions
 from crispy_forms.helper import FormHelper
-from crispy_forms.layout import Submit, Layout, Field, Div, Column
+from crispy_forms.layout import Submit, Layout, Field, Div
 from django import forms
 
 
@@ -8,15 +8,16 @@ def mapGalaxyToolInput(attr):
         """take Galaxy Tool build information return django field dict"""
 
         field_map = dict()
-        field_map['initial'] = attr.pop('value', None)
-        field_map['required'] = attr.pop('optional', None)
-        field_map['help_text'] = attr.pop('help', None)
-        field_map['label'] = attr.pop('label', None)
+        field_map['initial'] = attr.get('default_value', attr.get('value', ""))
+        field_map['required'] = attr.get('optional', "")
+        field_map['help_text'] = attr.get('help', "")
+        field_map['label'] = attr.get('label', "")
 
         if attr.get("type", "") == "select":
             field_map['choices'] = []
             for opt in attr.get("options", ""):
                 field_map['choices'].append((opt[1], opt[0]))
+
         return field_map
 
 
@@ -35,12 +36,17 @@ class ToolForm(forms.Form):
             self.fields[fieldname] = forms.ChoiceField(**mapGalaxyToolInput(attrfield))
 
         elif fieldtype == "boolean":
+            data_onvalue = attrfield.pop("truevalue", None)
+            data_offvalue = attrfield.pop("falsevalue", None)
 
-            CHOICES = (('true', 'Yes'),
-                       ('false', 'No'),
-                       )
-
-            self.fields[fieldname] = forms.TypedChoiceField(choices=CHOICES, **mapGalaxyToolInput(attrfield))
+            self.fields[fieldname] = forms.CharField(widget=forms.CheckboxInput(
+                                                     attrs={'data-toggle': "toggle",
+                                                            'data-on': 'Yes',
+                                                            'data-off': 'No',
+                                                            'data-on-value': data_onvalue,
+                                                            'data-off-value': data_offvalue,
+                                                            }),
+                                                     **mapGalaxyToolInput(attrfield))
 
         elif fieldtype == "text":
             self.fields[fieldname] = forms.CharField(**mapGalaxyToolInput(attrfield))
