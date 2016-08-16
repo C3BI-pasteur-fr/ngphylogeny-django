@@ -16,6 +16,22 @@
             changeInput: true,
         });
 
+        //put label on top of checkbox//
+        $('[data-toggle="toggle"]').each(function () {
+            if (this.id) {
+                var checkbox_label = $('label[for="' + this.id + '"]>div');
+                var parent = checkbox_label.parent();
+                parent.after(checkbox_label).addClass('control-label');
+                parent.parent().removeClass("checkbox").before(parent);
+
+                //create an hidden input to save uncheckvalue//
+                $('<input>').attr({
+                    type: 'hidden',
+                    name: $(this).attr('name'),
+                });
+            }
+         });
+
         var conditional_fields = $('[id*=_cond_]');
         $.each(conditional_fields, function (index, toggle_elt) {
             var str = toggle_elt.id;
@@ -23,21 +39,9 @@
             var m_id = str[0], cond = str[1];
             var test_field = $('#' + m_id);
 
-            if (test_field.attr("data-toggle")){
+            if (test_field.attr("data-toggle")) {
                 boolean_checkbox(test_field);
-
-                //put label on top of checkbox//
-                var checkbox_label=$('label[for="'+ test_field.attr('id') +'"]>div');
-                var parent = checkbox_label.parent();
-                parent.after(checkbox_label).addClass('control-label');
-                parent.parent().removeClass("checkbox").before(parent);
-                //create an hidden input to save uncheckvalue//
-                $('<input>').attr({
-                                    type: 'hidden',
-                                    name: test_field.attr('name'),
-                                    }).appendTo(parent);
-                                };
-
+            };
             toggle_condition(test_field, toggle_elt, cond );
             test_field.change( function(){
 
