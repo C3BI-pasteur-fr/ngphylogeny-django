@@ -4,7 +4,8 @@
 
 {% block nav-home %}class="active"{% endblock %}
 {% block stylesheet %}
-
+<link href="https://gitcdn.github.io/bootstrap-toggle/2.2.2/css/bootstrap-toggle.min.css" rel="stylesheet">
+<script src="https://gitcdn.github.io/bootstrap-toggle/2.2.2/js/bootstrap-toggle.min.js"></script>
 <script src="{% static 'js/jquery.filer.min.js' %} "></script>
 <link rel="stylesheet" href="{% static 'css/jquery.filer.css' %}" />
 
@@ -14,27 +15,57 @@
             showThumbs: true,
             changeInput: true,
         });
+
         var conditional_fields = $('[id*=_cond_]');
         $.each(conditional_fields, function (index, toggle_elt) {
             var str = toggle_elt.id;
             str = str.split('_cond_');
             var m_id = str[0], cond = str[1];
             var test_field = $('#' + m_id);
+
+            if (test_field.attr("data-toggle")){
+                boolean_checkbox(test_field);
+
+                //put label on top of checkbox//
+                var checkbox_label=$('label[for="'+ test_field.attr('id') +'"]>div');
+                var parent = checkbox_label.parent();
+                parent.after(checkbox_label).addClass('control-label');
+                parent.parent().removeClass("checkbox").before(parent);
+                //create an hidden input to save uncheckvalue//
+                $('<input>').attr({
+                                    type: 'hidden',
+                                    name: test_field.attr('name'),
+                                    }).appendTo(parent);
+                                };
+
             toggle_condition(test_field, toggle_elt, cond );
             test_field.change( function(){
-                toggle_condition(test_field, toggle_elt, cond )
+
+                boolean_checkbox(this);
+                toggle_condition(test_field, toggle_elt, cond ) ;
                 });
+
             });
         });
+        function boolean_checkbox(element) {
+            var new_value;
+            if ($(element).prop('checked')) {
+                new_value = $(element).attr("data-on-value");
+            } else {
+                new_value = $(element).attr("data-off-value");
+            };
+            $('[name="' + $(element).attr('name') + '"]').attr('value', new_value);
+        };
 
         function toggle_condition(test_field, toggle_elt, cond) {
-            console.log(test_field.val(), cond);
             if (test_field.val() == cond) {
                 $(toggle_elt).show();
-            } else {
+            }
+            else {
                 $(toggle_elt).hide();
             }
         };
+
 
 </script>
 
