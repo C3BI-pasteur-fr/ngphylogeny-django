@@ -11,66 +11,79 @@
 
 <script>
     $(document).ready(function () {
+        //file field
         $(':file').filer({
             showThumbs: true,
             changeInput: true,
         });
 
-        //put label on top of checkbox//
+        //put label on the top of checkbox//
         $('[data-toggle="toggle"]').each(function () {
             if (this.id) {
                 var checkbox_label = $('label[for="' + this.id + '"]>div');
                 var parent = checkbox_label.parent();
                 parent.after(checkbox_label).addClass('control-label');
                 parent.parent().removeClass("checkbox").before(parent);
-
-                //create an hidden input to save uncheckvalue//
-                $('<input>').attr({
-                    type: 'hidden',
-                    name: $(this).attr('name'),
-                });
             }
          });
+        //hide or show conditionals fields
+        $('[data-test]').each(function (index, toggle_elt) {
 
-        var conditional_fields = $('[id*=_cond_]');
-        $.each(conditional_fields, function (index, toggle_elt) {
-            var str = toggle_elt.id;
-            str = str.split('_cond_');
-            var m_id = str[0], cond = str[1];
-            var test_field = $('#' + m_id);
+            var m_id = $(toggle_elt).attr("data-test");
+            var test_fields = $('input[name="'+jq_conv_id(m_id) + '"]');
+            var test_field ;
+
+            if ( test_fields.length > 1 ){
+                test_field = test_fields.filter(':checked');
+            }else {
+                test_field = test_fields;
+            }
 
             if (test_field.attr("data-toggle")) {
                 boolean_checkbox(test_field);
             };
-            toggle_condition(test_field, toggle_elt, cond );
-            test_field.change( function(){
 
+            toggle_condition(test_field, toggle_elt );
+            test_fields.change( function(){
+                if (test_fields.length > 1) {
+                    test_field = test_fields.filter(':checked');
+                }
                 boolean_checkbox(this);
-                toggle_condition(test_field, toggle_elt, cond ) ;
+                toggle_condition(test_field, toggle_elt ) ;
                 });
 
             });
         });
+
         function boolean_checkbox(element) {
-            var new_value;
             if ($(element).prop('checked')) {
-                new_value = $(element).attr("data-on-value");
+                $(element).attr( 'value', $(element).attr("data-on-value"));
+                $("#"+$(element).attr("name")+"_unchecked").remove()
             } else {
-                new_value = $(element).attr("data-off-value");
+                $(element).attr( 'value', $(element).attr("data-off-value"));
+                $('<input/>',{ id: $(element).attr("name")+"_unchecked",
+                              type:'hidden',
+                              name:$(element).attr("name") ,
+                              value:$(element).attr("value")}).appendTo($(element).parent());
             };
-            $('[name="' + $(element).attr('name') + '"]').attr('value', new_value);
         };
 
-        function toggle_condition(test_field, toggle_elt, cond) {
-            if (test_field.val() == cond) {
+        function toggle_condition(test_field, toggle_elt) {
+            var cond = $(toggle_elt).attr("data-case");
+            var test = test_field.val();
+            if (test == cond) {
                 $(toggle_elt).show();
+                $(toggle_elt).find(':input').attr('disabled', false);
             }
             else {
                 $(toggle_elt).hide();
+                $(toggle_elt).find(':input').attr('disabled', true);
             }
         };
 
-
+        function jq_conv_id( myid ) {
+            return  myid.replace( /(:|\.|\[|\]|\||\,)/g, "\\$1" );
+        }
 </script>
 
 {% endblock %}
