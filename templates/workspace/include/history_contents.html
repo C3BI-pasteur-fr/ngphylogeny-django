@@ -1,0 +1,47 @@
+<h4>History: {{ history_info.name }}</h4>
+<table class="table table-striped ">
+    <thead>
+    <th>Step</th>
+    <th>File Name</th>
+    <th>Statut</th>
+    </thead>
+
+    {% for file in  history_content|dictsortreversed:"hid" %}
+
+        <tr {% if not file.visible %}class='hidden'{% endif %}>
+
+            <td>{{ file.hid }}.</td>
+            <td>{{ file.name }}</td>
+            <td>
+            {% if 'ok' in file.state %}
+                <span class="glyphicon glyphicon-ok  text-success"></span>
+            {% elif 'queued' in file.state or 'new' in file.state %}
+                <span class="glyphicon glyphicon-time text-info"></span>
+            {% elif "running" in file.state %}
+                <span class="glyphicon glyphicon-refresh spin"></span>
+            {% else %}
+                <span class="glyphicon glyphicon-remove text-danger"></span>
+            {% endif %}
+            </td>
+            <td>
+            {% if 'ok' in file.state %}
+                {# <a class="btn btn-default" title="Export big data in your personal outputs folder" #}
+                {#   href="{% url 'export_file' file.id %}"> #}
+                {#   <span class="glyphicon glyphicon-export text-primary" aria-hidden="true"></span></a>#}
+                <a class="btn btn-default" title="Dowload the file"
+                   href="{% url 'download_file' file.id %}">
+                    <span class="glyphicon glyphicon-download-alt text-primary"></span></a>
+                <a class="btn btn-default" title="Save the file in the database and shared with project group"
+                   href="{% url 'display_file' file.id %}">
+                    <span class="glyphicon glyphicon-eye-open text-primary"></span></a>
+            {% elif 'error' in file.state  %}
+                 <a class="btn btn-default" title="shows error"
+                    href="{% url 'galaxy_error_url' file.id %}">
+                    <span class="glyphicon glyphicon-exclamation-sign text-danger"></span></a>
+            {% endif %}
+
+            </td>
+        </tr>
+
+    {% endfor %}
+</table>

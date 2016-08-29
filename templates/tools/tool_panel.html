@@ -1,0 +1,19 @@
+<div class="panel panel-info">
+    <button type="button" class="close" data-dismiss="alert" aria-label="Close"
+            onclick="$(this).parent().parent().remove();">
+        <span aria-hidden="true">&times;</span>
+    </button>
+    <div class="panel-heading">{{ tool.tag }}</div>
+    <div class="panel-body">{{ tool.name }}</div>
+    <div class="panel-footer">
+    <ul class="list-group">
+        <li  class="list-group-item">Inputs:
+            {% for inp_data in tool.input_data %}<span>{{ inp_data.extensions }}</span>{% endfor %}
+        </li>
+        <li class="list-group-item">Outputs:
+            {% for out_data in tool.output_data %}<div>{{ out_data.extensions }}</div>{% endfor %}
+        </li>
+    </ul>
+    </div>
+    <input type="hidden" name="tools" value="{{ tool.pk }}"/>
+</div>

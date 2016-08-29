@@ -1,15 +1,15 @@
 {% extends "base.html" %}
 {% load static %}
-{% block nav-analysis %}class="active"{% endblock %}>
 {% block stylesheet %}
-    <link rel="stylesheet" href="{% static 'css/animation.css' %}"></link>
+    <meta http-equiv="refresh" content="3">
 {% endblock %}
 
+{% block nav-analysis %}class="active"{% endblock %}>
 {% block content %}
     <div class="row">
         <div class="col-md-2"></div>
         <div class="col-md-8">
-            {% include "include/history_contents.html" %}
+            {% include "workspace/include/history_contents.html" %}
         </div>
     </div>
 {% endblock %}

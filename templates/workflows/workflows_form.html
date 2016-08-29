@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% load crispy_forms_tags %}
+{% load static %}
+
+{% load i18n %}
+{% block nav-home %}class="active"{% endblock %}
+{% block stylesheet %}
+    <link href="https://gitcdn.github.io/bootstrap-toggle/2.2.2/css/bootstrap-toggle.min.css" rel="stylesheet">
+    <script src="https://gitcdn.github.io/bootstrap-toggle/2.2.2/js/bootstrap-toggle.min.js"></script>
+    <script src="{% static 'js/jquery.filer.min.js' %} "></script>
+    <link rel="stylesheet" href="{% static 'css/jquery.filer.css' %}"/>
+    {{ wizard.form.media }}
+    <script>
+        $(document).ready(function () {
+            //file field
+            $(':file').filer({
+                showThumbs: true,
+                changeInput: true,
+            });
+
+            //put label on the top of checkbox//
+            $('[data-toggle="toggle"]').each(function () {
+                if (this.id) {
+                    var checkbox_label = $('label[for="' + this.id + '"]>div');
+                    var parent = checkbox_label.parent();
+                    parent.after(checkbox_label).addClass('control-label');
+                    parent.parent().removeClass("checkbox").before(parent);
+                }
+            });
+            //hide or show conditionals fields
+            $('[data-test]').each(function (index, toggle_elt) {
+
+                var m_id = $(toggle_elt).attr("data-test");
+                var test_fields = $('input[name="' + jq_conv_id(m_id) + '"]');
+                var test_field;
+
+                if (test_fields.length > 1) {
+                    test_field = test_fields.filter(':checked');
+                } else {
+                    test_field = test_fields;
+                }
+
+                if (test_field.attr("data-toggle")) {
+                    boolean_checkbox(test_field);
+                }
+                ;
+
+                toggle_condition(test_field, toggle_elt);
+                test_fields.change(function () {
+                    if (test_fields.length > 1) {
+                        test_field = test_fields.filter(':checked');
+                    }
+                    boolean_checkbox(this);
+                    toggle_condition(test_field, toggle_elt);
+                });
+
+            });
+        });
+
+        function boolean_checkbox(element) {
+            if ($(element).prop('checked')) {
+                $(element).attr('value', $(element).attr("data-on-value"));
+                $("#" + $(element).attr("name") + "_unchecked").remove()
+            } else {
+                $(element).attr('value', $(element).attr("data-off-value"));
+                $('<input/>', {
+                    id: $(element).attr("name") + "_unchecked",
+                    type: 'hidden',
+                    name: $(element).attr("name"),
+                    value: $(element).attr("value")
+                }).appendTo($(element).parent());
+            }
+            ;
+        }
+        ;
+
+        function toggle_condition(test_field, toggle_elt) {
+            var cond = $(toggle_elt).attr("data-case");
+            var test = test_field.val();
+            if (test == cond) {
+                $(toggle_elt).show();
+                $(toggle_elt).find(':input').attr('disabled', false);
+            }
+            else {
+                $(toggle_elt).hide();
+                $(toggle_elt).find(':input').attr('disabled', true);
+            }
+        }
+        ;
+
+        function jq_conv_id(myid) {
+            return myid.replace(/(:|\.|\[|\]|\||\,)/g, "\\$1");
+        }
+    </script>
+
+{% endblock %}
+{% block content %}
+
+    <div class="row">
+        <div class="col-md-2"></div>
+        <div class="col-md-4 text-center">
+            <h3>{{ tool.name }}</h3>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-md-2"></div>
+        <div class="col-md-6">
+                <p>Step {{ wizard.steps.step1 }} of {{ wizard.steps.count }}</p>
+                <form action="" method="post">
+
+                        {{ wizard.management_form }}
+                        {% if wizard.form.forms %}
+                            {{ wizard.form.management_form }}
+                            {% for form in wizard.form.forms %}
+                                {% crispy form %}
+                            {% endfor %}
+                        {% else %}
+                            {% crispy wizard.form %}
+                        {% endif %}
+
+                    {% if wizard.steps.prev %}
+                        <button name="wizard_goto_step" type="submit" class="btn"
+                                value="{{ wizard.steps.first }}">{% trans "first step" %}</button>
+                        <button name="wizard_goto_step" type="submit" class="btn"
+                                value="{{ wizard.steps.prev }}">{% trans "prev step" %}</button>
+                    {% endif %}
+
+                </form>
+
+        </div>
+    </div>
+{% endblock %}

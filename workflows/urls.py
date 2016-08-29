@@ -15,13 +15,10 @@ Including another URLconf
 """
 from django.conf.urls import url
 from views import *
-
-
-
-
+from django.views.generic import TemplateView
 
 
 urlpatterns = [
-    url(r'^history$', HistoryDetailView.as_view(), name="history_current_detail"),
-    url(r'^history/(?P<history_id>[\w-]+)$', HistoryDetailView.as_view(), name="history_detail"),
+    url(r'^$', workflows_form, name="workflows_form"),
+    url(r'build$', workflows_build , name="workflows_build"),
 ]
