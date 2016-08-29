@@ -39,9 +39,8 @@ class UploadView(FormView):
 
             # Create a new galaxy history and delete older if the user is not authenticated
             history_id = gi.histories.create_history().get('id')
-
-        hist = gi.tools.upload_file(tmpfile.name, history_id, file_name=myfile.name)
-        self.success_url = reverse_lazy("history_detail", kwargs={'history_id': hist.get('id', history_id)}, )
+        outputs = gi.tools.upload_file(tmpfile.name, history_id, file_name=myfile.name)
+        self.success_url = reverse_lazy("history_detail", kwargs={'history_id': history_id}, )
 
         # TODO
         # supprime l'history en cas d'erreur
