@@ -5,13 +5,18 @@
 {% block content %}
     <div class="row">
         <div class="col-md-2"></div>
-        <div class="col-md-8">
-            {% for tool in tool_list %}
-                <li><a href="{%  url 'tool_detail' tool.pk %}">{{ tool.name }}</a>
-                    <a href="{%  url 'tool_form' tool.pk %}">Form</a>
-                    <a href="{%  url 'tool_detail_json' tool.pk %}">json</a>
-                </li>
+        <div class="col-md-8" >
+            <table class="table table-hover">
+            {% for tool in tool_list|dictsort:"name" %}
+                <tr class="list-inline">
+                    <td><a class="btn btn-toolbar" href="{%  url 'tool_detail' tool.pk %}">
+                        <span class="glyphicon glyphicon-info-sign"></span></a>
+                    </td>
+                    <td><a class="btn btn-toolbar" href="{%  url 'tool_form' tool.pk %}">{{ tool.name }}</a></td>
+                    <td><a class="btn btn-toolbar" href="{%  url 'tool_detail_json' tool.pk %}">json</a></td>
+                </tr>
             {% endfor %}
+            </table>
         </div>
     </div>
 {% endblock %}

@@ -4,13 +4,26 @@ from django.db import models
 
 # Create your models here.
 
+TOOL_TAGS = (
+    ('', '----'),
+    ('algn', 'Multiple Alignment'),
+    ('clean', 'Alignment curation'),
+    ('tree', 'Construction of phylogenetic tree'),
+    ('visu','Visualisation of phylogenetic tree')
+)
+
+
+
+
+
 class Tool(models.Model):
     """
 
     """
-    id_galaxy = models.CharField(max_length=250, unique=True )
+    id_galaxy = models.CharField(max_length=250, unique=True)
     name = models.CharField(max_length=250)
-    #params =
+
+    tag = models.CharField(max_length=5, choices=TOOL_TAGS, default='')
 
     @property
     def input_data(self):

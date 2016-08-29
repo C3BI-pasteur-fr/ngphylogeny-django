@@ -18,6 +18,15 @@ def map_galaxy_tool_input(attr):
             for opt in attr.get("options", ""):
                 field_map['choices'].append((opt[1], opt[0]))
 
+        if attr.get("type", "") == "data":
+
+            opt = attr.get("options", "").get('hda')
+            if opt:
+                field_map['choices'] = []
+            for data in opt:
+                field_map['choices'].append((data.get('id'), data.get('name')))
+                print field_map['choices']
+
         return field_map
 
 
@@ -26,6 +35,7 @@ class ToolForm(forms.Form):
 
     n = 0
     fieds_ids_mapping = {}
+    tool_params = None
 
     def create_field(self, attrfield):
 
@@ -34,7 +44,14 @@ class ToolForm(forms.Form):
         fieldtype = attrfield.get("type", "")
 
         if fieldtype == "data":
-            self.fields[field_id] = forms.FileField(**map_galaxy_tool_input(attrfield))
+            choices = attrfield.get("options", "").get('hda')
+            self.input_file_ids.append(field_id)
+
+            if choices:
+                self.fields[field_id] = forms.ChoiceField(**map_galaxy_tool_input(attrfield))
+            else:
+
+                self.fields[field_id] = forms.FileField(**map_galaxy_tool_input(attrfield))
 
         elif fieldtype == "select":
             if attrfield.get("display", "") == 'radio':
@@ -98,12 +115,18 @@ class ToolForm(forms.Form):
 
         return fields_created
 
-    def __init__(self, tool_params, *args, **kwargs):
+    def __init__(self, tool_params=None, *args, **kwargs):
         super(ToolForm, self).__init__(*args, **kwargs)
 
+        if tool_params:
+            self.tool_params = tool_params
+        assert self.tool_params, 'tool_params is needed'
+
+        self.input_file_ids = []
         self.helper = FormHelper(self)
         self.helper.form_class = 'blueForms'
-        self.formset = self.parse_galaxy_input_tool(tool_params)
+        self.helper.form_tag = False
+        self.formset = self.parse_galaxy_input_tool(self.tool_params)
         self.helper.layout = Layout(FormActions(Field(*self.formset),
                                                 Submit('submit', 'Submit', css_class="pull-right"),
                                                 )

@@ -36,7 +36,7 @@ class ToolDataInline(admin.TabularInline):
 class ToolAdmin(admin.ModelAdmin):
 
     form = ToolForm
-    fields = ('name', 'id_galaxy', 'input_data','output_data','compatible_tool')
+    fields = ('name', 'id_galaxy', 'tag', 'input_data','output_data','compatible_tool')
     inlines = [
                 ToolDataInline,
              ]

@@ -34,10 +34,10 @@ class ToolJSONView(ToolDetailView):
 @connection_galaxy
 def tool_form_view(request, pk):
     tool_obj = get_object_or_404(Tool, pk=pk)
-    data = request.galaxy.tools.show_tool(tool_id=tool_obj.id_galaxy, io_details='true')
-
     context = {"toolform": ToolForm(data['inputs']),
                "tool": tool_obj}
+
+    data = request.galaxy.tools.show_tool(tool_id=tool_obj.id_galaxy, io_details='true')
 
     return render(request, 'tools/tool_form.html', context)
 
@@ -49,7 +49,7 @@ def tool_exec_view(request, pk):
 
     tool_obj = get_object_or_404(Tool, pk=pk)
     tool_inputs_details = gi.tools.show_tool(tool_id=tool_obj.id_galaxy, io_details='true')
-    tool_form = ToolForm(tool_inputs_details['inputs'], request.POST or None)
+    tool_form = ToolForm(tool_params=tool_inputs_details['inputs'], data=request.POST or None)
 
     if request.method == 'POST':
 
@@ -79,6 +79,13 @@ def tool_exec_view(request, pk):
                     outputs = gi.tools.upload_file(tmp_file.name, history_id, file_name=uploaded_file.name)
                     file_id = outputs.get('outputs')[0].get('id')
                     tool_inputs.set_dataset_param(tool_form.fieds_ids_mapping.get(input_file_id.strip('[]')), file_id)
+                    print tool_inputs.to_dict()
+            else:
+                for input_file_id in tool_form.input_file_ids:
+                    if input_file_id in request.POST.keys():
+                        tool_inputs.set_dataset_param(
+                                                      tool_form.fieds_ids_mapping.get(input_file_id.strip('[]')),
+                                                      request.POST.get(input_file_id))
 
             try:
                 tool_outputs = gi.tools.run_tool(history_id=history_id,
@@ -92,7 +99,6 @@ def tool_exec_view(request, pk):
                 from django.forms import ValidationError
 
                 message = ast.literal_eval(e.body)
-
                 reverse_dict_field = {v: k for k, v in tool_form.fieds_ids_mapping.items()}
 
                 for field, err_msg in message.get('err_data').items():

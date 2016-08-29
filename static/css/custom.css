@@ -1,5 +1,9 @@
-header{
+header.jumbotron{
     color:#ffffff ;
-    background-image: linear-gradient(to bottom, #052a3b 0px, #055a7f 100%);
+    background-image: linear-gradient(to bottom, #052a3b 0px, #60a0c0 100%);
     font-family: "Ubuntu";
+    margin-bottom: 0px;
+}
+footer {
+    min-height: 100px;
 }
