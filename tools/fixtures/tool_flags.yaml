@@ -1,0 +1,20 @@
+- model: tools.toolflag
+  pk: 1
+  fields:
+    name: algn
+    verbose_name: Multiple Alignment
+- model: tools.toolflag
+  pk: 2
+  fields:
+    name: clean
+    verbose_name: Alignment curation
+- model: tools.toolflag
+  pk: 3
+  fields:
+    name: tree
+    verbose_name: Construction of phylogenetic tree
+- model: tools.toolflag
+  pk: 4
+  fields:
+    name: visu
+    verbose_name: Visualisation of phylogenetic tree

@@ -1,19 +1,14 @@
 from __future__ import unicode_literals
-
 from django.db import models
 
-# Create your models here.
 
 TOOL_TAGS = (
     ('', '----'),
     ('algn', 'Multiple Alignment'),
     ('clean', 'Alignment curation'),
     ('tree', 'Construction of phylogenetic tree'),
-    ('visu','Visualisation of phylogenetic tree')
+    ('visu', 'Visualisation of phylogenetic tree')
 )
-
-
-
 
 
 class Tool(models.Model):
@@ -21,9 +16,8 @@ class Tool(models.Model):
 
     """
     id_galaxy = models.CharField(max_length=250, unique=True)
-    name = models.CharField(max_length=250)
-
-    tag = models.CharField(max_length=5, choices=TOOL_TAGS, default='')
+    name = models.CharField(max_length=100)
+    description = models.CharField(max_length=250)
 
     @property
     def input_data(self):
@@ -77,12 +71,21 @@ class ToolData(models.Model):
     format = models.CharField(max_length=25, blank=True)
     extensions = models.CharField(max_length=25)
     edam_formats = models.CharField(max_length=250, null=True)
-    type = models.CharField(max_length=1,choices=DATA_TYPE_CHOICES, default='i')
+    type = models.CharField(max_length=1, choices=DATA_TYPE_CHOICES, default='i')
     tool = models.ForeignKey(Tool, on_delete=models.CASCADE)
 
     class Meta:
         verbose_name_plural = "Tool_data"
 
+    def __unicode__(self):
+        return "%s_%s" % (self.name, self.tool)
+
+
+class ToolFlag(models.Model):
+
+    name = models.CharField(max_length=5, unique=True)
+    verbose_name = models.CharField(max_length=250, unique=True)
+    tool = models.ManyToManyField(Tool)
 
     def __unicode__(self):
-        return "%s_%s"%(self.name, self.tool)
+        return self.verbose_name

@@ -1,5 +1,6 @@
-from django.contrib import admin
 from django import forms
+from django.contrib import admin
+
 # Register your models here.
 from .models import *
 
@@ -10,6 +11,7 @@ class CustomMultipleChoiceField(forms.ModelMultipleChoiceField):
         self.required = False
         self.widget = forms.SelectMultiple(attrs={'disabled': 'disabled'})
 
+
 class ToolForm(forms.ModelForm, forms.Form ):
 
     input_data = CustomMultipleChoiceField()
@@ -18,7 +20,7 @@ class ToolForm(forms.ModelForm, forms.Form ):
 
     class Meta:
         model = Tool
-        fields = ('name', 'id_galaxy' )
+        fields = ('name', 'id_galaxy')
         readonly_fields = ('input_data', 'output_data', 'compatible_tool')
 
     def __init__(self, *args, **kwargs):
@@ -33,14 +35,22 @@ class ToolDataInline(admin.TabularInline):
     extra = 0
 
 
+class ToolFlagInline(admin.TabularInline):
+    model = ToolFlag.tool.through
+    extra = 0
+
+
 class ToolAdmin(admin.ModelAdmin):
 
     form = ToolForm
-    fields = ('name', 'id_galaxy', 'tag', 'input_data','output_data','compatible_tool')
+    fields = ('name', 'id_galaxy', 'tag', 'input_data', 'output_data', 'compatible_tool')
     inlines = [
-                ToolDataInline,
-             ]
+        ToolDataInline,
+        ToolFlagInline
+    ]
+
 
 
 admin.site.register(Tool, ToolAdmin)
 admin.site.register(ToolData)
+admin.site.register(ToolFlag)

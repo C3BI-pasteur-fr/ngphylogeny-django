@@ -1,20 +1,13 @@
 {% extends "base.html" %}
 {% load static %}
-
-{% block nav-home %}class="active"{% endblock %}
+{% block nav-tools %}class="active"{% endblock %}
 {% block stylesheet %}
 {% endblock %}
 {% block content %}
     <div class="row">
         <div class="col-md-2"></div>
         <div class="col-md-8">
-            {{ tool.name }}
-            {% for input_data in tool.input_data %}
-                {{ input_data.name }}
-            {% endfor %}
-            {% for output_data in tool.output_data %}
-                {{ output_data.name }}
-            {% endfor %}
+          {% include "tools/tool_panel.html"%}
         </div>
     </div>
 {% endblock %}

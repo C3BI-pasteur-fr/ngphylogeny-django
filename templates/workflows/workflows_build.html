@@ -3,21 +3,23 @@
 {% load static %}
 {% block nav-analysis %}class="active"{% endblock %}
 {% block stylesheet %}
-  <script src="https://code.jquery.com/ui/1.12.0/jquery-ui.js"></script>
+{#    <script src="https://code.jquery.com/ui/1.12.0/jquery-ui.js" xmlns="http://www.w3.org/1999/html"></script>#}
+{#    <script>#}
+{#     $( function() {#}
+{#          $( "#sortable" ).sortable();#}
+{#          $( "#sortable" ).disableSelection();#}
+{#     });#}
+{#      </script>#}
   <script>
   $( function() {
-        $( "#sortable" ).sortable();
-        $( "#sortable" ).disableSelection();
-  });
-  </script>
-  <script>
-  $( function() {
-    $( 'input:radio').change( function() {
+    $( 'input:checkbox').change( function() {
         if ($(this).is(':checked')){
             $('#sortable #'+$(this).attr('data-target')).remove();
-            $('#sortable').append($('#'+$(this).attr('data-panel')).clone().prop({ id: $(this).attr('data-target')} ).show());
-            $('label:has(input:radio:checked)').addClass('active btn-info');
-            $('label:has(input:radio:not(:checked))').removeClass('active btn-info');
+            $('#sortable')
+                    .append($('#'+$(this).attr('data-panel')).clone().prop({ id: $(this).attr('data-target')}).show());
+
+            $('label:has(input:checkbox:checked)').addClass('active btn-info');
+            $('label:has(input:checkbox:not(:checked))').removeClass('active btn-info');
         }
 
     });
@@ -25,41 +27,11 @@
   </script>
 {% endblock %}
 {% block content %}
-    <div class="col-md-3">
-        <h3 class="text-justify"><span class="glyphicon glyphicon-chevron-right small"></span>List of Tools</h3>
+    <div class="col-md-12 ">
         <div class="row">
-        <div class="btn-group-vertical"  role="group">
-            {% for tool in tool_list %}
-                <label class="btn btn-default" for="radio-{{ tool.pk }}">{{ tool.name }}
-                    <input id="radio-{{ tool.pk }}" type="radio" name="radio" data-panel="toolbox-{{ tool.pk }}" data-target="tag1" class='hidden'>
-                </label>
-                {# tool panel #}
-                <div id="toolbox-{{ tool.pk }}" class="col-xs-12 col-sm-6 col-md-3" style="display:none;">
-                    {% include 'tools/tool_panel.html' %}
-                </div>
-                {# end tool panel #}
-            {% endfor %}
+            <h3>Workflow</h3>
         </div>
-       </div>
-        <div class="row">
-        <h3 class="text-justify"><span class="glyphicon glyphicon-chevron-right small"></span>List of Tools</h3>
-        <div class="btn-group-vertical"  role="group">
-            {% for tool in tool_list %}
-                <label class="btn btn-default" for="radio-{{ tool.pk }}-2">{{ tool.name }}
-                    <input id="radio-{{ tool.pk }}-2" type="radio" name="radio-2" data-panel="toolbox-{{ tool.pk }}" data-target="tag2" class='hidden'>
-                </label>
-                {# tool panel #}
-                <div id=toolbox-{{ tool.pk }}" class="col-xs-12 col-sm-6 col-md-3" style="display:none;">
-                    {% include 'tools/tool_panel.html' %}
-                </div>
-                {# end tool panel #}
-            {% endfor %}
-        </div>
-    </div>
-    </div>
-    <div class="col-md-9">
-        <div class="row"><h3>Workflow</h3></div>
-        <div class="col-xs-12 col-sm-6 col-md-2">
+        <div class="col-xs-12 col-sm-3 col-md-1">
             <div class="panel panel-info">
                 <div class="panel-heading"></div>
                 <div class="panel-body">Input</div>
@@ -73,8 +45,38 @@
         <div id="sortable" class="row">
         </div>
         <div class="row">
-            <input type="submit" class="btn btn-primary" name="Submit">
+            <botton type="submit" class="btn btn-primary" name="run" value="Run workflow"><span class="glyphicon glyphicon-play-circle"></span> Run workflow</botton>
         </div>
         </form>
+    </div>
+    <div class="row"></div>
+    <div class="row">
+        <h3 class="text-justify"><span class="glyphicon glyphicon-chevron-right small"></span>List of Tools</h3>
+    </div>
+    <div class="row">
+    {% regroup tool_list|dictsort:"tag" by get_tag_display as grouped_tools %}
+    {% for tag in grouped_tools %}
+    <div class="col-md-3">
+        <h4 class="text-justify"><span class="glyphicon glyphicon-chevron-right small"></span>{{tag.grouper}}</h4>
+        <div class="btn-group-vertical"  role="group">
+            {% for tool in tag.list %}
+                <label class="btn btn-default" for="radio-{{ tool.pk }}">{{ tool.name }}
+                    <input id="radio-{{ tool.pk }}" type="checkbox" name="radio-r{{ tool.tag }}"
+                           data-panel="toolbox-{{ tool.pk }}" data-target="r{{tool.tag}}" class='hidden'>
+                </label>
+                {# tool panel #}
+                <div id="toolbox-{{ tool.pk }}" class="col-xs-12 col-sm-4 col-md-2" style="display:none;">
+                    <button type="button" class="close" data-dismiss="alert" aria-label="Close"
+                            onclick="$(this).parent().remove();">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                    {% include 'tools/tool_panel.html' %}
+                </div>
+                {# end tool panel #}
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+
     </div>
 {% endblock content %}

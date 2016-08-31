@@ -31,11 +31,13 @@ class Command(BaseCommand):
 
             tool_name = tool_info.get('name')
             inputs_tools = tool_info.get('inputs')
+            description = tool_info.get('description')
 
             t, created = Tool.objects.get_or_create(id_galaxy=id_tool)
 
             if created:
                 t.name = tool_name
+                t.description = description
                 t.save()
                 for input_d in inputs_tools:
 

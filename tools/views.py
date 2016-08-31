@@ -34,10 +34,10 @@ class ToolJSONView(ToolDetailView):
 @connection_galaxy
 def tool_form_view(request, pk):
     tool_obj = get_object_or_404(Tool, pk=pk)
+    data = request.galaxy.tools.show_tool(tool_id=tool_obj.id_galaxy, io_details='true')
+
     context = {"toolform": ToolForm(data['inputs']),
                "tool": tool_obj}
-
-    data = request.galaxy.tools.show_tool(tool_id=tool_obj.id_galaxy, io_details='true')
 
     return render(request, 'tools/tool_form.html', context)
 

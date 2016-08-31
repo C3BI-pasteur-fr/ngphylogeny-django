@@ -1,12 +1,11 @@
-from django.views.generic import TemplateView
-from django.utils.decorators import method_decorator
-from account.decorator import connection_galaxy
-from django.forms import formset_factory
-from tools.forms import ToolForm
-from tools.models import Tool
-
 from django.shortcuts import render, redirect
+from django.utils.decorators import method_decorator
+from django.views.generic import TemplateView
 from formtools.wizard.views import SessionWizardView
+
+from account.decorator import connection_galaxy
+from tools.forms import ToolForm
+from tools.models import Tool ,ToolFlag
 
 
 @method_decorator(connection_galaxy, name="dispatch")
@@ -63,8 +62,27 @@ def workflows_build(request):
     return render(request, 'workflows/workflows_build.html', context )
 
 
+def workflows_advanced_mode_build(request):
+
+
+    WORKFLOW_ADVANCED_MODE = [{"step": 0, "category": 'algn', "group": ""},
+                              {"step": 1, "category": 'clean', "group": ""},
+                              {"step": 2, "category": 'tree', "group": ""},
+                              {"step": 3, "category": 'visu', "group": ""},
+                              ]
+
+    for step in WORKFLOW_ADVANCED_MODE:
+        step['group'] = ToolFlag.objects.get(name=step.get('category'))
+    context = {"workflow": WORKFLOW_ADVANCED_MODE}
+
+    return render(request, 'workflows/workflows_advanced.html', context)
 
 
 
+def workflows_oneclick_mode_build(request):
 
+    pass
 
+def workflows_alacarte_mode_build(request):
+
+    pass

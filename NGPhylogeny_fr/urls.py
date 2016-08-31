@@ -30,6 +30,7 @@ urlpatterns = [
     url(r'galaxy/$', RedirectView.as_view(url=settings.GALAXY_SERVER_URL), name="galaxy_url"),
     url(r'galaxy/(?P<id>[\w-]+)$', RedirectView.as_view(url=settings.GALAXY_SERVER_URL+'dataset/errors?id=%(id)s'), name="galaxy_error_url"),
     url(r'^documentation$', TemplateView.as_view(template_name="documentation.html"), name="documentation"),
+    url(r'^analysis$', TemplateView.as_view(template_name="phylogeny_analysis_choices.html"), name="analysis_list"),
     url(r'^tools/', include(tool_urls)),
     url(r'^data/', include(data_urls)),
     url(r'^workflows/', include(workflows_urls)),

@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% load crispy_forms_tags %}
+{% load static %}
+{% block nav-analysis %}class="active"{% endblock %}
+{% block stylesheet %}
+{#    <script src="https://code.jquery.com/ui/1.12.0/jquery-ui.js" xmlns="http://www.w3.org/1999/html"></script>#}
+{#    <script>#}
+{#     $( function() {#}
+{#          $( "#mini-wk" ).sortable();#}
+{#          $( "#mini-wk" ).disableSelection();#}
+{#     });#}
+{#      </script>#}
+  <script>
+  $( function() {
+    $( 'input:radio:checked').each( function () {
+        $('#'+$(this).attr('data-target')).show().empty().append($('#'+$(this).attr('data-panel')).clone().show());
+        $(this).parent().addClass('active btn-info');
+    });
+
+    $('input:radio').change( function() {
+        $('input:radio').parent().removeClass('active btn-info');
+        $('input:radio:checked').parent().addClass('active btn-info');
+        if ($(this).is(':checked')){
+            $('#'+$(this).attr('data-target')).show().empty().append($('#'+$(this).attr('data-panel')).clone().show());
+        }
+    });
+  });
+  </script>
+<script>
+  function remove_panel(obj){
+    $(obj).parent().parent().hide();
+    $('[data-panel="'+$(obj).parent().attr('id')+'"]').prop('checked', false).parent().removeClass('active btn-info');
+    $(obj).parent().remove();
+  }
+
+</script>
+
+
+{% endblock %}
+{% block content %}
+    <div>
+        <div class="row">
+            <h3  class="text-justify"><span class="glyphicon glyphicon-chevron-right small"></span>Workflow</h3>
+        </div>
+        <form method="post">
+            <div id="mini-wk" class="row">
+                {% csrf_token %}
+                <div class="col-md-2">
+                    <div class="panel panel-info">
+                        <div class="panel-heading"></div>
+                        <div class="panel-body">Input</div>
+                        <div class="panel-footer">
+                        </div>
+                        <input type="hidden" name="tools"/>
+                    </div>
+                </div>
+                {% for step in workflow|dictsort:"step"%}
+                  <div id=wk-display-{{ step.group.name}}  class="col-md-2"> </div>
+                {% endfor %}
+
+                <div class="row">
+                    <button type="submit" class="btn btn-primary" name="run" value="Run workflow">
+                        <span class="glyphicon glyphicon-play-circle"></span> Run workflow
+                    </button>
+                </div>
+            </div>
+        </form>
+        </div>
+    <div>
+        <div class="row">
+            <h3 class="text-justify"><span class="glyphicon glyphicon-chevron-right small"></span>List of Tools</h3>
+        </div>
+        <div class="col-md-2">
+            <h4 class="text-left">0. Set Input</h4>
+            <div class="btn-group-vertical"  role="group">
+                <label class="btn btn-default"><span class="glyphicon glyphicon-file"></span> Browse
+                    <input type="file" style="display: none;">
+                </label>
+            </div>
+        </div>
+        {% for step in workflow|dictsort:"step"%}
+            <div class="col-md-2">
+                <h4 class="text-left">{{forloop.counter}}. {{step.group.verbose_name}}</h4>
+                <div class="btn-group-vertical"  role="group">
+                {% for tool in step.group.tool.all %}
+                    <label class="btn btn-default" for="radio-{{ tool.pk }}">{{ tool.name }}
+                        <input type="radio"
+                               id="radio-{{ tool.pk }}"
+                               name="radio-{{ step.group.name }}"
+                               data-panel="toolbox-{{ tool.pk }}"
+                               data-target="wk-display-{{ step.group.name }}"
+                               >
+                    </label>
+                    {# tool panel #}
+                    <div id="toolbox-{{ tool.pk }}"  style="display:none;">
+                        <button type="button" class="close" data-dismiss="alert" aria-label="Close"
+                                onclick="remove_panel(this);">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                        {% include 'tools/tool_panel.html' %}
+                    </div>
+                    {# end tool panel #}
+
+                {% endfor %}
+                </div>
+            </div>
+        {% endfor %}
+        <div class="row">
+                <button type="submit" class="btn btn-primary" name="run" value="Run workflow">
+                    <span class="glyphicon glyphicon-play-circle"></span> Run workflow
+                </button>
+        </div>
+    </div>
+{% endblock content %}
