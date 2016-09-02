@@ -1,9 +1,10 @@
-import requests
-import urlparse
 import urllib
+
+import requests
 from django.conf import settings
 from django.core.management.base import BaseCommand
-from tools.models import Tool, ToolData
+
+from tools.models import Tool, ToolDataInput, ToolDataOutput
 
 
 class Command(BaseCommand):
@@ -42,24 +43,27 @@ class Command(BaseCommand):
                 for input_d in inputs_tools:
 
                     if input_d.get('type') == 'data':
-                        input_obj = ToolData(name=input_d.get('name'),
-                                             edam_formats=input_d.get('edam_formats'),
-                                             extensions=input_d.get('extensions'),
-                                             type='i',
-                                             tool=t
-                                             )
+
+                        edam = input_d.get('edam')
+                        if edam:
+                            ed_format = edam.get('edam_formats')
+
+                        input_obj = ToolDataInput(name=input_d.get('name'),
+                                                  edam_formats=ed_format,
+                                                  extensions=input_d.get('extensions'),
+                                                  tool=t
+                                                  )
                         input_obj.save()
-                        print "inputs:", input_d.get('name'), input_d.get('extensions'), input_d.get('edam_formats')
+                        print "inputs:", input_d.get('name'), input_d.get('extensions'), input_d.get('edam')
 
                 outputs_tools = tool_info.get('outputs')
 
                 for output_d in outputs_tools:
-                    output_obj = ToolData(name=output_d.get('name'),
-                                          edam_formats=output_d.get('edam_format'),
-                                          extensions=output_d.get('format'),
-                                          type='o',
-                                          tool=t
-                                          )
+                    output_obj = ToolDataOutput(name=output_d.get('name'),
+                                                edam_format=output_d.get('edam_format'),
+                                                extensions=output_d.get('format'),
+                                                tool=t
+                                                )
                     output_obj.save()
                     print "output", output_d.get('name'), output_d.get('format'), output_d.get('edam_format')
 
