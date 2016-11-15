@@ -1,2 +1,4 @@
 django
 django-formtools
+django-crispy-forms
+bioblend
