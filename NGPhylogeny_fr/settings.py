@@ -11,13 +11,10 @@ https://docs.djangoproject.com/en/1.9/ref/settings/
 """
 
 import os
+import galaxyconf
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-# Galaxy server definition
-GALAXY_SERVER_URL = "http://127.0.0.1:8080/"
-GALAXY_SESSION_ID = 'galaxysession'
 
 
 # Quick-start development settings - unsuitable for production
@@ -61,6 +58,7 @@ MIDDLEWARE_CLASSES = [
     'django.contrib.auth.middleware.SessionAuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'debug_toolbar.middleware.DebugToolbarMiddleware'
 ]
 
 SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
