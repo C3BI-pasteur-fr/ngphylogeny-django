@@ -14,26 +14,25 @@ class CustomMultipleChoiceField(forms.ModelMultipleChoiceField):
 
 class ToolForm(forms.ModelForm, forms.Form ):
 
-    input_data = CustomMultipleChoiceField()
-    output_data = CustomMultipleChoiceField()
     compatible_tool = CustomMultipleChoiceField()
 
     class Meta:
         model = Tool
         fields = ('name', 'id_galaxy')
-        readonly_fields = ('input_data', 'output_data', 'compatible_tool')
+        readonly_fields = ( 'compatible_tool')
 
     def __init__(self, *args, **kwargs):
         super(ToolForm, self).__init__(*args, **kwargs)
-        self.fields['input_data'].queryset = kwargs.get('instance').input_data
-        self.fields['output_data'].queryset = kwargs.get('instance').output_data
         self.fields['compatible_tool'].queryset = kwargs.get('instance').compatible_tool
 
 
-class ToolDataInline(admin.TabularInline):
-    model = ToolData
+class ToolDataOutputInline(admin.TabularInline):
+    model = ToolDataOutput
     extra = 0
 
+class ToolDataInputInline(admin.TabularInline):
+    model = ToolDataInput
+    extra = 0
 
 class ToolFlagInline(admin.TabularInline):
     model = ToolFlag.tool.through
@@ -42,10 +41,11 @@ class ToolFlagInline(admin.TabularInline):
 
 class ToolAdmin(admin.ModelAdmin):
 
-    form = ToolForm
-    fields = ('name', 'id_galaxy', 'tag', 'input_data', 'output_data', 'compatible_tool')
+
+    fields = ('name', 'id_galaxy',)
     inlines = [
-        ToolDataInline,
+        ToolDataInputInline,
+        ToolDataOutputInline,
         ToolFlagInline
     ]
 

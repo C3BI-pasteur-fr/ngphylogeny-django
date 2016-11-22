@@ -1,4 +1,3 @@
-from __future__ import unicode_literals
 from django.db import models
 
 
@@ -20,18 +19,6 @@ class Tool(models.Model):
     description = models.CharField(max_length=250)
 
     @property
-    def input_data(self):
-        """return the list of input of the tool"""
-        return self.tooldata_set.filter(type='i')
-
-
-    @property
-    def output_data(self):
-        """return the list of output of the tool"""
-        return self.tooldata_set.filter(type='o')
-
-
-    @property
     def compatible_tool(self):
         """
             return the list of tools that have inputs compatible with the outputs of the tool
@@ -39,10 +26,10 @@ class Tool(models.Model):
 
             ie: tool.output.format == next_tool.input.format
         """
-        outputs = self.output_data
+        outputs = ToolDataOutput.objects.filter(tool=self)
         outputs_formats = outputs.values_list('edam_formats', flat=True)
 
-        tools_data_input = ToolData.objects.filter(type="i").select_related()
+        tools_data_input = ToolDataInput.objects.filter(tool=self)
         tools_compatible = []
 
         from ast import literal_eval
@@ -72,13 +59,44 @@ class ToolData(models.Model):
     extensions = models.CharField(max_length=25)
     edam_formats = models.CharField(max_length=250, null=True)
     type = models.CharField(max_length=1, choices=DATA_TYPE_CHOICES, default='i')
-    tool = models.ForeignKey(Tool, on_delete=models.CASCADE)
+    tool = models.ForeignKey(Tool,  on_delete=models.CASCADE)
 
     class Meta:
         verbose_name_plural = "Tool_data"
 
     def __unicode__(self):
         return "%s_%s" % (self.name, self.tool)
+
+
+class ToolDataOutputManager(models.Manager):
+
+    def get_queryset(self):
+        return super(ToolDataOutputManager, self).get_queryset().filter(
+            type='o')
+
+
+class ToolDataInputManager(models.Manager):
+
+    def get_queryset(self):
+        return super(ToolDataInputManager, self).get_queryset().filter(
+            type='i')
+
+
+class ToolDataInput(ToolData):
+
+    objects = ToolDataInputManager()
+
+    class Meta:
+        proxy = True
+        default_related_name = 'data_input'
+
+class ToolDataOutput(ToolData):
+
+    objects = ToolDataOutputManager()
+
+    class Meta:
+        proxy = True
+        default_related_name = 'data_output'
 
 
 class ToolFlag(models.Model):
