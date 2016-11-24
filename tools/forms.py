@@ -5,7 +5,7 @@ from django import forms
 
 
 def map_galaxy_tool_input(attr):
-        """take Galaxy Tool build information return django field dict"""
+        """Convert Galaxy tool input information to django field attribute dict"""
 
         field_map = dict()
         field_map['initial'] = attr.get('default_value', attr.get('value', ""))
@@ -25,15 +25,14 @@ def map_galaxy_tool_input(attr):
                 field_map['choices'] = []
             for data in opt:
                 field_map['choices'].append((data.get('id'), data.get('name')))
-                print field_map['choices']
 
         return field_map
-
 
 
 class ToolForm(forms.Form):
 
     n = 0
+    #keep link between unique id field to galaxy params name
     fieds_ids_mapping = {}
     tool_params = None
 
@@ -115,13 +114,13 @@ class ToolForm(forms.Form):
 
         return fields_created
 
-    def __init__(self, tool_params=None, *args, **kwargs):
+    def __init__(self, tool_params=None, tool_id='', *args, **kwargs):
         super(ToolForm, self).__init__(*args, **kwargs)
 
         if tool_params:
             self.tool_params = tool_params
         assert self.tool_params, 'tool_params is needed'
-
+        self.tool_id = tool_id
         self.input_file_ids = []
         self.helper = FormHelper(self)
         self.helper.form_class = 'blueForms'

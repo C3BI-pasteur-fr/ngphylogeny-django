@@ -38,37 +38,11 @@
 
 {% endblock %}
 {% block content %}
-    <div>
-        <div class="row">
-            <h3  class="text-justify"><span class="glyphicon glyphicon-chevron-right small"></span>Workflow</h3>
-        </div>
-        <form method="post" action="">
-            <div id="mini-wk" class="row">
-                {% csrf_token %}
-                <div class="col-md-2">
-                    <div class="panel panel-info">
-                        <div class="panel-heading"></div>
-                        <div class="panel-body">Input</div>
-                        <div class="panel-footer"></div>
-                    </div>
-                </div>
-                {% for step in workflow|dictsort:"step"%}
-                  <div id=wk-display-{{ step.group.name}}  class="col-md-2"> </div>
-                {% endfor %}
 
-                <div class="row">
-                    <button type="submit" class="btn btn-primary" name="run" value="Run workflow">
-                        <span class="glyphicon glyphicon-play-circle"></span> Run workflow
-                    </button>
-                </div>
-            </div>
-        </form>
-    </div>
     <div>
         <div class="row">
             <h3 class="text-justify"><span class="glyphicon glyphicon-chevron-right small"></span>List of Tools</h3>
         </div>
-        <form method="post" action="">{% csrf_token %}
         <div class="col-md-2">
             <h4 class="text-left">0. Set Input</h4>
             <div class="btn-group-vertical"  role="group">
@@ -97,18 +71,45 @@
                             <span aria-hidden="true">&times;</span>
                         </button>
                         {% include 'tools/tool_panel.html' %}
-                         <input type="hidden" name={{ step.group.name }} value="{{ tool.pk }}"/>
                     </div>
                     {# end tool panel #}
+
                 {% endfor %}
                 </div>
             </div>
         {% endfor %}
         <div class="row">
-                <button type="submit" class="btn btn-primary" name="run" value="Run workflow">
+                <button type="submit" class="btn btn-primary" name="run" value="Build workflow">
                     <span class="glyphicon glyphicon-play-circle"></span> Run workflow
                 </button>
         </div>
+    </div>
+        <div>
+        <div class="row">
+            <h3  class="text-justify"><span class="glyphicon glyphicon-chevron-right small"></span>Workflow</h3>
+        </div>
+        <form method="post">
+            <div id="mini-wk" class="row">
+                {% csrf_token %}
+                <div class="col-md-2">
+                    <div class="panel panel-info">
+                        <div class="panel-heading"></div>
+                        <div class="panel-body">Input</div>
+                        <div class="panel-footer">
+                        </div>
+                        <input type="hidden" name="tools"/>
+                    </div>
+                </div>
+                {% for step in workflow|dictsort:"step"%}
+                  <div id=wk-display-{{ step.group.name}}  class="col-md-2"> </div>
+                {% endfor %}
+
+                <div class="row">
+                    <button type="submit" class="btn btn-primary" name="run" value="Build workflow">
+                        <span class="glyphicon glyphicon-play-circle"></span> Run workflow
+                    </button>
+                </div>
+            </div>
         </form>
     </div>
 {% endblock content %}

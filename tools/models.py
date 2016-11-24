@@ -48,7 +48,7 @@ class Tool(models.Model):
 
 class ToolData(models.Model):
     """
-
+        Generic model for Input/output data
     """
     DATA_TYPE_CHOICES = (
         ('i', "input"),
@@ -107,3 +107,17 @@ class ToolFlag(models.Model):
 
     def __unicode__(self):
         return self.verbose_name
+
+
+class ToolInterConnections(models.Model):
+
+    tool_output = models.ForeignKey(ToolDataOutput)
+    next_tool_input = models.ForeignKey(ToolDataInput)
+
+    @property
+    def tool(self):
+        return self.tool_output.tool
+
+    @property
+    def next_tool(self):
+        return self.next_tool_input.tool

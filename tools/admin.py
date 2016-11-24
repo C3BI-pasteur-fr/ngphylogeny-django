@@ -38,6 +38,12 @@ class ToolFlagInline(admin.TabularInline):
     model = ToolFlag.tool.through
     extra = 0
 
+class ToolInterConnectionInline(admin.TabularInline):
+    model = ToolData
+
+    extra = 0
+
+
 
 class ToolAdmin(admin.ModelAdmin):
 
@@ -54,3 +60,4 @@ class ToolAdmin(admin.ModelAdmin):
 admin.site.register(Tool, ToolAdmin)
 admin.site.register(ToolData)
 admin.site.register(ToolFlag)
+admin.site.register(ToolInterConnections)

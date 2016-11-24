@@ -19,9 +19,8 @@ from django.views.generic import TemplateView
 
 
 urlpatterns = [
-    url(r'^$', workflows_form, name="workflows_form"),
+    url(r'^$', workflow_form, name="workflow_form"),
 
-    url(r'build$', workflows_build, name="workflows_build"),
     url(r'advanced_mode$', workflows_advanced_mode_build, name="workflows_advanced"),
     url(r'oneclick_mode$', workflows_oneclick_mode_build, name="workflows_oneclick"),
     url(r'alacarte_mode$', workflows_alacarte_mode_build, name="workflows_alacarte"),

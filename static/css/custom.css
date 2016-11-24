@@ -1,7 +1,20 @@
+@import 'https://fonts.googleapis.com/css?family=Bungee+Inline|Fascinate+Inline|Francois+One';
+/*font-family: 'Francois One', sans-serif;
+font-family: 'Fascinate Inline', cursive;
+font-family: 'Bungee Inline', cursive;*/
+
+.title-cap{
+    font-family: 'Bungee Inline', cursive;
+}
+
 header.jumbotron{
     color:#ffffff ;
-    background-image: linear-gradient(to bottom, #052a3b 0px, #60a0c0 100%);
-    font-family: "Ubuntu";
+    background-color: #446cb3;
+    background-size: 100%;
+    background-image: url("/static/images/header.jpg");
+    background-position: center;
+    background-repeat: no-repeat;
+    font-family: 'Ubuntu', sans-serif;
     margin-bottom: 0px;
 }
 footer {
