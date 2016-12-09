@@ -111,13 +111,13 @@ class ToolFlag(models.Model):
 
 class ToolInterConnections(models.Model):
 
-    tool_output = models.ForeignKey(ToolDataOutput)
-    next_tool_input = models.ForeignKey(ToolDataInput)
-
+    data = models.ForeignKey(ToolDataOutput, related_name='data_output_producted')
     @property
-    def tool(self):
+    def producted_by(self):
         return self.tool_output.tool
 
     @property
-    def next_tool(self):
+    def compatible_with(self):
         return self.next_tool_input.tool
+
+    input_field = models.ForeignKey(ToolDataInput, related_name='data_input_compatible')
