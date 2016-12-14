@@ -12,3 +12,9 @@ def galaxy_connection_error_view(request):
 
     return render(request, 'error.html', {'error': error})
 
+
+def galaxy_user_apikey_settings(request):
+    """TODO"""
+    return render(request, 'error.html', {'error': "Not Already implemanted"})
+
+
