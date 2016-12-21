@@ -1,5 +1,5 @@
 from django.db import models
-
+from account.models import *
 
 TOOL_TAGS = (
     ('', '----'),
@@ -14,9 +14,14 @@ class Tool(models.Model):
     """
 
     """
+    galaxy_server = models.ForeignKey(GalaxyServer, null=True, blank=True)
     id_galaxy = models.CharField(max_length=250, unique=True)
-    name = models.CharField(max_length=100)
+    toolshed = models.CharField(max_length=100, blank=True)
+    name = models.CharField(max_length=100 , blank=True)
+    version = models.CharField(max_length=10, blank=True)
     description = models.CharField(max_length=250)
+
+
 
     @property
     def compatible_tool(self):

@@ -4,6 +4,7 @@ import requests
 from django.conf import settings
 from django.core.management.base import BaseCommand
 
+from account.models import GalaxyServer
 from tools.models import Tool, ToolDataInput, ToolDataOutput
 
 
@@ -17,29 +18,34 @@ class Command(BaseCommand):
 
     def handle_noargs(self):
 
+        galaxy_server, created = GalaxyServer.objects.get_or_create(url=settings.GALAXY_SERVER_URL)
+
         params = urllib.urlencode({'q': "phylogeny"}, True)
-        url = '%s/%s/%s/?%s' % (settings.GALAXY_SERVER_URL, 'api', 'tools', params)
-        connection = requests.get(url)
+        tools_url = '%s/%s/%s/?%s' % (galaxy_server.url, 'api', 'tools', params)
+        connection = requests.get(tools_url)
         tools_ids = []
         if connection.status_code == 200:
             tools_ids = connection.json()
 
             for id_tool in tools_ids:
                 params = urllib.urlencode({'io_details': "true"}, True)
-                tool_url = '%s/%s/%s/%s/?%s' % (settings.GALAXY_SERVER_URL, 'api', 'tools', id_tool, params )
+                tool_url = '%s/%s/%s/%s/?%s' % (galaxy_server.url, 'api', 'tools', id_tool, params )
                 tool_info_request = requests.get(tool_url)
                 tool_info = tool_info_request.json()
 
-                tool_name = tool_info.get('name')
-                inputs_tools = tool_info.get('inputs')
-                description = tool_info.get('description')
-
-                t, created = Tool.objects.get_or_create(id_galaxy=id_tool)
+                t, created = Tool.objects.get_or_create(id_galaxy=id_tool, galaxy_server=galaxy_server)
 
                 if created:
-                    t.name = tool_name
-                    t.description = description
+                    t.name = tool_info.get('name')
+                    print t.name
+                    t.description = tool_info.get('description')
+                    t.version = tool_info.get('version')
+
+                    if "toolshed" in t.id_galaxy:
+                        t.toolshed = t.id_galaxy.split('/')[0]
                     t.save()
+
+                    inputs_tools = tool_info.get('inputs')
                     for input_d in inputs_tools:
 
                         if input_d.get('type') == 'data':
@@ -63,6 +69,7 @@ class Command(BaseCommand):
                         output_obj = ToolDataOutput(name=output_d.get('name'),
                                                     edam_formats=output_d.get('edam_format'),
                                                     extensions=output_d.get('format'),
+                                                    type="o",
                                                     tool=t
                                                     )
                         output_obj.save()

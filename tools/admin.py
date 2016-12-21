@@ -19,7 +19,7 @@ class ToolForm(forms.ModelForm, forms.Form ):
     class Meta:
         model = Tool
         fields = ('name', 'id_galaxy')
-        readonly_fields = ( 'compatible_tool')
+        readonly_fields = ('compatible_tool')
 
     def __init__(self, *args, **kwargs):
         super(ToolForm, self).__init__(*args, **kwargs)
@@ -48,7 +48,7 @@ class ToolInterConnectionInline(admin.TabularInline):
 class ToolAdmin(admin.ModelAdmin):
 
 
-    fields = ('name', 'id_galaxy',)
+    fields = ('galaxy_server','toolshed','name','version','id_galaxy',)
     inlines = [
         ToolDataInputInline,
         ToolDataOutputInline,
