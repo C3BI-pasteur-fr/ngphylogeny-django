@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block stylesheet %}
+
+{% endblock %}
+
+{% block content %}
+    <div class="row">
+        <div class="col-md-2"></div>
+        <div class="col-md-8">
+            <h3>Welcome</h3>
+            <div class="glyphicon glyphicon-info-sign">"></div>
+            <div>Your(s) job(s) will be executed by <a href="{{ object.galaxy_server.url }}">{{ object.galaxy_server.url }}</a></div>
+            <div class="glyphicon glyphicon-info-sign">></div>
+            Please to set up your API Key to continue... (see the Galaxy docs to generate an API Key )
+
+            <section>
+                <form action="" method="post">{% csrf_token %}
+                    {{ form.as_p }}
+                    <button type="submit" value="Update"/>
+                    Update</button>
+                </form>
+                {% if messages %}
+                    <ul class="messages">
+                        {% for message in messages %}
+                            {{ message }}
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+            </section>
+        </div>
+
+{% endblock %}

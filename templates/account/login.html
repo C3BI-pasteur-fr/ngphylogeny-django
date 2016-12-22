@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block stylesheet %}
+    <link rel="stylesheet" type="text/css" href="{{ STATIC_URL }}css/login.css" media="screen"/>
+{% endblock %}
+{% block logout %}{% endblock %}
+
+{% block bodyclass %}login{% endblock %}
+
+{% block content %}
+
+    <div class="row">
+        <div class="col-md-2"></div>
+        <div class="col-md-8">
+
+            <h2>Authentication required</h2>
+
+            <div id="content-main">
+                <form action="" method="POST" id="login-form">
+                    <div class="form-row">
+                        {% csrf_token %}
+                        {{ form.as_p }}
+                    </div>
+                    <div class="submit-row">
+                        <input type="submit" value="Login">
+                        {%comment%}
+					<a href="/create_account">new user</a>
+				{% endcomment%}
+                    </div>
+                </form>
+                <div>
+
+                </div>
+                <br class="clear"/>
+            </div>
+
+            <script type="text/javascript">
+                document.getElementById('id_username').focus()
+            </script>
+        </div>
+    </div>
+
+{% endblock %}

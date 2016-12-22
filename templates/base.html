@@ -32,6 +32,18 @@
             <li {% block nav-doc %}{% endblock %}><a href="{% url 'documentation' %}">Documentation</a></li>
             <li {% block nav-about %}{% endblock %}><a href="#">About</a></li>
             <li {% block nav-contact %}{% endblock %}><a href="#">Contact</a></li>
+
+            <li class=user>
+            {%if user.is_authenticated %}
+                <a href ="{% url 'logout' %}">Logout</a>
+            </li>
+            <li class=user>
+                <a href ="{% url 'account' %}">{{user}}</a>
+            {% else %}
+                <a href ={% url 'login' %}>Login</a>
+            {% endif %}
+            </li>
+
         </ul>
     </div>
 </nav>

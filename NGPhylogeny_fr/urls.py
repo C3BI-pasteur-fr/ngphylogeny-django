@@ -23,6 +23,7 @@ from workspace import urls as workspace_urls
 from tools import urls as tool_urls
 from workflows import urls as workflows_urls
 from django.conf import settings
+from account import urls as account_urls
 
 
 urlpatterns = [
@@ -31,6 +32,7 @@ urlpatterns = [
     url(r'galaxy/(?P<id>[\w-]+)$', RedirectView.as_view(url=settings.GALAXY_SERVER_URL+'dataset/errors?id=%(id)s'), name="galaxy_error_url"),
     url(r'^documentation$', TemplateView.as_view(template_name="documentation.html"), name="documentation"),
     url(r'^analysis$', TemplateView.as_view(template_name="phylogeny_analysis_choices.html"), name="analysis_list"),
+    url(r'^account/', include(account_urls)),
     url(r'^tools/', include(tool_urls)),
     url(r'^data/', include(data_urls)),
     url(r'^workflows/', include(workflows_urls)),

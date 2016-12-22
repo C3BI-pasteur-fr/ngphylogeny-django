@@ -13,6 +13,7 @@
                         <span class="glyphicon glyphicon-info-sign"></span></a>
                     </td>
                     <td><a class="btn btn-toolbar" href="{%  url 'tool_form' tool.pk %}">{{ tool.name }}</a></td>
+                    <td><a class="btn btn-toolbar" href="{%  url 'tool_form' tool.pk %}">{{ tool.version }}</a></td>
                     <td><a class="btn btn-toolbar" href="{%  url 'tool_detail_json' tool.pk %}">json</a></td>
                 </tr>
             {% endfor %}

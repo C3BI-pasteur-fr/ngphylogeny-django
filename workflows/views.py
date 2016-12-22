@@ -106,7 +106,7 @@ def workflows_advanced_mode_build(request):
 
 def workflows_oneclick_mode_build(request):
 
-    pass
+    return render(request, 'workflows/workflows_oneclik.html')
 
 def workflows_alacarte_mode_build(request):
 

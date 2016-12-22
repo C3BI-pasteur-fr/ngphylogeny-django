@@ -2,9 +2,10 @@ from __future__ import unicode_literals
 
 from django.conf import settings
 from galaxylib import GalaxyInstanceAnonymous, GalaxyInstance
-from django.core.exceptions import ObjectDoesNotExist
 
-from views import galaxy_connection_error_view, galaxy_user_apikey_settings
+from django.shortcuts import redirect
+from account.models import GalaxyConf, GalaxyUser
+from views import galaxy_connection_error_view
 
 import requests
 
@@ -26,26 +27,50 @@ def get_galaxy_session_id():
 def connection_galaxy(view_function):
     """Initiating Galaxy connection"""
 
+    try:
+
+        galaxy_conf = GalaxyConf.objects.get(active=True)
+
+    except:
+        raise Exception("NGPhylogeny server is not properly configured,"
+                        "please ensure that the Galaxy server is correctly set up")
+
     def wrapper(request, *args, **kwargs):
 
         if request.user.is_authenticated():
             """Try to use related Galaxy user information"""
-            if request.user.galaxyuser.api_key:
-                request.galaxy = GalaxyInstance(url=settings.GALAXY_SERVER_URL, key=request.user.galaxyuser.api_key)
-            else:
 
-                return galaxy_user_apikey_settings(request)
+            try:
+                gu = GalaxyUser.objects.get(user=request.user)
+                if gu.api_key:
+                    request.galaxy = GalaxyInstance(url=settings.GALAXY_SERVER_URL, key=request.user.galaxyuser.api_key)
+                else:
+                    return redirect('account')
 
+            except:
+                gu = GalaxyUser(user=request.user,
+                                galaxy_server=galaxy_conf.galaxy_server)
+                gu.save()
+                return redirect('account')
 
         elif request.user.is_anonymous():
-            """If user is not an authenticated galaxyuser"""
+
+            """If user is not an authenticated user default galaxy user"""
             try:
-                id_galaxysession = request.session.setdefault(settings.GALAXY_SESSION_ID, get_galaxy_session_id())
-                request.galaxy = GalaxyInstanceAnonymous(url=settings.GALAXY_SERVER_URL, galaxysession=id_galaxysession)
 
-            except requests.ConnectionError:
+                request.galaxy = GalaxyInstance(url=galaxy_conf.galaxy_server.url, key=galaxy_conf.global_api_key)
 
-                return galaxy_connection_error_view(request)
+            except:
+                return redirect('account')
+
+                # """If user is not an authenticated galaxyuser use cookies"""
+                # try:
+                #    id_galaxysession = request.session.setdefault(settings.GALAXY_SESSION_ID, get_galaxy_session_id())
+                #    request.galaxy = GalaxyInstanceAnonymous(url=settings.GALAXY_SERVER_URL, galaxysession=id_galaxysession)
+                #
+                # except requests.ConnectionError:
+                #
+                #    return galaxy_connection_error_view(request)
 
         return view_function(request, *args, **kwargs)
 

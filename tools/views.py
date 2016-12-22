@@ -9,7 +9,7 @@ from django.views.generic import DetailView, ListView
 from account.decorator import connection_galaxy
 from .forms import ToolForm
 from .models import Tool
-
+from workspace.views import create_history
 
 class ToolListView(ListView):
     """
@@ -72,12 +72,7 @@ def tool_exec_view(request, pk, store_output=None):
 
         if tool_form.is_valid():
 
-            try:
-                history_id = gi.histories.get_most_recently_used_history().get('id')
-
-            except:
-                # Create a new galaxy history and delete older if the user is not authenticated
-                history_id = gi.histories.create_history().get('id')
+            history_id = create_history(request)
 
             tool_inputs = inputs()
             for key, value in request.POST.items():
@@ -108,7 +103,7 @@ def tool_exec_view(request, pk, store_output=None):
                 tool_outputs = gi.tools.run_tool(history_id=history_id,
                                                  tool_id=tool_obj.id_galaxy,
                                                  tool_inputs=tool_inputs)
-
+                print tool_outputs
                 if store_output:
                     request.session['output'] = tool_outputs
 
@@ -138,12 +133,7 @@ def tool_exec(request, tool_form, store_output=None):
         gi = request.galaxy
         if tool_form.is_valid():
 
-            try:
-                history_id = gi.histories.get_most_recently_used_history().get('id')
-
-            except:
-                # Create a new galaxy history and delete older if the user is not authenticated
-                history_id = gi.histories.create_history().get('id')
+            history_id = create_history(request)
 
             tool_inputs = inputs()
             for key, value in request.POST.items():
