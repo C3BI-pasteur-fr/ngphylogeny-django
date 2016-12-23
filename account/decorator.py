@@ -3,7 +3,7 @@ from __future__ import unicode_literals
 from django.conf import settings
 from galaxylib import GalaxyInstanceAnonymous, GalaxyInstance
 
-from django.shortcuts import redirect
+from django.shortcuts import redirect, get_object_or_404
 from account.models import GalaxyConf, GalaxyUser
 from views import galaxy_connection_error_view
 
@@ -27,15 +27,14 @@ def get_galaxy_session_id():
 def connection_galaxy(view_function):
     """Initiating Galaxy connection"""
 
-    try:
-
-        galaxy_conf = GalaxyConf.objects.get(active=True)
-
-    except:
-        raise Exception("NGPhylogeny server is not properly configured,"
-                        "please ensure that the Galaxy server is correctly set up")
-
     def wrapper(request, *args, **kwargs):
+
+        try:
+            galaxy_conf = get_object_or_404(GalaxyConf, active=True)
+        except:
+
+            raise Exception("NGPhylogeny server is not properly configured,"
+                   "please ensure that the Galaxy server is correctly set up")
 
         if request.user.is_authenticated():
             """Try to use related Galaxy user information"""
