@@ -8,17 +8,21 @@
     <div class="row">
         <div class="col-md-2"></div>
         <div class="col-md-8">
-            <h3>Welcome</h3>
-            <div class="glyphicon glyphicon-info-sign">"></div>
-            <div>Your(s) job(s) will be executed by <a href="{{ object.galaxy_server.url }}">{{ object.galaxy_server.url }}</a></div>
-            <div class="glyphicon glyphicon-info-sign">></div>
-            Please to set up your API Key to continue... (see the Galaxy docs to generate an API Key )
+            <h3>Welcome {{ galaxyuser.user }}</h3>
+            <div>
+                <spam class="glyphicon glyphicon-info-sign"></spam>
+                Your(s) job(s) will be executed by <a href="{{ object.galaxy_server.url }}">{{ object.galaxy_server.url }}</a>
+            </div>
+            <div>
+                {% if not galaxyuser.api_key %}
+                    <spam class="glyphicon glyphicon-info-sign"></spam> Please to set up your API Key to continue... (see the Galaxy docs to generate an API Key)
+                {% endif %}
+            </div>
 
             <section>
                 <form action="" method="post">{% csrf_token %}
                     {{ form.as_p }}
-                    <button type="submit" value="Update"/>
-                    Update</button>
+                    <button type="submit" value="Update">Update</button>
                 </form>
                 {% if messages %}
                     <ul class="messages">
