@@ -26,6 +26,22 @@ def create_history(request):
     return wsph.history
 
 
+@connection_galaxy
+def get_or_create_history(request):
+
+    gi = request.galaxy
+    history_id = request.session.get('last_history')
+
+    if not history_id:
+        # Create a new galaxy history
+        history_id = create_history(request)
+
+    # save the current history
+    request.session["last_history"] = history_id
+
+    return history_id
+
+
 @method_decorator(connection_galaxy, name="dispatch")
 class HistoryDetailView(TemplateView):
     """
@@ -36,23 +52,14 @@ class HistoryDetailView(TemplateView):
     def get_context_data(self, **kwargs):
         # Call the base implementation first to get a context
         context = super(HistoryDetailView, self).get_context_data(**kwargs)
-
-        gi = self.request.galaxy
         history_id = context.get('history_id', None)
+        gi = self.request.galaxy
 
-        #if no history id try to retrieve last history
+        #if no history id try to retrieve or create history
         if not history_id:
-            history_id = self.request.session.get('last_history')
-
-        if not history_id:
-            # Create a new galaxy history
-            history_id = create_history(self.request)
-
-        #save the current history
-        self.request.session["last_history"] = history_id
+            history_id = get_or_create_history(self.request)
 
         context['history_info'] = gi.histories.show_history(history_id)
         context['history_content'] = gi.histories.show_history(history_id, contents=True)
         print context['history_content']
         return context
-
