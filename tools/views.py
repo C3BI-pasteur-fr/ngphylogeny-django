@@ -2,7 +2,7 @@ import tempfile
 
 from bioblend.galaxy.tools.inputs import inputs
 from django.core.urlresolvers import reverse_lazy
-from django.http import JsonResponse
+
 from django.shortcuts import render, get_object_or_404, redirect
 from django.views.generic import DetailView, ListView
 
@@ -11,45 +11,13 @@ from .forms import ToolForm
 from .models import Tool
 from workspace.views import create_history
 
+
 class ToolListView(ListView):
-    """
-    """
     model = Tool
 
 
 class ToolDetailView(DetailView):
     model = Tool
-
-
-class ToolJSONView(ToolDetailView):
-    """
-    """
-    def get(self, request, *args, **kwargs):
-        tool = self.get_object()
-        jsondata = {'id': tool.id, 'name': tool.name,
-                    'id_galaxy': tool.id_galaxy,
-                    'inputs_data': list(str(i) for i in tool.input_data),
-                    'outputs_data': list(str(o) for o in tool.output_data),
-                    'tool_linkable': list(str(t) for t in tool.compatible_tool),
-                    }
-        return JsonResponse(jsondata)
-
-
-@connection_galaxy
-def tool_form_view(request, pk):
-    """
-    :param request:
-    :param pk:
-    :return:
-    """
-
-    tool_obj = get_object_or_404(Tool, pk=pk)
-    data = request.galaxy.tools.show_tool(tool_id=tool_obj.id_galaxy, io_details='true')
-
-    context = {"toolform": ToolForm(data['inputs']),
-               "tool": tool_obj}
-
-    return render(request, 'tools/tool_form.html', context)
 
 
 @connection_galaxy
@@ -122,6 +90,7 @@ def tool_exec_view(request, pk, store_output=None):
 
     context = {"toolform": tool_form,
                "tool": tool_obj,
+               "message":message,
                }
 
     return render(request, 'tools/tool_form.html', context)

@@ -6,6 +6,7 @@ from .models import *
 
 
 class CustomMultipleChoiceField(forms.ModelMultipleChoiceField):
+
     def __init__(self, *args, **kwargs):
         super(CustomMultipleChoiceField, self).__init__(queryset=None,*args, **kwargs)
         self.required = False
@@ -27,26 +28,30 @@ class ToolForm(forms.ModelForm, forms.Form ):
 
 
 class ToolDataOutputInline(admin.TabularInline):
+
     model = ToolDataOutput
     extra = 0
 
+
 class ToolDataInputInline(admin.TabularInline):
+
     model = ToolDataInput
     extra = 0
 
+
 class ToolFlagInline(admin.TabularInline):
+
     model = ToolFlag.tool.through
     extra = 0
 
-class ToolInterConnectionInline(admin.TabularInline):
-    model = ToolData
 
+class ToolInterConnectionInline(admin.TabularInline):
+
+    model = ToolData
     extra = 0
 
 
-
 class ToolAdmin(admin.ModelAdmin):
-
 
     fields = ('galaxy_server','toolshed','name','version','id_galaxy',)
     inlines = [
@@ -54,7 +59,6 @@ class ToolAdmin(admin.ModelAdmin):
         ToolDataOutputInline,
         ToolFlagInline
     ]
-
 
 
 admin.site.register(Tool, ToolAdmin)
