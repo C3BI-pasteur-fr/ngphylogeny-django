@@ -8,7 +8,7 @@ from django.views.generic import FormView
 from forms import UploadForm
 from django.utils.decorators import method_decorator
 from account.decorator import connection_galaxy
-
+from workspace.views import get_or_create_history
 
 @method_decorator(connection_galaxy, name="dispatch")
 class UploadView(FormView):
@@ -20,31 +20,23 @@ class UploadView(FormView):
     form_class = UploadForm
     success_url = reverse_lazy("home")
 
-    # TODO Page d'erreur
-
-    def form_valid(self, form):
-
+    def upload_file(self, form):
+        """upload file into current galaxy history: return galaxy response
+        """
         myfile = form.cleaned_data['file']
         tmpfile = tempfile.NamedTemporaryFile()
         for chunk in myfile.chunks():
             tmpfile.write(chunk)
         tmpfile.flush()
 
-        gi = self.request.galaxy
+        self.history_id = get_or_create_history(self.request)
+        return self.request.galaxy.tools.upload_file(tmpfile.name, self.history_id, file_name=myfile.name)
 
-        try:
-            history_id = gi.histories.get_most_recently_used_history().get('id')
 
-        except:
+    def form_valid(self, form):
 
-            # Create a new galaxy history and delete older if the user is not authenticated
-            history_id = gi.histories.create_history().get('id')
-        outputs = gi.tools.upload_file(tmpfile.name, history_id, file_name=myfile.name)
-        self.success_url = reverse_lazy("history_detail", kwargs={'history_id': history_id}, )
-
-        # TODO
-        # supprime l'history en cas d'erreur
-        # gi.histories.delete_history(history_id)
+        outputs = self.upload_file(form)
+        self.success_url = reverse_lazy("history_detail", kwargs={'history_id': self.history_id}, )
 
         return super(UploadView, self).form_valid(form)
 
