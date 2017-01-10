@@ -1,27 +1,28 @@
 from __future__ import unicode_literals
 
-from django.conf import settings
-from galaxylib import GalaxyInstanceAnonymous, GalaxyInstance
-
+from galaxylib import  GalaxyInstance
 from django.shortcuts import redirect, get_object_or_404
 from account.models import GalaxyConf, GalaxyUser
-from views import galaxy_connection_error_view
 
-import requests
-
-
-def get_galaxy_session_id():
-    """
-    Open an anonymous connection with Galaxy server and save Galaxy session information
-    """
-    connection = requests.get(settings.GALAXY_SERVER_URL)
-    # connect to galaxy server and retrieve galaxysession ID stored in a cookie
-    if connection.status_code == 200:
-        return connection.cookies.get('galaxysession')
-
-    else:
-        # TODO Galaxy no response page
-        raise Exception("Galaxy server response:" + connection.status.code)
+# from views import galaxy_connection_error_view
+# import requests
+# from galaxylib import GalaxyInstanceAnonymous
+# from django.conf import settings
+#
+# Allow anonymous access deprecated
+# def get_galaxy_session_id():
+#     """
+#     Open an anonymous connection with Galaxy server and save Galaxy session information
+#     """
+#
+#     connection = requests.get(settings.GALAXY_SERVER_URL)
+#     # connect to galaxy server and retrieve galaxysession ID stored in a cookie
+#     if connection.status_code == 200:
+#         return connection.cookies.get('galaxysession')
+#
+#     else:
+#         # TODO Galaxy no response page
+#         raise Exception("Galaxy server response:" + connection.status.code)
 
 
 def connection_galaxy(view_function):
@@ -41,14 +42,15 @@ def connection_galaxy(view_function):
 
             try:
                 gu = GalaxyUser.objects.get(user=request.user)
+
                 if gu.api_key:
-                    request.galaxy = GalaxyInstance(url=settings.GALAXY_SERVER_URL, key=request.user.galaxyuser.api_key)
+                    request.galaxy = GalaxyInstance(url=galaxy_conf.galaxy_server.url, key=request.user.galaxyuser.api_key)
                 else:
                     return redirect('account')
 
             except:
                 gu = GalaxyUser(user=request.user,
-                                galaxy_server=galaxy_conf.galaxy_server)
+                                galaxy_server=galaxy_conf.galaxy_server.url)
                 gu.save()
                 return redirect('account')
 
@@ -62,6 +64,7 @@ def connection_galaxy(view_function):
             except:
                 return redirect('account')
 
+                # Allow anonymous access deprecated
                 # """If user is not an authenticated galaxyuser use cookies"""
                 # try:
                 #    id_galaxysession = request.session.setdefault(settings.GALAXY_SESSION_ID, get_galaxy_session_id())

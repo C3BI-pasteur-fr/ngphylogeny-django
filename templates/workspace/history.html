@@ -6,7 +6,13 @@
     <div class="row">
         <div class="col-md-2"></div>
         <div class="col-md-8">
-            {% include "workspace/include/history_contents.html" %}
+            {% if history_content %}
+                {% include "workspace/include/history_contents.html" %}
+            {% else %}
+                <div class="jumbotron">
+                    You haven't any recent analyzes in progress
+                </div>
+            {% endif %}
         </div>
     </div>
 {% endblock %}

@@ -13,11 +13,11 @@ from workspace.views import create_history
 
 
 class ToolListView(ListView):
-    model = Tool
+    queryset = Tool.objects.filter(galaxy_server__galaxyconf__active=True)
 
 
 class ToolDetailView(DetailView):
-    model = Tool
+    queryset = Tool.objects.filter(galaxy_server__galaxyconf__active=True)
 
 
 @connection_galaxy

@@ -27,8 +27,7 @@ class WorkflowOneClickListView(ListView):
     """
     Generic class-based view
     """
-    model = Workflow
-
+    queryset = Workflow.objects.filter(galaxy_server__galaxyconf__active=True)
 
 @connection_galaxy
 def workflow_oneclick_form_view(request, slug):
@@ -43,9 +42,10 @@ def workflow_oneclick_form_view(request, slug):
     context = {"workflow": workflow, "inputs": i_inputs }
     return render(request, 'workflows/workflows_oneclik_form.html', context)
 
+
 class WorkflowOneClickView( UploadView ):
 
-    model = Workflow
+    queryset = Workflow.objects.filter(galaxy_server__galaxyconf__active=True)
     object = Workflow
     #context_object_name = 'workflow'
     template_name = 'workflows/workflows_oneclik_form.html'
@@ -57,7 +57,7 @@ class WorkflowOneClickView( UploadView ):
         gi = self.request.galaxy
         workflow = self.get_object()
         workflow.json = gi.workflows.show_workflow(workflow.id_galaxy)
-
+        print workflow.json
         query=Tool.objects
         start = workflow.json['inputs'].keys()[0]
 
@@ -69,7 +69,6 @@ class WorkflowOneClickView( UploadView ):
 
             for input, step_output in step.get("input_steps",{}).items():
                 graph.setdefault(str(step_output.get('source_step')), []).append(str(step_id))
-
 
 
         def search_order(graph,step):

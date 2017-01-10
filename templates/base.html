@@ -28,7 +28,15 @@
             <li {% block nav-home %}{% endblock %} ><a href="{% url 'home' %}">Home</a></li>
             <li {% block nav-analysis %}{% endblock %}><a href="{% url 'analysis_list' %}">Phylogeny Analysis</a></li>
             <li {% block nav-tools %}{% endblock %}><a href="{% url 'tools' %}">Tools</a></li>
-            <li {% block nav-workspace %}{% endblock %}><a href="{% url 'history_current_detail' %}">Workspace</a></li>
+            <li {% block nav-workspace %}{% endblock %}>
+                <a  {% if request.session.last_history %}
+                        href="{% url 'history_current_detail' %}"
+                    {% else %}
+                        class="text-muted"
+                {% endif %}>
+                    Workspace
+                </a>
+            </li>
             <li {% block nav-doc %}{% endblock %}><a href="{% url 'documentation' %}">Documentation</a></li>
             <li {% block nav-about %}{% endblock %}><a href="#">About</a></li>
             <li {% block nav-contact %}{% endblock %}><a href="#">Contact</a></li>

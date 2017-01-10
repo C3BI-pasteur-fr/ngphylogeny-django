@@ -7,6 +7,11 @@ from models import WorkspaceHistory
 
 @connection_galaxy
 def create_history(request):
+    """
+    :param request:
+    :return: history_id
+    """
+
     gi = request.galaxy
     # Create a new galaxy history and delete older if the user is not authenticated
     history = gi.histories.create_history()
@@ -23,15 +28,23 @@ def create_history(request):
                             galaxy_server=galaxy_conf.galaxy_server)
 
     wsph.save()
+    request.session["last_history"] = wsph.history
+
     return wsph.history
 
-
 @connection_galaxy
-def get_or_create_history(request):
+def get_history(request):
 
     gi = request.galaxy
-    history_id = request.session.get('last_history')
+    return request.session.get('last_history')
 
+
+def get_or_create_history(request):
+    """
+    :param request:
+    :return: history_id
+    """
+    history_id = get_history(request)
     if not history_id:
         # Create a new galaxy history
         history_id = create_history(request)
@@ -52,14 +65,18 @@ class HistoryDetailView(TemplateView):
     def get_context_data(self, **kwargs):
         # Call the base implementation first to get a context
         context = super(HistoryDetailView, self).get_context_data(**kwargs)
-        history_id = context.get('history_id', None)
-        gi = self.request.galaxy
 
-        #if no history id try to retrieve or create history
+        # first display history with id history contained in the url
+        history_id = context.get('history_id', None) or self.kwargs.get('history_id', None)
+
+        # if no history id try to retrieve or create history
         if not history_id:
-            history_id = get_or_create_history(self.request)
+            history_id = get_history(self.request)
 
+        if not history_id:
+            return context
+
+        gi = self.request.galaxy
         context['history_info'] = gi.histories.show_history(history_id)
         context['history_content'] = gi.histories.show_history(history_id, contents=True)
-        print context['history_content']
         return context
