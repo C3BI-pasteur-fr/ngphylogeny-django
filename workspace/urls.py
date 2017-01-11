@@ -17,11 +17,8 @@ from django.conf.urls import url
 from views import *
 
 
-
-
-
-
 urlpatterns = [
     url(r'^history$', HistoryDetailView.as_view(), name="history_current_detail"),
     url(r'^history/(?P<history_id>[\w-]+)$', HistoryDetailView.as_view(), name="history_detail"),
+    url(r'^history/galaxyerror/(?P<id>[\w-]+)$', GalaxyErrorView.as_view(url='/dataset/errors?id=%(id)s'), name="galaxy_error_url"),
 ]

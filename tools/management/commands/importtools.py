@@ -4,7 +4,7 @@ import requests
 from django.conf import settings
 from django.core.management.base import BaseCommand
 
-from account.models import GalaxyServer
+from account.models import GalaxyServer, GalaxyConf
 from tools.models import Tool, ToolDataInput, ToolDataOutput
 
 
@@ -18,7 +18,13 @@ class Command(BaseCommand):
 
     def handle_noargs(self):
 
-        galaxy_server, created = GalaxyServer.objects.get_or_create(url=settings.GALAXY_SERVER_URL)
+        galaxy_server = ""
+        try:
+            galaxy_active_conf = GalaxyConf.objects.get(active=True)
+            galaxy_server = galaxy_active_conf.galaxy_server
+
+        except:
+            galaxy_server, created = GalaxyServer.objects.get_or_create(url=settings.GALAXY_SERVER_URL)
 
         params = urllib.urlencode({'q': "phylogeny"}, True)
         tools_url = '%s/%s/%s/?%s' % (galaxy_server.url, 'api', 'tools', params)

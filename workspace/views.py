@@ -1,9 +1,9 @@
-from django.views.generic import TemplateView
+from django.views.generic import TemplateView, RedirectView
 from django.utils.decorators import method_decorator
 from account.decorator import connection_galaxy
 from account.models import GalaxyConf
 from models import WorkspaceHistory
-
+from django.shortcuts import get_object_or_404
 
 @connection_galaxy
 def create_history(request):
@@ -80,3 +80,10 @@ class HistoryDetailView(TemplateView):
         context['history_info'] = gi.histories.show_history(history_id)
         context['history_content'] = gi.histories.show_history(history_id, contents=True)
         return context
+
+class GalaxyErrorView(RedirectView):
+
+    def get_redirect_url(self, *args, **kwargs):
+        galaxy_conf = get_object_or_404(GalaxyConf,active=True)
+
+        return "%s/dataset/errors?id=%s" %(galaxy_conf.galaxy_server.url, kwargs.get('id'))

@@ -34,6 +34,7 @@ def tool_exec_view(request, pk, store_output=None):
 
     tool_obj = get_object_or_404(Tool, pk=pk)
     tool_inputs_details = gi.tools.show_tool(tool_id=tool_obj.id_galaxy, io_details='true')
+    print tool_inputs_details
     tool_form = ToolForm(tool_params=tool_inputs_details['inputs'], tool_id=pk, data=request.POST or None)
 
     if request.method == 'POST':
@@ -68,10 +69,11 @@ def tool_exec_view(request, pk, store_output=None):
                                                       request.POST.get(input_file_id))
 
             try:
+
                 tool_outputs = gi.tools.run_tool(history_id=history_id,
                                                  tool_id=tool_obj.id_galaxy,
                                                  tool_inputs=tool_inputs)
-                print tool_outputs
+                print "#4", tool_outputs
                 if store_output:
                     request.session['output'] = tool_outputs
 
@@ -87,6 +89,7 @@ def tool_exec_view(request, pk, store_output=None):
                 for field, err_msg in message.get('err_data').items():
                     tool_form.add_error(reverse_dict_field.get(field),
                                         ValidationError(err_msg, code='invalid'))
+
 
     context = {"toolform": tool_form,
                "tool": tool_obj,

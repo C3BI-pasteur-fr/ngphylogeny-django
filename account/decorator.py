@@ -41,16 +41,17 @@ def connection_galaxy(view_function):
             """Try to use related Galaxy user information"""
 
             try:
-                gu = GalaxyUser.objects.get(user=request.user)
+                gu = GalaxyUser.objects.get(user=request.user, galaxy_server__galaxyconf__active=True )
 
                 if gu.api_key:
-                    request.galaxy = GalaxyInstance(url=galaxy_conf.galaxy_server.url, key=request.user.galaxyuser.api_key)
+                    request.galaxy = GalaxyInstance(url=galaxy_conf.galaxy_server.url, key=gu.api_key)
                 else:
                     return redirect('account')
 
-            except:
+            except Exception, e:
+                print e
                 gu = GalaxyUser(user=request.user,
-                                galaxy_server=galaxy_conf.galaxy_server.url)
+                                galaxy_server=galaxy_conf.galaxy_server)
                 gu.save()
                 return redirect('account')
 

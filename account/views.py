@@ -18,13 +18,14 @@ def galaxy_connection_error_view(request):
 
 
 class GalaxyUserUpdateApiKey(SuccessMessageMixin, UpdateView):
+    """
 
-
-    model = GalaxyUser
+    """
+    queryset = GalaxyUser.objects.filter(galaxy_server__galaxyconf__active=True)
     template_name = "account/user_info.html"
     fields = ['api_key', ]
     success_url = '/account'
     success_message = "Your Api Key was updated successfully"
 
-    def get_object(self, queryset=None):
-        return get_object_or_404(GalaxyUser, user=self.request.user)
+    def get_object(self, queryset=queryset):
+        return get_object_or_404(GalaxyUser, user=self.request.user, galaxy_server__galaxyconf__active=True )
