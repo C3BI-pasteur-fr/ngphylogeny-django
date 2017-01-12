@@ -3,7 +3,7 @@ from django.views.generic import UpdateView
 from django.contrib.messages.views import SuccessMessageMixin
 from django.shortcuts import get_object_or_404
 from django.shortcuts import render
-from models import GalaxyUser
+from models import GalaxyUser, GalaxyServer
 
 # Create your views here.
 
@@ -28,4 +28,6 @@ class GalaxyUserUpdateApiKey(SuccessMessageMixin, UpdateView):
     success_message = "Your Api Key was updated successfully"
 
     def get_object(self, queryset=queryset):
-        return GalaxyUser.objects.get_or_create(user=self.request.user, galaxy_server__galaxyconf__active=True )[0]
+
+        galaxy_server = GalaxyServer.objects.get(galaxyconf__active=True)
+        return GalaxyUser.objects.get_or_create(user=self.request.user, galaxy_server=galaxy_server )[0]
