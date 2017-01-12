@@ -28,4 +28,4 @@ class GalaxyUserUpdateApiKey(SuccessMessageMixin, UpdateView):
     success_message = "Your Api Key was updated successfully"
 
     def get_object(self, queryset=queryset):
-        return get_object_or_404(GalaxyUser, user=self.request.user, galaxy_server__galaxyconf__active=True )
+        return GalaxyUser.objects.get_or_create(user=self.request.user, galaxy_server__galaxyconf__active=True )[0]
