@@ -1,6 +1,5 @@
 from __future__ import unicode_literals
 
-from galaxylib import  GalaxyInstance
 from django.shortcuts import redirect, get_object_or_404
 from account.models import GalaxyConf, GalaxyUser
 
@@ -42,25 +41,24 @@ def connection_galaxy(view_function):
 
             try:
                 gu = GalaxyUser.objects.get(user=request.user, galaxy_server__galaxyconf__active=True )
-
+                """If the key api is not defined, prompts the user to define it"""
                 if gu.api_key:
-                    request.galaxy = GalaxyInstance(url=galaxy_conf.galaxy_server.url, key=gu.api_key)
+                    request.galaxy = gu.get_galaxy_instance()
                 else:
                     return redirect('account')
 
             except Exception, e:
-                print e
-                gu = GalaxyUser(user=request.user,
-                                galaxy_server=galaxy_conf.galaxy_server)
+                """create galaxy user onfly"""
+                gu = GalaxyUser(user=request.user, galaxy_server=galaxy_conf.galaxy_server)
                 gu.save()
                 return redirect('account')
 
         elif request.user.is_anonymous():
 
-            """If user is not an authenticated user default galaxy user"""
+            """If user is not an authenticated, use anonymous galaxyuser set"""
             try:
 
-                request.galaxy = GalaxyInstance(url=galaxy_conf.galaxy_server.url, key=galaxy_conf.global_api_key)
+                request.galaxy = galaxy_conf.anonymous_user.get_galaxy_instance()
 
             except:
                 return redirect('account')

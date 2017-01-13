@@ -5,6 +5,8 @@ from django.contrib.auth.models import User
 from django.conf import settings
 
 from django.core.exceptions import ValidationError
+from galaxylib import GalaxyInstance
+
 
 class GalaxyServer(models.Model):
     """
@@ -29,8 +31,7 @@ class GalaxyConf(models.Model):
     name = models.CharField(max_length=80,)
     galaxy_server = models.ForeignKey(GalaxyServer)
     galaxy_anonymous_api_access = models.BooleanField(default=False, verbose_name="Enable Anonymous api?", help_text="If True")
-    global_user_name = models.CharField(max_length=50, null=True, blank=True, verbose_name="User used to connect Anonymous Users")
-    global_api_key = models.CharField(max_length=50, null=True, blank=True, verbose_name="Anonymous User shared api key")
+    anonymous_user = models.OneToOneField('GalaxyUser',  null=True, verbose_name="User used to connect Anonymous Users")
     active = models.BooleanField(default=False, verbose_name="Active Configuration?")
 
     def clean(self,*args, **kwargs):
@@ -62,6 +63,13 @@ class GalaxyUser(models.Model):
 
     def __unicode__(self):
         return self.user.username
+
+
+    def get_galaxy_instance(self):
+        """:return bioblend galaxy instance objects"""
+
+        return GalaxyInstance(url=self.galaxy_server.url, key=self.api_key)
+
 
     class Meta:
 
