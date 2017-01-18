@@ -19,7 +19,7 @@ def create_history(request):
     galaxy_conf = GalaxyConf.objects.get(active=True)
     if request.user.is_anonymous:
 
-        current_user = galaxy_conf.anonymous_user
+        current_user = galaxy_conf.anonymous_user.user
     else:
         current_user = request.user
 
