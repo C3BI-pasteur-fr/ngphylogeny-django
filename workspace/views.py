@@ -18,7 +18,8 @@ def create_history(request):
 
     galaxy_conf = GalaxyConf.objects.get(active=True)
     if request.user.is_anonymous:
-        current_user = None
+
+        current_user = galaxy_conf.anonymous_user
     else:
         current_user = request.user
 
@@ -80,6 +81,7 @@ class HistoryDetailView(TemplateView):
         context['history_info'] = gi.histories.show_history(history_id)
         context['history_content'] = gi.histories.show_history(history_id, contents=True)
         return context
+
 
 class GalaxyErrorView(RedirectView):
 

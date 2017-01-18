@@ -4,6 +4,8 @@ from django.contrib import admin
 # Register your models here.
 from .models import *
 
+class WorkspaceAdmin(admin.ModelAdmin):
 
-admin.site.register(WorkspaceHistory)
+    list_display = ('user', 'galaxy_server',)
 
+admin.site.register(WorkspaceHistory,WorkspaceAdmin)
