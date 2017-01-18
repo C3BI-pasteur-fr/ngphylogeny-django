@@ -21,16 +21,15 @@ class WorkspaceHistory(models.Model):
         if self.user:
             return GalaxyUser.objects.get(user=self.user, galaxy_server=self.galaxy_server)
 
-
     class Meta:
-
+        verbose_name_plural = "workspace histories"
         unique_together = (("history", "galaxy_server"),)
 
 
 def send_delete_galaxy_history(sender, instance, using, **kwargs):
     """remove history from db and from Galaxy serveur"""
 
-    gu = instance.get_galaxy_user
+    gu = instance.get_galaxy_user()
     if gu:
         gi = gu.get_galaxy_instance()
         gi.histories.delete_history(instance.history, purge=True)
