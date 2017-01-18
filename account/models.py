@@ -36,14 +36,15 @@ class GalaxyConf(models.Model):
 
     def clean(self,*args, **kwargs):
 
-        if self.galaxy_anonymous_api_access == True and ((not self.global_api_key) or (not self.global_user_name)):
-            raise ValidationError({'global_api_key': 'This field is required.',
-                                   'global_user_name': 'This field is required.'
+        if self.galaxy_anonymous_api_access == True and (not self.anonymous_user):
+            raise ValidationError({'anonymous_user': 'This field is required.',
                                    })
+
         super(GalaxyConf,self).clean(*args, **kwargs)
 
     def save(self, *args, ** kwargs):
         if self.active is True:
+            """One configuration can be actived"""
             deactivated_config = GalaxyConf.objects.all()
             deactivated_config.update(active=False)
         super(GalaxyConf, self).save(*args, **kwargs)
