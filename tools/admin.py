@@ -6,15 +6,13 @@ from .models import *
 
 
 class CustomMultipleChoiceField(forms.ModelMultipleChoiceField):
-
     def __init__(self, *args, **kwargs):
-        super(CustomMultipleChoiceField, self).__init__(queryset=None,*args, **kwargs)
+        super(CustomMultipleChoiceField, self).__init__(queryset=None, *args, **kwargs)
         self.required = False
         self.widget = forms.SelectMultiple(attrs={'disabled': 'disabled'})
 
 
-class ToolForm(forms.ModelForm, forms.Form ):
-
+class ToolForm(forms.ModelForm, forms.Form):
     compatible_tool = CustomMultipleChoiceField()
 
     class Meta:
@@ -28,40 +26,50 @@ class ToolForm(forms.ModelForm, forms.Form ):
 
 
 class ToolDataOutputInline(admin.TabularInline):
-
     model = ToolDataOutput
     extra = 0
 
 
 class ToolDataInputInline(admin.TabularInline):
-
     model = ToolDataInput
     extra = 0
 
 
 class ToolFlagInline(admin.TabularInline):
-
     model = ToolFlag.tool.through
     extra = 0
 
 
-class ToolInterConnectionInline(admin.TabularInline):
-
+class ToolInterconnectionInline(admin.TabularInline):
     model = ToolData
     extra = 0
 
 
 class ToolAdmin(admin.ModelAdmin):
+    """
 
-    fields = ('galaxy_server','toolshed','name','version','id_galaxy',)
+    """
+    list_display = ['name', 'galaxy_server', 'toolshed', 'version']
+    list_filter = ['galaxy_server', 'toolshed']
+    fields = ('galaxy_server', 'toolshed', 'name', 'version', 'id_galaxy',)
     inlines = [
         ToolDataInputInline,
         ToolDataOutputInline,
         ToolFlagInline
     ]
+    actions = ['search_more_tools_from_this_tool_server']
+
+    def search_more_tools_from_this_tool_server(self, request, queryset):
+        """
+            find more tools based on selected tool galaxy server
+        """
+        tools_list = []
+        for tool in queryset:
+            tools_list.extend(Tool.import_tools(tool.galaxy_server))
+        self.message_user(request, "%s successfully imported new tools." % (len(tools_list)))
 
 
 admin.site.register(Tool, ToolAdmin)
 admin.site.register(ToolData)
 admin.site.register(ToolFlag)
-admin.site.register(ToolInterConnections)
+admin.site.register(ToolInterconnections)
