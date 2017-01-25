@@ -13,21 +13,20 @@ Including another URLconf
     1. Import the include() function: from django.conf.urls import url, include
     2. Add a URL to urlpatterns:  url(r'^blog/', include('blog.urls'))
 """
+
 from django.conf.urls import url
-from views import *
-from django.views.generic import TemplateView
+
+from views import workflows_advanced_mode_build, workflows_alacarte_mode_build
+from views.oneclick import WorkflowOneClickListView, WorkflowOneClickView
 
 urlpatterns = [
 
     url(r'^oneclick_mode$', WorkflowOneClickListView.as_view(), name="workflow_oneclick_list"),
     url(r'^oneclick_mode/(?P<slug>[\w-]+)/$', WorkflowOneClickView.as_view(), name="workflow_oneclick_form"),
-    #url(r'^oneclick_mode$', workflows_oneclick_mode_build, name="workflows_oneclick"),
+    # url(r'^oneclick_mode$', workflows_oneclick_mode_build, name="workflows_oneclick"),
 
     url(r'advanced_mode$', workflows_advanced_mode_build, name="workflows_advanced"),
     url(r'^alacarte_mode$', workflows_alacarte_mode_build, name="workflows_alacarte"),
-    #url(r'^(?P<slug>[\w-]+)/$', LaunchGalaxyWorkflowView.as_view(), name="workflows"),
-
-    #url(r'^$', workflow_form, name="workflow_form"),
+    # url(r'^(?P<slug>[\w-]+)/$', LaunchGalaxyWorkflowView.as_view(), name="workflows"),
+    # url(r'^$', workflow_form, name="workflow_form"),
 ]
-
-

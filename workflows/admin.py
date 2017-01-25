@@ -4,7 +4,8 @@ from models import Workflow
 
 
 class WorkflowsAdmin(admin.ModelAdmin):
-    prepopulated_fields = {"slug": ("name",)}
 
+    prepopulated_fields = {"slug": ("name",)}
+    list_display = ('name',)
 
 admin.site.register(Workflow,WorkflowsAdmin)
