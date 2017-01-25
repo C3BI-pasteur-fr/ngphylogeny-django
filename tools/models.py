@@ -133,8 +133,8 @@ class ToolData(models.Model):
         ('o', "output"),
     )
     name = models.CharField(max_length=250)
-    format = models.CharField(max_length=25, blank=True)
-    extensions = models.CharField(max_length=25)
+    format = models.CharField(max_length=100, blank=True)
+    extensions = models.CharField(max_length=100)
     edam_formats = models.CharField(max_length=250, null=True)
     type = models.CharField(max_length=1, choices=DATA_TYPE_CHOICES, default='i')
     tool = models.ForeignKey(Tool, on_delete=models.CASCADE)
