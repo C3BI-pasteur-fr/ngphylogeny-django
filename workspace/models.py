@@ -21,8 +21,21 @@ class WorkspaceHistory(models.Model):
         if self.user:
             return GalaxyUser.objects.get(user=self.user, galaxy_server=self.galaxy_server)
 
+    def rename(self):
+        """Rename history galaxy"""
+        gu = self.get_galaxy_user()
+        if gu:
+            gi = gu.get_galaxy_instance()
+            gi.histories.update_history(history_id=self.history, name=self.name)
+
+    def save(self, *args, **kwargs):
+        if self.name:
+            self.rename()
+        super(WorkspaceHistory, self).save(*args, **kwargs)
+
+
     class Meta:
-        verbose_name_plural = "workspace histories"
+        verbose_name_plural = "Workspace histories"
         unique_together = (("history", "galaxy_server"),)
 
 
