@@ -135,9 +135,10 @@ class WorkflowOneClickView(UploadView):
 
         # import published shared workflow
         workflow_id = self.get_object().id_galaxy
-        # wf_import = gi.workflows.import_shared_workflow(workflow_id)  #return nothing
-        wf_export_dict = gi.workflows.export_workflow_json(workflow_id)
-        wf_import = gi.workflows.import_workflow_json(wf_export_dict)
+
+        #wf_import = gi.workflows.import_shared_workflow(workflow_id) pull-request #210
+        payload = {'shared_workflow_id':workflow_id}
+        wf_import=gi.workflows._post(payload)
 
         if wf_import:
 
@@ -154,12 +155,15 @@ class WorkflowOneClickView(UploadView):
             # mappe l'input du workflow oneclick avec l'id du fichier soumi par l'utilisateur
             dataset_map = dict()
             dataset_map[i_input] = {'id': file_id, 'src': 'hda'}
-
-            # lancement du workflow avec les parametres
-            gi.workflows.run_workflow(workflow_id=workflow_id, history_id=history_id,params=wk_galaxy.params, dataset_map=dataset_map)
-
-            # supprime le workflow importe
-            gi.workflows.delete_workflow(wf_import.get('id'))
+            print dataset_map
+            try:
+                # lancement du workflow avec les parametres
+                gi.workflows.run_workflow(workflow_id=workflow_id, history_id=history_id, dataset_map=dataset_map)#,params=wk_galaxy.params)
+            except Exception, galaxy_exception:
+                raise galaxy_exception
+            finally:
+                # supprime le workflow importe
+                print gi.workflows.delete_workflow(wf_import.get('id'))
 
             self.success_url = reverse_lazy("history_detail", kwargs={'history_id': history_id}, )
         else:
