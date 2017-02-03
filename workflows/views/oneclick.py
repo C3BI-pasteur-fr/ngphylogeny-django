@@ -134,11 +134,12 @@ class WorkflowOneClickView(UploadView):
         gi = self.request.galaxy
 
         # import published shared workflow
-        workflow_id = self.get_object().id_galaxy
+        shared_workflow_id = self.get_object().id_galaxy
 
-        #wf_import = gi.workflows.import_shared_workflow(workflow_id) pull-request #210
-        payload = {'shared_workflow_id':workflow_id}
+        #wf_import = gi.workflows.import_shared_workflow(shared_workflow_id) pull-request #210
+        payload = {'shared_workflow_id':shared_workflow_id}
         wf_import=gi.workflows._post(payload)
+        workflow_id = wf_import.get('id')
 
         if wf_import:
 
@@ -163,7 +164,7 @@ class WorkflowOneClickView(UploadView):
                 raise galaxy_exception
             finally:
                 # supprime le workflow importe
-                print gi.workflows.delete_workflow(wf_import.get('id'))
+                print gi.workflows.delete_workflow(workflow_id)
 
             self.success_url = reverse_lazy("history_detail", kwargs={'history_id': history_id}, )
         else:
