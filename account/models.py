@@ -37,7 +37,7 @@ class GalaxyConf(models.Model):
 
     def clean(self,*args, **kwargs):
         """make anonymous_user as required field them anonymous_user_api_access is true"""
-        if self.galaxy_anonymous_api_access == True and (not self.anonymous_user):
+        if self.anonymous_user_api_access == True and (not self.anonymous_user):
             raise ValidationError({'anonymous_user': 'This field is required.',
                                    })
         if self.anonymous_user:
