@@ -14,8 +14,8 @@ class WorkspaceHistory(models.Model):
     history = models.CharField(max_length=20,unique=True)
     name = models.CharField(max_length=100)
     created_date = models.DateField(auto_now=True)
-    user = models.ForeignKey(User, null=True)
-    galaxy_server = models.ForeignKey(GalaxyServer)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
+    galaxy_server = models.ForeignKey(GalaxyServer, on_delete=models.CASCADE )
 
     def get_galaxy_user(self):
         if self.user:

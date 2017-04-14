@@ -2,7 +2,7 @@ import tempfile
 import urllib
 import urlparse
 from django.shortcuts import render
-from django.core.urlresolvers import reverse_lazy
+from django.urls import reverse_lazy
 from django.http import StreamingHttpResponse
 from django.views.generic import FormView
 from forms import UploadForm

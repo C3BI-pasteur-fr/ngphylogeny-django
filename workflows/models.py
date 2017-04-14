@@ -8,7 +8,7 @@ class Workflow(models.Model):
     """
     Galaxy Workflow informations
     """
-    galaxy_server = models.ForeignKey(GalaxyServer, null=True, blank=True)
+    galaxy_server = models.ForeignKey(GalaxyServer, on_delete=models.CASCADE, null=True, blank=True)
     id_galaxy = models.CharField(max_length=250, unique=True)
     name = models.CharField(max_length=100, unique=True)
     category = models.CharField(max_length=100 , blank=True)

@@ -18,7 +18,7 @@ class Tool(models.Model):
 
     """
 
-    galaxy_server = models.ForeignKey(GalaxyServer, null=True, blank=True)
+    galaxy_server = models.ForeignKey(GalaxyServer, on_delete=models.CASCADE, null=True, blank=True)
     id_galaxy = models.CharField(max_length=250, unique=True)
     toolshed = models.CharField(max_length=100, blank=True)
     name = models.CharField(max_length=100, blank=True)
@@ -184,7 +184,7 @@ class ToolFlag(models.Model):
 
 
 class ToolInterconnections(models.Model):
-    data = models.ForeignKey(ToolDataOutput, related_name='data_output_producted')
+    data = models.ForeignKey(ToolDataOutput, on_delete=models.CASCADE, related_name='data_output_producted')
 
     @property
     def producted_by(self):
@@ -194,7 +194,7 @@ class ToolInterconnections(models.Model):
     def compatible_with(self):
         return self.next_tool_input.tool
 
-    input_field = models.ForeignKey(ToolDataInput, related_name='data_input_compatible')
+    input_field = models.ForeignKey(ToolDataInput, on_delete=models.CASCADE, related_name='data_input_compatible')
 
     class Meta:
         verbose_name_plural = "Tool Interconnections"

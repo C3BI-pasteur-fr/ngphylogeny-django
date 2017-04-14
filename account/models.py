@@ -29,9 +29,13 @@ class GalaxyConf(models.Model):
     :galaxy_server: in GalaxyConf is used to Galaxy requests when status active is true.
     """
     name = models.CharField(max_length=80,)
-    galaxy_server = models.ForeignKey(GalaxyServer)
-    anonymous_user_api_access = models.BooleanField(default=False, verbose_name="Enable Anonymous api?", help_text="If True, Anonymous user must be set")
-    anonymous_user = models.OneToOneField('GalaxyUser', blank=True, null=True, verbose_name="Global Anonymous User",
+    galaxy_server = models.ForeignKey(GalaxyServer, on_delete=models.CASCADE)
+    anonymous_user_api_access = models.BooleanField(default=False,
+                                                    verbose_name="Enable Anonymous api?",
+                                                    help_text="If True, Anonymous user must be set")
+    anonymous_user = models.OneToOneField('GalaxyUser', on_delete=models.CASCADE,
+                                          blank=True, null=True,
+                                          verbose_name="Global Anonymous User",
                                           help_text="This User is used to make Galaxy requests for NGPhylogeny Anonymous Users")
     active = models.BooleanField(default=False, verbose_name="Active Configuration?")
 
@@ -61,8 +65,8 @@ class GalaxyUser(models.Model):
     """
     Model to save User APIkey from Galaxy
     """
-    user = models.ForeignKey(User)
-    galaxy_server = models.ForeignKey(GalaxyServer)
+    user = models.ForeignKey(User, on_delete=models.CASCADE )
+    galaxy_server = models.ForeignKey(GalaxyServer, on_delete=models.CASCADE)
     api_key = models.CharField(max_length=100, blank=True)
 
     def get_galaxy_instance(self):
