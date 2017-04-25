@@ -1,14 +1,15 @@
 from __future__ import unicode_literals
 
 from django.db import models
-from account.models import GalaxyServer
+
+from galaxy.models import Server
 
 
 class Workflow(models.Model):
     """
     Galaxy Workflow informations
     """
-    galaxy_server = models.ForeignKey(GalaxyServer, on_delete=models.CASCADE, null=True, blank=True)
+    galaxy_server = models.ForeignKey(Server, on_delete=models.CASCADE, null=True, blank=True)
     id_galaxy = models.CharField(max_length=250, unique=True)
     name = models.CharField(max_length=100, unique=True)
     category = models.CharField(max_length=100 , blank=True)

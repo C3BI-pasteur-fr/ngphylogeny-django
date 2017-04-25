@@ -3,8 +3,8 @@ from django.shortcuts import get_object_or_404,render
 from django.utils.decorators import method_decorator
 from django.views.generic import ListView
 
-from account.decorator import connection_galaxy
 from data.views import UploadView
+from galaxy.decorator import connection_galaxy
 from tools.models import Tool
 from workflows.models import Workflow
 from workspace.views import get_or_create_history
@@ -95,7 +95,7 @@ class WorkflowOneClickListView(ListView):
     """
     Generic class-based view
     """
-    queryset = Workflow.objects.filter(galaxy_server__galaxyconf__active=True)
+    queryset = Workflow.objects.filter(galaxy_server__current=True)
 
 
 @method_decorator(connection_galaxy, name="dispatch")

@@ -1,37 +1,37 @@
-from django.views.generic import TemplateView, RedirectView
 from django.utils.decorators import method_decorator
-from account.decorator import connection_galaxy
-from account.models import GalaxyConf
+from django.views.generic import TemplateView, RedirectView
+
+from galaxy.decorator import connection_galaxy
 from models import WorkspaceHistory
-from django.shortcuts import get_object_or_404
+
 
 @connection_galaxy
 def create_history(request):
     """
+    Create a new galaxy history
     :param request:
     :return: history_id
     """
 
     gi = request.galaxy
-    # Create a new galaxy history and delete older if the user is not authenticated
+    server = request.galaxy_server
+
     history = gi.histories.create_history()
+    current_user = None
 
-    galaxy_conf = GalaxyConf.objects.get(active=True)
-    if request.user.is_anonymous:
-
-        current_user = galaxy_conf.anonymous_user.user
-    else:
+    if request.user.is_authenticated():
         current_user = request.user
 
     wsph = WorkspaceHistory(history=history.get("id"),
                             name=history.get('name'),
                             user=current_user,
-                            galaxy_server=galaxy_conf.galaxy_server)
+                            galaxy_server = server )
 
     wsph.save()
     request.session["last_history"] = wsph.history
 
     return wsph.history
+
 
 @connection_galaxy
 def get_history(request):
@@ -82,10 +82,9 @@ class HistoryDetailView(TemplateView):
         context['history_content'] = gi.histories.show_history(history_id, contents=True)
         return context
 
-
+@method_decorator(connection_galaxy, name="dispatch")
 class GalaxyErrorView(RedirectView):
 
     def get_redirect_url(self, *args, **kwargs):
-        galaxy_conf = get_object_or_404(GalaxyConf,active=True)
 
-        return "%s/dataset/errors?id=%s" %(galaxy_conf.galaxy_server.url, kwargs.get('id'))
+        return "%s/dataset/errors?id=%s" %(self.request.galaxy_server.url, kwargs.get('id'))

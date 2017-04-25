@@ -2,22 +2,21 @@ import tempfile
 
 from bioblend.galaxy.tools.inputs import inputs
 from django.core.urlresolvers import reverse_lazy
-
 from django.shortcuts import render, get_object_or_404, redirect
 from django.views.generic import DetailView, ListView
 
-from account.decorator import connection_galaxy
+from galaxy.decorator import connection_galaxy
+from workspace.views import create_history
 from .forms import ToolForm
 from .models import Tool
-from workspace.views import create_history
 
 
 class ToolListView(ListView):
-    queryset = Tool.objects.filter(galaxy_server__galaxyconf__active=True)
+    queryset = Tool.objects.filter(galaxy_server__current=True)
 
 
 class ToolDetailView(DetailView):
-    queryset = Tool.objects.filter(galaxy_server__galaxyconf__active=True)
+    queryset = Tool.objects.filter(galaxy_server__current=True)
 
 
 @connection_galaxy

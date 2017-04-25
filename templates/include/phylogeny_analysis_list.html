@@ -1,31 +1,32 @@
 <h2>Phylogeny Analysis</h2>
-    <br>
-    <div class="btn-group-vertical">
-        <a class="btn btn-default" href="{% url 'workflow_oneclick_list' %}">
-            <dt>
-            <h3><span class="glyphicon glyphicon-chevron-right small"></span> One Click</h3></dt>
-            <dd>
+<br>
+<div class="row">
+    <div class="col-sm-4 text-center ">
+        <a class="navbar-default " href="{% url 'workflow_oneclick_list' %}">
+            <img src="/static/images/oneclick.svg"/>
+            <h3><span class="glyphicon glyphicon-chevron-right small"></span> One Click</h3>
+            <p>
                 Paste your set of sequences and let the software make decisions on your
-                behalf (Each step is optimized for your data).<br/>
-                <br/>
-            </dd>
-        </a>
-        <a class="btn btn-default" href="{% url 'workflows_advanced' %}">
-            <dt>
-            <h3><span class="glyphicon glyphicon-chevron-right small"></span> Advanced</h3>
-            </dt>
-            <dd>
-                Manually set parameters for the various steps.<br/>
-                <br/>
-            </dd>
-        </a>
-        <a class="btn btn-default" href="{% url 'workflows_alacarte' %}">
-            <dt>
-            <h3><span class="glyphicon glyphicon-chevron-right small"></span> A la Carte</h3>
-            </dt>
-            <dd>
-                Create your own phylogeny workflow using more programs available.<br/>
-                <br/>
-            </dd>
+                behalf (Each step is optimized for your data).
+            </p>
         </a>
     </div>
+    <div class="col-sm-4 text-center">
+        <a class="btn button-default" href="{% url 'workflows_advanced' %}">
+            <img src="/static/images/custom.svg"/>
+            <h3><span class="glyphicon glyphicon-chevron-right small"></span> Advanced</h3>
+            <p>
+                Manually set parameters for the various steps.
+            </p>
+        </a>
+    </div>
+    <div class="col-sm-4 text-center">
+        <a class="navbar-default label-default " href="{% url 'workflows_alacarte' %}">
+            <img src="/static/images/build.svg"/>
+        <h3><span class="glyphicon glyphicon-chevron-right small"></span> A la Carte</h3>
+        <p>
+            Create your own phylogeny workflow using more programs available.
+        </p>
+        </a>
+    </div>
+</div>

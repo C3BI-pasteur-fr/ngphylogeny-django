@@ -3,12 +3,12 @@
 {% block nav-home %}class="active"{% endblock %}
 {% block jumbotron %}
     <div class="jumbotron">
+        <img alt="[Logo]" src="{% static 'images/logo_phylogeny-fr.png' %}" class="center-block">
+
         <div class="text-center"><h2>Phylogeny.fr</h2>
             <h4>Robust Phylogenetic Analysis For The Non-Specialist</h4>
         </div>
         <div class="text-center">
-            <img alt="[Logo]" src="{% static 'images/logo_phylogeny-fr.png' %}" class="center-block">
-        </div>
         <div>
             <b>Phylogeny.fr</b> is a free, simple to use web service dedicated to
             reconstructing and analysing phylogenetic relationships between
@@ -26,6 +26,7 @@
             (<a target="_blank"
                 href="http://www.ncbi.nlm.nih.gov/pubmed/18424797?ordinalpos=1&amp;itool=EntrezSystem2.PEntrez.Pubmed.Pubmed_ResultsPanel.Pubmed_RVDocSum">PubMed</a>)
             <span class="small">*: joint first authors</span>
+        </div>
         </div>
     </div>
     {% include "include/phylogeny_analysis_list.html" %}

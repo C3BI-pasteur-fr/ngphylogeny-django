@@ -4,7 +4,7 @@ from django.core.urlresolvers import reverse_lazy
 from django.shortcuts import render, redirect, get_object_or_404
 from formtools.wizard.views import SessionWizardView
 
-from account.decorator import connection_galaxy
+from galaxy.decorator import connection_galaxy
 from tools.forms import ToolForm
 from tools.models import Tool,ToolFlag
 from tools.views import tool_exec

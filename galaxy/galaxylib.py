@@ -1,8 +1,9 @@
+import json
+
+import requests
 from bioblend.galaxy import GalaxyInstance
 from bioblend.galaxyclient import ConnectionError
 from requests_toolbelt import MultipartEncoder
-import requests
-import json
 
 
 class GalaxyInstanceAnonymous(GalaxyInstance):

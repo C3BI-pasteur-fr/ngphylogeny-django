@@ -3,11 +3,23 @@
 font-family: 'Fascinate Inline', cursive;
 font-family: 'Bungee Inline', cursive;*/
 
-.title-cap{
-    font-family: 'Bungee Inline', cursive;
+.title-bg{
+    background-color: #000;
+    opacity: 0.5;
+    padding: 10px;
 }
 
+.title-cap{
+    font-family: 'Bungee Inline', cursive;s
+    background-color: #446cb3;
+}
+
+.nav{
+    font-family: "Helvetica Neue",Helvetica,Arial,sans-serif;
+    font-size: 14px;
+}
 header.jumbotron{
+
     color:#ffffff ;
     background-color: #446cb3;
     background-size: 100%;
@@ -16,7 +28,9 @@ header.jumbotron{
     background-repeat: no-repeat;
     font-family: 'Ubuntu', sans-serif;
     margin-bottom: 0px;
+
 }
+
 footer {
     min-height: 100px;
 }

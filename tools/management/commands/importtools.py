@@ -1,7 +1,7 @@
 from django.conf import settings
 from django.core.management.base import BaseCommand
 
-from account.models import GalaxyServer, GalaxyConf
+from galaxy.models import Server, GalaxyConf
 from tools.models import Tool
 
 
@@ -20,6 +20,6 @@ class Command(BaseCommand):
             galaxy_server = galaxy_active_conf.galaxy_server
 
         except:
-            galaxy_server, created = GalaxyServer.objects.get_or_create(url=settings.GALAXY_SERVER_URL)
+            galaxy_server, created = Server.objects.get_or_create(url=settings.GALAXY_SERVER_URL)
 
         Tool.import_tools(galaxy_server)

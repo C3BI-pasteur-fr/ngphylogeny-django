@@ -1,8 +1,9 @@
 import urllib
+
 import requests
 from django.db import models
 
-from account.models import GalaxyServer
+from galaxy.models import Server
 
 TOOL_TAGS = (
     ('', '----'),
@@ -18,7 +19,7 @@ class Tool(models.Model):
 
     """
 
-    galaxy_server = models.ForeignKey(GalaxyServer, on_delete=models.CASCADE, null=True, blank=True)
+    galaxy_server = models.ForeignKey(Server, on_delete=models.CASCADE, null=True, blank=True)
     id_galaxy = models.CharField(max_length=250, unique=True)
     toolshed = models.CharField(max_length=100, blank=True)
     name = models.CharField(max_length=100, blank=True)
@@ -28,7 +29,7 @@ class Tool(models.Model):
     @classmethod
     def import_tools_from_url(cls, galaxy_url, query="phylogeny"):
         try:
-            galaxy_server = GalaxyServer.objects.get(url=galaxy_url)
+            galaxy_server = Server.objects.get(url=galaxy_url)
         except:
             raise Exception("NGPhylogeny server is not properly configured,"
                             "Please ensure that the Galaxy server is correctly set up")
