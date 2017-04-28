@@ -10,7 +10,7 @@ font-family: 'Bungee Inline', cursive;*/
 }
 
 .title-cap{
-    font-family: 'Bungee Inline', cursive;s
+    font-family: 'Bungee Inline', cursive;
     background-color: #446cb3;
 }
 
@@ -33,4 +33,21 @@ header.jumbotron{
 
 footer {
     min-height: 100px;
+}
+
+.sidenav {
+      background-color: #ececec;
+      height: 100%;
+
+}
+
+.miniworkflow .panel{
+      top:0px;
+      width:120px;
+}
+
+.miniworkflow .glyphicon.glyphicon-arrow-right{
+    font-size:20px;
+    font-color:blue;
+    padding:2px;
 }

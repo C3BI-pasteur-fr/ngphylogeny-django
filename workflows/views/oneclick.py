@@ -91,11 +91,23 @@ def workflow_oneclick_form_view(request, slug):
     return render(request, 'workflows/workflows_oneclik_form.html', context)
 
 
+@method_decorator(connection_galaxy, name="dispatch")
 class WorkflowOneClickListView(ListView):
     """
     Generic class-based view
     """
     queryset = Workflow.objects.filter(galaxy_server__current=True)
+
+    def get_queryset(self):
+
+        for workflow in self.queryset:
+            gi = self.request.galaxy
+            workflow_json = gi.workflows.show_workflow(workflow_id=workflow.id_galaxy)
+            # parse galaxy workflows json informations
+            workflow.detail = WorkflowStepInformation(workflow_json).sorted_tool_list
+
+        return self.queryset
+
 
 
 @method_decorator(connection_galaxy, name="dispatch")
@@ -163,7 +175,7 @@ class WorkflowOneClickView(UploadView):
             except Exception, galaxy_exception:
                 raise galaxy_exception
             finally:
-                # supprime le workflow importe
+                # supprime le workflow imported
                 print gi.workflows.delete_workflow(workflow_id)
 
             self.success_url = reverse_lazy("history_detail", kwargs={'history_id': history_id}, )

@@ -5,21 +5,61 @@
 {% block stylesheet %}
 {% endblock %}
 {% block content %}
-    <div class="row">
-        <div class="col-md-2"></div>
-        <div class="col-md-8" >
-            <div class="h3">One Click Workflows</div>
-            <table class="table table-hover">
+<script>
+$(function() {
+  $(".nav li").on("click", function() {
+    $(".nav li").removeClass("active");
+    $(this).addClass("active");
+    $('.miniworkflow').addClass("hidden");
+    $($(this).find('a').attr('href')).removeClass("hidden");
+  });
+});
+</script>
+<div class="row content">
+    <div class="col-sm-3 sidenav">
+            <h4>One Click Workflows</h4>
+            <ul class="nav nav-pills nav-stacked">
             {% for workflow in workflow_list|dictsort:"name" %}
-                <tr class="list-inline">
-                    <td><a class="btn btn-toolbar" href="{%  url 'workflow_oneclick_form' workflow.slug %}">
-                        <span class="glyphicon glyphicon-"></span></a>
-                    </td>
-                    <td><a class="btn btn-toolbar" href="{%  url 'workflow_oneclick_form' workflow.slug %}">{{ workflow.name }}</a></td>
-                    <td><a class="btn btn-toolbar" href="{%  url 'workflow_oneclick_form' workflow.slug %}">{{ workflow.version }}</a></td>
-                </tr>
+                <li {% if forloop.first %}class="active"{%endif%}>
+                    <a href="#{{ workflow.slug }}">
+                        <span class="glyphicon glyphicon-wheel"></span>
+                        {{ workflow.name }}
+                    </a>
+                </li>
             {% endfor %}
-            </table>
+            </ul>
         </div>
-    </div>
+
+   <div class="col-sm-9">
+   {% for workflow in workflow_list|dictsort:"name" %}
+    <table id="{{ workflow.slug }}" class="table-responsive miniworkflow
+           {% if not forloop.first %}hidden{%endif%}" >
+        <tr>
+        {% for step, tool in workflow.detail  %}
+             <td class="d-inline-block">
+                 <div class="panel-group">
+                    <div class="panel panel-info">
+                        <div class="panel-heading">{{ tool.category }}</div>
+                        <div class="panel-body">
+                            <a data-toggle="collapse" href="#collapse{{ step }}"><span class="glyphicon glyphicon-info-sign"></span></a> {{ tool.name }}
+                        </div>
+                        <div id="collapse{{ step }}" class="panel-collapse collapse">
+                            <div class="panel-footer">
+                            {{ tool.description }}
+                            </div>
+                        </div>
+                    </div>
+                 </div>
+             </td>
+            {% if not forloop.last %}
+            <td class="d-inline-block align-middle text-center">
+                <span class="glyphicon glyphicon-arrow-right"></span>
+            </td>
+            {% endif %}
+        {% endfor %}
+        </tr>
+    </table>
+    {% endfor %}
+   </div>
+</div>
 {% endblock content %}
