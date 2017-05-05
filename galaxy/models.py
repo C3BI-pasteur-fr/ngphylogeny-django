@@ -3,7 +3,7 @@ from __future__ import unicode_literals
 from django.contrib.auth.models import User
 from django.db import models
 
-from galaxylib import GalaxyInstance
+from .galaxylib import GalaxyInstance
 
 
 class Server(models.Model):
