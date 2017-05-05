@@ -1,21 +1,20 @@
-@import 'https://fonts.googleapis.com/css?family=Bungee+Inline|Fascinate+Inline|Francois+One';
+@import 'https://fonts.googleapis.com/css?family=Bungee+Inline|Francois+One';
 /*font-family: 'Francois One', sans-serif;
 font-family: 'Fascinate Inline', cursive;
 font-family: 'Bungee Inline', cursive;*/
 
 .title-bg{
-    background-color: #000;
-    opacity: 0.5;
+    background-color: rgb(0, 0, 0);
+    background-color: rgba(0, 0, 0, 0.6);
     padding: 10px;
 }
 
 .title-cap{
     font-family: 'Bungee Inline', cursive;
-    background-color: #446cb3;
 }
 
 .nav{
-    font-family: "Helvetica Neue",Helvetica,Arial,sans-serif;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
     font-size: 14px;
 }
 header.jumbotron{
@@ -36,8 +35,9 @@ footer {
 }
 
 .sidenav {
-      background-color: #ececec;
+      background-color: #f2f2f2;
       height: 100%;
+      padding-bottom: 100px;
 
 }
 
