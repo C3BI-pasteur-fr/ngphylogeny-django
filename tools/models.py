@@ -3,6 +3,7 @@ import urllib
 import requests
 from django.db import models
 
+from forms import ToolForm
 from galaxy.models import Server
 
 TOOL_TAGS = (
@@ -25,15 +26,17 @@ class Tool(models.Model):
     name = models.CharField(max_length=100, blank=True)
     version = models.CharField(max_length=20, blank=True)
     description = models.CharField(max_length=250)
+    toolshed_revision= models.CharField(max_length=250, blank=True)
+
 
     @classmethod
-    def import_tools_from_url(cls, galaxy_url, query="phylogeny"):
+    def import_tools_from_url(cls, galaxy_url, query="phylogeny" ):
         try:
             galaxy_server = Server.objects.get(url=galaxy_url)
         except:
             raise Exception("NGPhylogeny server is not properly configured,"
                             "Please ensure that the Galaxy server is correctly set up")
-        return cls.import_tools(galaxy_server)
+        return cls.import_tools(galaxy_server, query)
 
     @classmethod
     def import_tools(cls, galaxy_server, query="phylogeny"):
@@ -62,8 +65,11 @@ class Tool(models.Model):
                     t.description = tool_info.get('description')
                     t.version = tool_info.get('version')
 
-                    if "toolshed" in t.id_galaxy:
-                        t.toolshed = t.id_galaxy.split('/')[0]
+                    toolshed = tool_info.get('tool_shed_repository')
+                    if toolshed:
+                        t.toolshed = toolshed.get('tool_shed')
+                        t.toolshed_revision = toolshed.get('changeset_revision')
+
                     t.save()
 
                     # save inputs
@@ -120,6 +126,24 @@ class Tool(models.Model):
                     tools_compatible.append(data_input.tool.pk)
 
         return Tool.objects.filter(pk__in=tools_compatible)
+
+
+    def form_class(self, galaxy_server):
+
+
+        params = urllib.urlencode({'io_details': "true"}, True)
+        tool_url = '%s/%s/%s/%s/?%s' % (galaxy_server.url, 'api', 'tools', self.id_galaxy, params)
+        tool_info_request = requests.get(tool_url)
+        tool_inputs_details = tool_info_request.json()
+
+        return type(str(self.name) + 'Form',
+                        (ToolForm,),
+                         {'tool_params': tool_inputs_details.get('inputs'),
+                        'tool_id': self.id_galaxy
+                        }
+                    )
+
+
 
     def __unicode__(self):
         return self.name

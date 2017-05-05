@@ -1,5 +1,8 @@
 from django.contrib import admin
-from models import Workflow
+
+from .models import Workflow
+
+
 # Register your models here.
 
 
