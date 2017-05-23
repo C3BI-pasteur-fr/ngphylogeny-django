@@ -33,9 +33,10 @@ class Server(models.Model):
         return "%s %s" %(self.name, self.url)
 
 
+
 class GalaxyUser(models.Model):
     """
-    Model to save User APIkey associated with a Galaxy server
+        Model to save User APIkey associated with a Galaxy server
     """
     user = models.ForeignKey(User, on_delete=models.CASCADE )
     galaxy_server = models.ForeignKey(Server, on_delete=models.CASCADE)
@@ -47,7 +48,8 @@ class GalaxyUser(models.Model):
                                             )
 
     def get_galaxy_instance(self):
-        """:return bioblend Galaxy instance object
+        """
+            :return bioblend Galaxy instance object
         """
         if self.api_key:
             return GalaxyInstance(url=self.galaxy_server.url, key=self.api_key)

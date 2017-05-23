@@ -72,7 +72,9 @@ def tool_exec_view(request, pk, store_output=None):
                 tool_outputs = gi.tools.run_tool(history_id=history_id,
                                                  tool_id=tool_obj.id_galaxy,
                                                  tool_inputs=tool_inputs)
-                print "#4", tool_outputs
+
+
+                print "#4", tool_inputs
                 if store_output:
                     request.session['output'] = tool_outputs
 
@@ -96,6 +98,8 @@ def tool_exec_view(request, pk, store_output=None):
                }
 
     return render(request, 'tools/tool_form.html', context)
+
+
 
 
 @connection_galaxy

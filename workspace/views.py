@@ -82,6 +82,7 @@ class HistoryDetailView(TemplateView):
         context['history_content'] = gi.histories.show_history(history_id, contents=True)
         return context
 
+
 @method_decorator(connection_galaxy, name="dispatch")
 class GalaxyErrorView(RedirectView):
 

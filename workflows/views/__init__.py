@@ -1,13 +1,15 @@
+import json
 import tempfile
 
 from django.core.urlresolvers import reverse_lazy
+from django.http import HttpResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from formtools.wizard.views import SessionWizardView
 
 from galaxy.decorator import connection_galaxy
 from tools.models import ToolFlag
 from tools.views import tool_exec
-from workflows.models import Workflow, WorkflowStepInformation
+from workflows.models import Workflow, WorkflowStepInformation, WorkflowGalaxyFactory
 from workspace.views import get_or_create_history
 
 
@@ -99,14 +101,15 @@ def workflow_form(request, slug_workflow):
 
 
 
+
+WORKFLOW_ADVANCED_MODE = [{"step": 0, "category": 'algn', "group": ""},
+                          {"step": 1, "category": 'clean', "group": ""},
+                          {"step": 2, "category": 'tree', "group": ""},
+                          {"step": 3, "category": 'visu', "group": ""},
+                         ]
+
 @connection_galaxy
 def workflows_advanced_mode_build(request):
-
-    WORKFLOW_ADVANCED_MODE = [{"step": 0, "category": 'algn', "group": ""},
-                              {"step": 1, "category": 'clean', "group": ""},
-                              {"step": 2, "category": 'tree', "group": ""},
-                              {"step": 3, "category": 'visu', "group": ""},
-                              ]
 
     for step in WORKFLOW_ADVANCED_MODE:
         step['group'] = ToolFlag.objects.get(name=step.get('category'))
@@ -124,16 +127,49 @@ def workflows_advanced_mode_build(request):
     return render(request, 'workflows/workflows_advanced.html', context)
 
 
+@connection_galaxy
 def workflows_alacarte_mode_build(request):
 
-    WORKFLOW_ADVANCED_MODE = [{"step": 0, "category": 'algn', "group": ""},
-                              {"step": 1, "category": 'clean', "group": ""},
-                              {"step": 2, "category": 'tree', "group": ""},
-                              {"step": 3, "category": 'visu', "group": ""},
-                              ]
 
     for step in WORKFLOW_ADVANCED_MODE:
         step['group'] = ToolFlag.objects.get(name=step.get('category'))
+
+    if request.method == 'POST':
+
+        return workflow_build_view(request)
+
+
     context = {"workflow": WORKFLOW_ADVANCED_MODE}
 
     return render(request, 'workflows/workflows_alacarte.html', context)
+
+
+
+def workflow_build_view(request):
+
+    tools = []
+    for step in WORKFLOW_ADVANCED_MODE:
+        tools.append(request.POST.get(step.get('category')))
+
+    list_t = tools
+
+    from tools.models import Tool
+    dict_tools = Tool.objects.in_bulk(list_t)
+    list_tool = [dict_tools.get(int(t)) for t in list_t if t]
+
+
+    if list_tool:
+        gi = request.galaxy
+        history_id = get_or_create_history(request)
+
+        wkg = WorkflowGalaxyFactory(list_tool, gi, history_id)
+        wkg.name = request.POST.get('name', 'generated workflow')
+
+        return HttpResponse(json.dumps(eval(str(wkg))), content_type='application/json')
+
+
+
+
+
+
+

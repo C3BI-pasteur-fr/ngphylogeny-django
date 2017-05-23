@@ -1,7 +1,6 @@
 from django import forms
 from django.contrib import admin
 
-# Register your models here.
 from .models import *
 
 
@@ -25,13 +24,13 @@ class ToolForm(forms.ModelForm, forms.Form):
         self.fields['compatible_tool'].queryset = kwargs.get('instance').compatible_tool
 
 
-class ToolDataOutputInline(admin.TabularInline):
-    model = ToolDataOutput
+class ToolOutputDataInline(admin.TabularInline):
+    model = ToolOutputData
     extra = 0
 
 
-class ToolDataInputInline(admin.TabularInline):
-    model = ToolDataInput
+class ToolInputDataInline(admin.TabularInline):
+    model = ToolInputData
     extra = 0
 
 
@@ -40,21 +39,24 @@ class ToolFlagInline(admin.TabularInline):
     extra = 0
 
 
-class ToolInterconnectionInline(admin.TabularInline):
-    model = ToolData
-    extra = 0
+class ToolOutputDataAdmin(admin.ModelAdmin):
+    pass
+
+class ToolInputDataAdmin(admin.ModelAdmin):
+    pass
 
 
 class ToolAdmin(admin.ModelAdmin):
     """
 
     """
+
     list_display = ['name', 'galaxy_server', 'toolshed', 'version']
     list_filter = ['galaxy_server', 'toolshed']
     fields = ('galaxy_server', 'toolshed', 'name', 'version', 'id_galaxy',)
     inlines = [
-        ToolDataInputInline,
-        ToolDataOutputInline,
+        ToolInputDataInline,
+        ToolOutputDataInline,
         ToolFlagInline
     ]
     actions = ['search_more_tools_from_this_tool_server']
@@ -70,6 +72,7 @@ class ToolAdmin(admin.ModelAdmin):
 
 
 admin.site.register(Tool, ToolAdmin)
-admin.site.register(ToolData)
+admin.site.register(ToolInputData, ToolInputDataAdmin)
+admin.site.register(ToolOutputData, ToolOutputDataAdmin)
 admin.site.register(ToolFlag)
-admin.site.register(ToolInterconnections)
+

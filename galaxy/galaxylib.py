@@ -37,6 +37,7 @@ class GalaxyInstanceAnonymous(GalaxyInstance):
 
         r = requests.post(url, data=payload, headers=headers,
                           verify=self.verify, params=post_params, cookies=dict(galaxysession=self.galaxysession))
+
         if r.status_code == 200:
             return r.json()
         # @see self.body for HTTP response body

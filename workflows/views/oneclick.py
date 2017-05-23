@@ -5,7 +5,7 @@ from django.views.generic import ListView
 
 from data.views import UploadView
 from galaxy.decorator import connection_galaxy
-from workflows.models import Workflow, WorkflowStepInformation
+from workflows.models import Workflow, WorkflowStepInformation, WorkflowGalaxyFactory
 from workspace.views import get_or_create_history
 
 
@@ -14,19 +14,25 @@ class WorkflowOneClickListView(ListView):
     """
     Generic class-based view
     """
-    queryset = Workflow.objects.filter(galaxy_server__current=True)
+    queryset = Workflow.objects.filter(galaxy_server__current=True).select_related()
     template_name = 'workflows/workflows_oneclick_choices.html'
 
     def get_queryset(self):
 
+        gi = self.request.galaxy
         for workflow in self.queryset:
-            gi = self.request.galaxy
             workflow_json = gi.workflows.show_workflow(workflow_id=workflow.id_galaxy)
+
             # parse galaxy workflows json informations
             workflow.detail = WorkflowStepInformation(workflow_json).sorted_tool_list
 
-        return self.queryset
+            history_id = get_or_create_history(self.request)
+            wkg = WorkflowGalaxyFactory([i[1] for i in workflow.detail ], gi, history_id)
+            import json
+            print json.dumps(eval(str(wkg)))
 
+
+        return self.queryset
 
 
 @method_decorator(connection_galaxy, name="dispatch")
