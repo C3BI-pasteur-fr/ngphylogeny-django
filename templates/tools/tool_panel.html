@@ -4,10 +4,10 @@
     <div class="panel-footer">
     <ul class="list-group">
         <li  class="list-group-item">Inputs:
-            {% for inp_data in tool.input_data %}<span>{{ inp_data.extensions }}</span>{% endfor %}
+            {% for inp_data in tool.tooldatainput_set %}<span>{{ inp_data.extensions }}</span>{% endfor %}
         </li>
         <li class="list-group-item">Outputs:
-            {% for out_data in tool.output_data %}<div>{{ out_data.extensions }}</div>{% endfor %}
+            {% for out_data in tool.tooldataoutput_set %}<div>{{ out_data.extensions }}</div>{% endfor %}
         </li>
     </ul>
     </div>

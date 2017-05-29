@@ -5,7 +5,7 @@ from django.views.generic import ListView
 
 from data.views import UploadView
 from galaxy.decorator import connection_galaxy
-from workflows.models import Workflow, WorkflowStepInformation, WorkflowGalaxyFactory
+from workflows.models import Workflow, WorkflowStepInformation
 from workspace.views import get_or_create_history
 
 
@@ -25,12 +25,6 @@ class WorkflowOneClickListView(ListView):
 
             # parse galaxy workflows json informations
             workflow.detail = WorkflowStepInformation(workflow_json).sorted_tool_list
-
-            history_id = get_or_create_history(self.request)
-            wkg = WorkflowGalaxyFactory([i[1] for i in workflow.detail ], gi, history_id)
-            import json
-            print json.dumps(eval(str(wkg)))
-
 
         return self.queryset
 

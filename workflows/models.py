@@ -188,8 +188,10 @@ class WorkflowGalaxyFactory(object):
         return str(self.__dict__)
 
 
-    def to_dict(self):
-        return self.__dict__
+    def to_json(self):
+        import ast
+        return ast.literal_eval(str(self))
+
 
 
 class WorkflowToolInformation(object):

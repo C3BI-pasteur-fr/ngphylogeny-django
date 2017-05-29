@@ -70,7 +70,7 @@ class HistoryDetailView(TemplateView):
         # first display history with id history contained in the url
         history_id = context.get('history_id', None) or self.kwargs.get('history_id', None)
 
-        # if no history id try to retrieve or create history
+        # if no history id try to retrieve
         if not history_id:
             history_id = get_history(self.request)
 
@@ -79,7 +79,19 @@ class HistoryDetailView(TemplateView):
 
         gi = self.request.galaxy
         context['history_info'] = gi.histories.show_history(history_id)
-        context['history_content'] = gi.histories.show_history(history_id, contents=True)
+        history_content = gi.histories.show_history(history_id, contents=True)
+
+        for dataset in history_content:
+            dataset_provenance = gi.histories.show_dataset_provenance( history_id,
+                                                            dataset.get('id'),
+                                                            follow=False
+                                                          )
+            tool = gi.tools.get_tools(tool_id=dataset_provenance.get("tool_id"))[0]
+            dataset.update(tool_name=tool.get('name'),
+                           job_id=dataset_provenance.get("job_id")
+                           )
+
+        context['history_content'] = history_content
         return context
 
 

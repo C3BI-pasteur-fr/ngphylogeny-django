@@ -30,7 +30,7 @@ $(function() {
 });
 </script>
 <div class="row row-eq-height">
-    <div class="col-sm-3 sidenav">
+    <div class="col-md-3 sidenav">
             <h4>One Click Workflows</h4>
             <ul class="nav nav-pills nav-stacked">
             {% for workflow in workflow_list|dictsort:"name" %}
@@ -44,7 +44,7 @@ $(function() {
             </ul>
     </div>
 
-   <div class="col-sm-9">
+   <div class="col-md-9">
    {% for workflow in workflow_list|dictsort:"name" %}
         <table id="{{ workflow.slug }}" class="table-responsive miniworkflow
                {% if not forloop.first %}hidden{%endif%}" >

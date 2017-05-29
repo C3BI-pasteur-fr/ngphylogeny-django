@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+{% load static %}
+{% block stylesheet %}
+    <script src="{% static 'presto/d3.v3.min.js' %} "></script>
+    <script src="{% static 'presto/load_tree.js' %} "></script>
+    <script src="{% static 'presto/phylotree.js' %} "></script>
+    <link rel="stylesheet" type="text/css" href="{% static 'presto/css/font-awesome.css' %}"/>
+    <link rel="stylesheet" type="text/css" href="{% static 'presto/phylotree.css' %}"/>
+
+
+{% endblock %}
+{% block nav-workspace %}class="active"{% endblock %}
+{% block content %}
+
+
+    <!--
+    ###############################################################################################################################
+    -->
+    <div id="tree_wrapper" class="tree-wrapper">
+        <div id="top_bar" class="top_bar">
+            <a class="navbar-brand" href="#">PRESTO - Phylogenetic tReE viSualisaTiOn - </a>
+            <ul class="nav navbar-nav">
+
+                <!-- THIS CODE IS USED TO UPLOAD TREES. IT CAN BE IMPLEMENTED IF YOU DECIDE TO USE THE SOFTWARE IN A STANDALONE MODE
+
+
+              <li class="dropdown">
+                <a href="#" class="dropdown-toggle" data-toggle="dropdown">Upload your own tree <b class="caret"></b></a>
+                <ul class="dropdown-menu">
+                  <li><a href="#" data-toggle="modal" data-target="#newick_modal">Input Text</a></li>
+                  <li><a href="#"><input type="file" id="newick_file"/></a></li>
+                </ul>
+              </li>
+
+                  -->
+
+            </ul>
+
+            <div class="modal" id="newick_modal">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
+                            <h4 class="modal-title">Newick string to render</h4>
+                        </div>
+                        <div class="modal-body" id="newick_body">
+                            <textarea id="nwk_spec" autofocus="true" placeholder="" style="width: 100%; height: 100%"
+                                      rows="20" selectionstart="1" selectionend="1000">(a : 0.1, (b : 0.11, (c : 0.12, d : 0.13) : 0.14) : 0.15)</textarea>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-primary" id="validate_newick">Display this tree
+                            </button>
+                        </div>
+                    </div><!-- /.modal-content -->
+                </div><!-- /.modal-dialog -->
+            </div><!-- /.modal -->
+           <!--
+            <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-2">
+                <ul class="nav navbar-nav">
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown"> Export the tree <b
+                                class="caret"></b></a>
+                        <ul class="dropdown-menu" id="Download">
+                            <li id="download-SVG"><a href="#">SVG</a></li>
+                            <li id="download-PDF"><a href="#">PDF</a></li>
+                            <li id="download-PNG"><a href="#">PNG</a></li>
+                            <li id="download-JPEG"><a href="#">JPEG</a></li>
+                            <li class="divider"></li>
+                            <li id="download-NWK"><a href="#">Newick</a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+            -->
+        </div>
+        <div class="tree_options">
+            <p class="text_tree_options_title"> Tree Layout </p>
+            <div class="tree_disposition_wrapper">
+                <div class="tree_disposition_1">
+                    <div>
+                        <label>
+                            <input id="phylotree_branch_length_1" type="radio" name="options_bl"
+                                   class="phylotree_branch_length" data-mode="phylogram" autocomplete="off" checked=""
+                                   title="Layout with branch length">
+                            <p class="text_tree_options_content"> Phylogram </p>
+                        </label>
+                    </div>
+                    <div>
+                        <label>
+                            <input id="phylotree_branch_length_2" type="radio" name="options_bl"
+                                   class="phylotree_branch_length" data-mode="dendrogram" autocomplete="off"
+                                   title="Layout without branch length">
+                            <p class="text_tree_options_content"> Dendrogram </p>
+                        </label>
+                    </div>
+                </div>
+                <div class="tree_disposition_line"></div>
+                <div class="tree_disposition_2">
+                    <div>
+                        <label>
+                            <input id="phylotree_layout_mode_1" type="radio" name="options_lay"
+                                   class="phylotree-layout-mode" data-mode="step" autocomplete="off" checked=""
+                                   title="Layout left-to-right">
+                            <p class="text_tree_options_content"> Linear </p>
+                        </label>
+                    </div>
+                    <div>
+                        <label>
+                            <input id="phylotree_layout_mode_2" type="radio" name="options_lay"
+                                   class="phylotree-layout-mode" data-mode="radial" autocomplete="off"
+                                   title="Layout radially">
+                            <p class="text_tree_options_content"> Radial </p>
+                        </label>
+                    </div>
+                    <div>
+                        <label>
+                            <input id="phylotree_layout_mode_3" type="radio" name="options_lay"
+                                   class="phylotree-layout-mode" data-mode="straight" autocomplete="off"
+                                   title="Layout tree">
+                            <p class="text_tree_options_content"> Slanted </p>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <p class="text_tree_options_title"> Tree ordering </p>
+            <div class="tree_ordering">
+                <div>
+                    <button type="button" class="btn btn-default btn-sm" id="sort_ascending"
+                            title="Sort deepest clades to the bottom">
+                        <i class="fa  fa-sort-amount-asc" aria-hidden="true"></i>
+                    </button>
+                    <p class="text_tree_options_content"> Increasing ladderizing </p>
+                </div>
+                <div>
+                    <button type="button" class="btn btn-default btn-sm" id="sort_descending"
+                            title="Sort deepsest clades to the top">
+                        <i class="fa  fa-sort-amount-desc " aria-hidden="true"></i>
+                    </button>
+                    <p class="text_tree_options_content"> decreasing ladderizing </p>
+                </div>
+                <div>
+                    <button type="button" class="btn btn-default btn-sm" id="sort_original"
+                            title="Restore original order">
+                        <i class="fa  fa-refresh" aria-hidden="true"></i>
+                    </button>
+                    <p class="text_tree_options_content"> Retrieve original order </p>
+                </div>
+            </div>
+            <p class="text_tree_options_title"> Tree settings </p>
+            <div class="tree_manipulation">
+                <div>
+                    <input type="checkbox" class="btn btn-default btn-sm" id="display_bootstrap"
+                           title="Display bootstrap (and other support values)">
+                    <p class="text_tree_options_content"> Display support values </p>
+                </div>
+                <div>
+                    <input type="checkbox" class="btn btn-default btn-sm" id="display_LB" title="Display Branch length">
+                    <p class="text_tree_options_content"> Display branch length </p>
+                </div>
+                <div>
+                    <input type="checkbox" class="btn btn-default btn-sm" id="align-toggler"
+                           title="Align tips labels to the edge of the plot">
+                    <p class="text_tree_options_content"> align text </p>
+                </div>
+            </div>
+            <div class="branch_filter_wrapper" id="branch_filter_wrapper">
+                <p class="text_tree_options_search"> Highlight node </p>
+                <div>
+                    <input type="text" id="branch_filter" class="form-control" placeholder="Search...">
+                </div>
+            </div>
+        </div>
+        <div id="tree_visualisation" class="tree-vis">
+            <div id="tree_container" class="tree-widget">
+            </div>
+            <div id="tree_zoom" class="tree_zoom">
+                <div class="btn-group">
+                    <button type="button" class="btn btn-default btn-sm" id="expand_vert_space"
+                            data-direction="vertical" data-amount="1" title="Expand vertical spacing">
+                        <i class="fa fa-arrows-v" aria-hidden="true"></i>
+                    </button>
+                    <button type="button" class="btn btn-default btn-sm" id="expand_hori_space"
+                            data-direction="horizontal" data-amount="1" title="Expand horizonal spacing">
+                        <i class="fa fa-arrows-h" aria-hidden="true"></i>
+                    </button>
+
+                </div>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-default btn-sm" id="compress_vert_space"
+                            data-direction="vertical" data-amount="-1" title="Compress vertical spacing">
+                        <i class="fa  fa-compress fa-rotate-135" aria-hidden="true"></i>
+                    </button>
+                    <button type="button" class="btn btn-default btn-sm" id="compress_hori_space"
+                            data-direction="horizontal" data-amount="-1" title="Compress horizonal spacing">
+                        <i class="fa  fa-compress fa-rotate-45" aria-hidden="true"></i>
+                    </button>
+                </div>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-default btn-sm" id="enable_zoom" title="Display zoom function">
+                        <i class="fa fa-search" aria-hidden="true"></i>
+                    </button>
+                    <button type="button" class="btn btn-default btn-sm" id="zoom_minus" title="Zoom minus on the tree">
+                        <i class="fa fa-search-minus" aria-hidden="true"></i>
+                    </button>
+                    <button type="button" class="btn btn-default btn-sm" id="zoom_plus" title="Zoom plus on the tree">
+                        <i class="fa fa-search-plus" aria-hidden="true"></i>
+                    </button>
+
+                </div>
+            </div>
+        </div>
+    </div>
+    <!--
+    ###############################################################################################################################
+    -->
+    <script>
+        load( "{{newick_tree|escapejs}}")
+    </script>
+{% endblock %}

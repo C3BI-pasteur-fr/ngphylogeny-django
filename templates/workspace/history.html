@@ -1,13 +1,15 @@
 {% extends "base.html" %}
 {% load static %}
+{% block stylesheet %}
 
+{% endblock %}
 {% block nav-workspace %}class="active"{% endblock %}
 {% block content %}
     <div class="row">
-        <div class="col-md-2"></div>
-        <div class="col-md-8">
+        <div class="col-md-1"></div>
+        <div class="col-md-9">
             {% if history_content %}
-                {% include "workspace/include/history_contents.html" %}
+                {% include "workspace/include/history_contents_provenance.html" %}
             {% else %}
                 <div class="jumbotron">
                     You haven't any recent analyzes in progress

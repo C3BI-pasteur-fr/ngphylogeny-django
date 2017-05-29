@@ -3,7 +3,7 @@ import urllib
 import urlparse
 
 from django.http import StreamingHttpResponse
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.urls import reverse_lazy
 from django.utils.decorators import method_decorator
 from django.views.generic import FormView
@@ -44,6 +44,8 @@ class UploadView(FormView):
         return super(UploadView, self).form_valid(form)
 
 
+
+
 @connection_galaxy
 def download_file(request, file_id):
 
@@ -60,7 +62,7 @@ def download_file(request, file_id):
     return stream_response
 
 
-@connection_galaxy
+#@connection_galaxy
 def display_file(request, file_id):
     """Display file content to the web browser """
     if request.is_ajax():
@@ -69,6 +71,40 @@ def display_file(request, file_id):
         return stream_response
     else:
         return render(request, 'display.html')
+
+
+@connection_galaxy
+def tree_visualization(request, file_id):
+
+    gi = request.galaxy
+    data = gi.datasets.show_dataset(dataset_id=file_id)
+    url = urlparse.urljoin(gi.base_url, data['download_url'])
+    response = urllib.urlopen(url)
+
+    return render(request, template_name='treeviz/tree.html', context={'newick_tree':response.read()})
+
+@connection_galaxy
+def export_to_itol(request, file_id):
+
+    #retrieve newick from galaxy server
+    gi = request.galaxy
+    data = gi.datasets.show_dataset(dataset_id=file_id)
+    url = urlparse.urljoin(gi.base_url, data['download_url'])
+    response = urllib.urlopen(url)
+
+    tmpfile = tempfile.NamedTemporaryFile()
+    tmpfile.write(response.read())
+    tmpfile.flush()
+    #send file to itol server
+    import requests
+
+    url_itol = 'http://itol.embl.de/upload.cgi'
+    payload = { 'tname':"" ,'tfile':open(tmpfile.name,'rb'), }
+    r = requests.post(url_itol, files=payload)
+
+    return redirect(r.url)
+
+
 
 
 @connection_galaxy

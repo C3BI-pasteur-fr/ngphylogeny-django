@@ -30,15 +30,21 @@ header.jumbotron{
 
 }
 
-footer {
-    min-height: 100px;
+.row-eq-height{
+  display: -webkit-box;
+  display: -webkit-flex;
+  display: -ms-flexbox;
+  display:         flex;
 }
 
 .sidenav {
       background-color: #f2f2f2;
-      height: 100%;
-      padding-bottom: 100px;
+      border-right: 15px;
 
+}
+
+.table>tbody>tr>td{
+     vertical-align: middle;
 }
 
 .miniworkflow .panel{
@@ -50,4 +56,8 @@ footer {
     font-size:20px;
     font-color:blue;
     padding:2px;
+}
+
+footer {
+    min-height: 100px;
 }

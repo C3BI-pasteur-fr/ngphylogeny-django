@@ -31,7 +31,7 @@
                 <a class="btn btn-default" title="Dowload the file"
                    href="{% url 'download_file' file.id %}">
                     <span class="glyphicon glyphicon-download-alt text-primary"></span></a>
-                <a class="btn btn-default" title="Save the file in the database and shared with project group"
+                <a class="btn btn-default" title="Display the file"
                    href="{% url 'display_file' file.id %}">
                     <span class="glyphicon glyphicon-eye-open text-primary"></span></a>
             {% elif 'error' in file.state  %}

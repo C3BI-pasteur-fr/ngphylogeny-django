@@ -39,13 +39,13 @@
 {% endblock %}
 {% block content %}
     <div class="row row-eq-height">
-        <div class="col-sm-3 sidenav">
+        <div class="col-md-2 text-center sidenav">
                 <h3>A la carte</h3>
                 <ul class="nav nav-pills nav-stacked">
 
 
-                <li><h5 class="text-left"> Workflow Name: </h5>
-                    <div class="btn-group-vertical"  role="group">
+                <li><h5> Workflow Name: </h5>
+                    <div class="btn-group-vertical" placeholder="Workflow name.." role="group">
                         <input type="text">
                     </div>
                 </li>
@@ -58,12 +58,12 @@
                 </ul>
         </div>
 
-
-        <h3 class="text-justify"><span class="glyphicon glyphicon-chevron-right small"></span>List of Tools</h3>
+        <div class="col-md-10">
+            <h3 class="text-justify"><span class="glyphicon glyphicon-chevron-right small"></span>List of Tools</h3>
 
 
         {% for step in workflow|dictsort:"step"%}
-            <div class="col-md-2">
+            <div class="col-md-3">
                 <h4 class="text-left">{{forloop.counter}}. {{step.group.verbose_name}}</h4>
                 <div class="btn-group-vertical"  role="group">
                 {% for tool in step.group.tool.all %}
@@ -76,7 +76,8 @@
                     </label>
                     {# tool panel #}
                     <div id="toolbox-{{ tool.pk }}"  style="display:none;">
-                        <button type="button" class="close" data-dismiss="alert" aria-label="Close"
+                        <button type="button" class="close"
+                                data-dismiss="alert" aria-label="Close"
                                 onclick="remove_panel(this);">
                             <span aria-hidden="true">&times;</span>
                         </button>
@@ -89,6 +90,7 @@
                 </div>
             </div>
         {% endfor %}
+        </div>
  </div>
 
 
@@ -107,7 +109,7 @@
                         </div>
                     </div>
                     {% for step in workflow|dictsort:"step"%}
-                      <div id=wk-display-{{ step.group.name}}  class="col-md-2" style="display:none"> </div>
+                      <div id=wk-display-{{ step.group.name}}  class="col-md-2" style="display:none"></div>
                     {% endfor %}
                 </div>
                     <button type="submit" class="btn btn-primary" name="run" value="build_workflow">

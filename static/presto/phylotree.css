@@ -1,0 +1,338 @@
+.tree-selection-brush .extent {
+    fill-opacity: .05;
+    stroke: #fff;
+    shape-rendering: geometricPrecision;
+    width: 100%;
+    height: 100%;
+}
+
+.tree-scale-bar text {
+    font-family: sans-serif;
+    font: 11px Arial;
+}
+
+.tree-scale-bar line,
+.tree-scale-bar path {
+    fill: none;
+    stroke: black;
+    stroke-width: 0.8px;
+    shape-rendering: geometricPrecision;
+}
+
+.node circle,
+.node ellipse,
+.node rect {
+    fill: steelblue;
+    stroke: black;
+    stroke-width: 0.5px;
+}
+
+.internal-node circle,
+.internal-node ellipse,
+.internal-node rect {
+    fill: #CCC;
+    stroke: black;
+    stroke-width: 0.5px;
+}
+
+.node {
+    font: 11px Arial;
+}
+
+.node-selected {
+    fill: #f00 !important;
+}
+
+.node-collapsed triangle,
+.node-collapsed ellipse,
+.node-collapsed rect {
+    fill: #f00 !important;
+}
+
+.node-tagged {
+    fill: #00f;
+}
+
+.branch {
+    fill: none;
+    stroke: black;
+    stroke-width: 1.2px;
+}
+
+.clade {
+    fill: #1f77b4;
+    stroke: #444;
+    stroke-width: 2px;
+    opacity: 1;
+}
+
+.branch-selected {
+    stroke: #f00 !important;
+    stroke-width: 2px;
+}
+
+.branch-tagged {
+    stroke: #00f;
+    stroke-dasharray: 10, 5;
+    stroke-width: 2px;
+}
+
+.branch-tracer {
+    stroke: #bbb;
+    stroke-dasharray: 3, 4;
+    stroke-width: 1px;
+}
+
+.branch-multiple {
+    stroke-dasharray: 5, 5, 1, 5;
+    stroke-width: 3px;
+}
+
+.branch:hover {
+    stroke-width: 5px;
+}
+
+.internal-node circle:hover,
+.internal-node ellipse:hover,
+.internal-node rect:hover {
+    fill: black;
+    stroke: #CCC;
+}
+
+.bootstrap_values {
+    font-size: 10px;
+    background-fill: #cccccc;
+}
+
+.attribute {
+    font-size: 10px;
+    background-fill: #cccccc;
+}
+
+html,
+body, .tree-wrapper {
+    height: 100%;
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.navbar-brand {
+    color: black;
+
+}
+
+.dropdown-toggle {
+    color: black;
+
+}
+
+.top_bar {
+    position: relative;
+    min-width: 100%;
+    height: 50px;
+    background: #f2f2f2; /* fallback for old browsers */
+    background: -webkit-linear-gradient(to right, #f2f2f2 250px, #ffffff); /* Chrome 10-25, Safari 5.1-6 */
+    background: linear-gradient(to right, #f2f2f2 250px, #ffffff); /* W3C, IE 10+/ Edge, Firefox 16+, Chrome 26+, Opera 12+, Safari 7+ */
+
+}
+
+.tree_options,
+.tree-vis {
+    position: relative;
+    display: inline-block;
+    vertical-align: top;
+
+}
+
+#bs-example-navbar-collapse-1 {
+    padding: 0;
+}
+
+.tree_options {
+    min-height: calc(100% - 50px);
+    width: 250px;
+    left: 0;
+    bottom: 0;
+    background: #f2f2f2;
+
+}
+
+.text_tree_options_title {
+    text-align: center;
+    margin-top: 0%;
+    margin-right: 0;
+    margin-left: 25%;
+    font-size: 20px;
+    font-family: sans-serif;
+    display: inline-block;
+}
+
+.text_tree_options_content {
+    font-size: 11px;
+    font-family: sans-serif;
+    display: inline-block;
+}
+
+.tree_disposition_wrapper {
+    background-color: #fefefe;
+    width: 90%;
+    height: 25%;
+    border-radius: 25px;
+    display: table;
+    margin: 0 auto;
+    margin-bottom: 5%;
+}
+
+.tree_disposition_1 {
+    display: inline-block;
+    float: left;
+    padding-top: 10px;
+    padding-right: 0px;
+    padding-bottom: 0px;
+    padding-left: 10px;
+    vertical-align: top;
+    width: 49%;
+}
+
+.tree_disposition_line {
+    z-index: 1;
+    display: inline-block;
+    min-height: 170px;
+    margin-left: 0;
+    margin-top: 10px;
+    width: 0.5px;
+    margin-bottom: 10px;
+    border-style: solid;
+    border-width: thin;
+    vertical-align: top;
+}
+
+#phylotree_branch_length_1 {
+    margin-top: 50%;
+    margin-bottom: 50%;
+    font: 14px Arial;
+}
+
+#phylotree_branch_length_2 {
+    margin-bottom: 50%;
+    font: 14px Arial;
+}
+
+.tree_disposition_2 {
+    display: inline-block;
+    margin-top: 10px;
+    margin-right: 25px;
+    margin-bottom: 0px;
+    margin-left: 10px;
+    vertical-align: top;
+}
+
+#phylotree_layout_mode_1 {
+    margin-top: 25%;
+    margin-bottom: 25%;
+}
+
+#phylotree_layout_mode_2 {
+    margin-top: 50%;
+    margin-bottom: 50%;
+}
+
+#phylotree_layout_mode_3 {
+    margin-top: 25%;
+    margin-bottom: 25%;
+}
+
+.branch_filter_wrapper {
+    margin: 25px;
+}
+
+.text_tree_options_search {
+    margin-top: 20%;
+    margin-right: 0;
+    margin-left: 0;
+    font-size: 18px;
+    font-family: sans-serif;
+    display: inline-block;
+    vertical-align: top;
+}
+
+.tree_ordering {
+    background-color: #fefefe;
+    width: 90%;
+    height: 25%;
+    border-radius: 25px;
+    display: table;
+    margin: 0 auto 5% auto;
+    padding-left: 10px;
+}
+
+#sort_ascending, #sort_descending, #sort_original {
+    margin-top: 5px;
+    margin-right: 5px;
+    margin-bottom: 5px;
+    margin-left: 10px;
+}
+
+.tree_manipulation {
+    background-color: #fefefe;
+    width: 90%;
+    height: 25%;
+    border-radius: 25px;
+    display: table;
+    margin: 0 auto;
+    padding-top: 10px;
+    padding-right: 25px;
+    padding-bottom: 0px;
+    padding-left: 10px;
+}
+
+#display_bootstrap, #display_LB, #align-toggler {
+    margin-top: 10px;
+    margin-right: 5px;
+    margin-bottom: 10px;
+    margin-left: 10px;
+}
+
+.tree-vis {
+    height: calc(100% - 50px);
+    width: calc(100% - 255px) !important;
+}
+
+.tree-widget {
+    height: 100%;
+    width: 100%;
+    overflow-y: auto;
+    overflow-x: auto;
+}
+
+.tree_zoom {
+    right: 25px;
+    top: 10px;
+    position: absolute;
+    width: 100px;
+    height: 100px;
+
+}
+
+#expand_vert_space, #expand_hori_space {
+
+}
+
+#compress_vert_space, #compress_hori_space {
+    margin-top: 10px;
+
+}
+
+#enable_zoom, #zoom_minus, #zoom_plus {
+    margin-top: 10px;
+}
+
+.phylotree_branch_length {
+}
+
+.phylotree-container {
+    cursor: pointer;
+
+}
+	

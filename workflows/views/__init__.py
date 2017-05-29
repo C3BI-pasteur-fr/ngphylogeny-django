@@ -164,8 +164,10 @@ def workflow_build_view(request):
 
         wkg = WorkflowGalaxyFactory(list_tool, gi, history_id)
         wkg.name = request.POST.get('name', 'generated workflow')
+        wk_id = gi.workflows.import_workflow_json(wkg.to_json())
+        print wk_id
 
-        return HttpResponse(json.dumps(eval(str(wkg))), content_type='application/json')
+        return HttpResponse(json.dumps(wkg.to_json()), content_type='application/json')
 
 
 
