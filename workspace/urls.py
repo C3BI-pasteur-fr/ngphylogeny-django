@@ -14,11 +14,13 @@ Including another URLconf
     2. Add a URL to urlpatterns:  url(r'^blog/', include('blog.urls'))
 """
 from django.conf.urls import url
-from views import *
 
+from views import *
 
 urlpatterns = [
     url(r'^history$', HistoryDetailView.as_view(), name="history_current_detail"),
     url(r'^history/(?P<history_id>[\w-]+)$', HistoryDetailView.as_view(), name="history_detail"),
+    url(r'^history/provenance/(?P<history_id>[\w-]+)$', get_dataset_toolprovenance, name="get_dataset_tool"),
     url(r'^history/galaxyerror/(?P<id>[\w-]+)$', GalaxyErrorView.as_view(url='/dataset/errors?id=%(id)s'), name="galaxy_error_url"),
+
 ]

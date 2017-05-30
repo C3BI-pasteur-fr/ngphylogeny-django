@@ -1,4 +1,52 @@
 {% load static %}
+<script>
+    $(function () {
+        var deferreds = [];
+        // Loop using .each
+        $("[data]").each(function (index, value) {
+            var ajax = $.post("{% url 'get_dataset_tool' history_info.id %}",
+                {
+                    'dataset_id': $(this).attr('id'),
+                    'csrfmiddlewaretoken': '{{ csrf_token }}'
+                },
+                function (response) {
+                    var result = response;
+                    $('#' + result.dataset_id).attr('data', result.tool_id)
+                });
+            // Push promise to 'deferreds' array
+            deferreds.push(ajax);
+        });
+        // Use .apply onto array from deferreds
+        $.when.apply($, deferreds).then(function () {
+            // groupe dataset by tool
+            var id_tool = '';
+            var first_dataset = '';
+            var cmpt = 1;
+
+            $("[data]").each(function (index, el) {
+
+                if (id_tool == $(el).attr('data')) {
+                    cmpt++;
+                    $(el).remove();
+                } else {
+                    cmpt = 1;
+                    first_dataset = $(el).attr('id');
+                    id_tool = $(el).attr('data');
+                    $.post("{% url 'get_tool_name' %}",
+                        {
+                            'tool_id': $(this).attr('data'),
+                            'csrfmiddlewaretoken': '{{ csrf_token }}'
+                        },
+                        function (response) {
+                            var result = response;
+                            $(el).text(result.name);
+                        });
+                }
+                $('#' + first_dataset).attr('rowspan', cmpt);
+            });
+        });
+    });
+</script>
 <h4>History: {{ history_info.name }}</h4>
 <table class="table table-striped ">
     <thead>
@@ -7,14 +55,10 @@
     <th>File Name</th>
     <th>Statut</th>
     </thead>
-    {% regroup history_content by job_id as job_list %}
-    {% for job in job_list %}
 
-        {% for file in job.list %}
-            <tr {% if not file.visible %}class='hidden' {% endif %}>
-                {% if forloop.first %}
-                    <td rowspan="{{ job.list|length }}">{{ job.list.0.tool_name }}.</td>
-                {% endif %}
+    {% for file in history_content %}
+        <tr {% if not file.visible %}class='hidden' {% endif %}>
+                <td id="{{ file.id }}" data='' ></td>
                 <td>{{ file.hid }}.</td>
                 <td>{{ file.name }}</td>
                 <td>
@@ -60,6 +104,5 @@
                 </td>
 
             </tr>
-        {% endfor %}
     {% endfor %}
 </table>

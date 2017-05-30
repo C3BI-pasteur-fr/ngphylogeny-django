@@ -1,7 +1,9 @@
+import json
 import tempfile
 
 from bioblend.galaxy.tools.inputs import inputs
 from django.core.urlresolvers import reverse_lazy
+from django.http import HttpResponse
 from django.shortcuts import render, get_object_or_404, redirect
 from django.views.generic import DetailView, ListView
 
@@ -156,3 +158,14 @@ def tool_exec(request, tool_form, store_output=None):
                     tool_form.add_error(reverse_dict_field.get(field),
                                         ValidationError(err_msg, code='invalid'))
             return tool_outputs
+
+
+@connection_galaxy
+def get_tool_name(request):
+    context = dict()
+    if request.POST:
+        gi = request.galaxy
+        toolid = request.POST.get('tool_id')
+        tool = gi.tools.get_tools(tool_id=toolid )[0]
+        context.update({'tool_id':toolid, 'name':tool.get('name')})
+    return  HttpResponse(json.dumps(context), content_type='application/json')

@@ -1,4 +1,8 @@
+import json
+
+from django.http import HttpResponse
 from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.generic import TemplateView, RedirectView
 
 from galaxy.decorator import connection_galaxy
@@ -55,7 +59,7 @@ def get_or_create_history(request):
 
     return history_id
 
-
+@method_decorator(ensure_csrf_cookie, name="dispatch")
 @method_decorator(connection_galaxy, name="dispatch")
 class HistoryDetailView(TemplateView):
     """
@@ -81,6 +85,8 @@ class HistoryDetailView(TemplateView):
         context['history_info'] = gi.histories.show_history(history_id)
         history_content = gi.histories.show_history(history_id, contents=True)
 
+        """"
+        # slow
         for dataset in history_content:
             dataset_provenance = gi.histories.show_dataset_provenance( history_id,
                                                             dataset.get('id'),
@@ -90,9 +96,31 @@ class HistoryDetailView(TemplateView):
             dataset.update(tool_name=tool.get('name'),
                            job_id=dataset_provenance.get("job_id")
                            )
-
+        """
         context['history_content'] = history_content
         return context
+
+
+
+@connection_galaxy
+def get_dataset_toolprovenance(request, history_id,):
+
+    context = dict()
+    if request.POST:
+        gi = request.galaxy
+
+        data_id = request.POST.get('dataset_id')
+        if data_id:
+            dataset_provenance = gi.histories.show_dataset_provenance(history_id,
+                            data_id,
+                            follow=False)
+
+            context.update({'tool_id':dataset_provenance.get("tool_id"),
+                            'dataset_id':data_id})
+
+    return HttpResponse(json.dumps(context), content_type='application/json')
+
+
 
 
 @method_decorator(connection_galaxy, name="dispatch")
@@ -101,3 +129,4 @@ class GalaxyErrorView(RedirectView):
     def get_redirect_url(self, *args, **kwargs):
 
         return "%s/dataset/errors?id=%s" %(self.request.galaxy_server.url, kwargs.get('id'))
+

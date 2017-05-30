@@ -1,3 +1,4 @@
+{% load static %}
 <h4>History: {{ history_info.name }}</h4>
 <table class="table table-striped ">
     <thead>
@@ -28,6 +29,18 @@
                 {# <a class="btn btn-default" title="Export big data in your personal outputs folder" #}
                 {#   href="{% url 'export_file' file.id %}"> #}
                 {#   <span class="glyphicon glyphicon-export text-primary" aria-hidden="true"></span></a>#}
+                {% if file.extension in "nhx,nwk" %}
+                <a class="btn btn-success" title="Interactive Tree visualisation"
+                   href="{% url 'display_tree' file.id %}">
+                    <span class="glyphicon text-success" aria-hidden="true"><img src="{% static 'images/ptree.svg' %}"> </span>
+                    Tree
+                </a>
+
+                <a class="btn btn-warning" title="Export tree to iTOL: Interactive Tree Of Life"
+                   href="{% url 'export_to_itol' file.id %}"><span class="glyphicon glyphicon-export" aria-hidden="true"> </span>
+                    Export to iTol
+                </a>
+                {% endif %}
                 <a class="btn btn-default" title="Dowload the file"
                    href="{% url 'download_file' file.id %}">
                     <span class="glyphicon glyphicon-download-alt text-primary"></span></a>
@@ -38,8 +51,8 @@
                  <a class="btn btn-default" title="shows error"
                     href="{% url 'galaxy_error_url' file.id %}">
                     <span class="glyphicon glyphicon-exclamation-sign text-danger"></span></a>
-            {% endif %}
 
+            {% endif %}
             </td>
         </tr>
 
