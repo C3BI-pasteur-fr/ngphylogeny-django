@@ -47,7 +47,29 @@
         });
     });
 </script>
-<h4>History: {{ history_info.name }}</h4>
+<script>
+    function refresh() {
+        $.get('{% url 'history_detail' history_info.id %}',
+            function (data) {
+                var html = $.parseHTML(data);
+                $(html).find('[id^=state_]').each(function (index, el) {
+                    $('#' + $(el).attr('id')).replaceWith($(el));
+                });
+                $(html).find('[id^=action_]').each(function (index, el) {
+                    $('#' + $(el).attr('id')).replaceWith($(el));
+                });
+            }
+        );
+    }
+</script>
+
+<p class="pull-right">
+    <a onclick="refresh()" class="btn btn-info">
+        <span class="glyphicon glyphicon-refresh"></span> Refresh
+    </a>
+</p>
+<h4>History: {{ history_info.name }}</h4>​
+<br>
 <table class="table table-striped ">
     <thead>
     <th>Tool</th>
@@ -56,53 +78,55 @@
     <th>Statut</th>
     </thead>
 
-    {% for file in history_content %}
+    {% for file in history_content|dictsortreversed:"hid" %}
         <tr {% if not file.visible %}class='hidden' {% endif %}>
-                <td id="{{ file.id }}" data='' ></td>
-                <td>{{ file.hid }}.</td>
-                <td>{{ file.name }}</td>
-                <td>
-                    {% if 'ok' in file.state %}
-                        <span class="glyphicon glyphicon-ok  text-success"></span>
-                    {% elif 'queued' in file.state or 'new' in file.state %}
-                        <span class="glyphicon glyphicon-time text-info"></span>
-                    {% elif "running" in file.state %}
-                        <span class="glyphicon glyphicon-refresh spin"></span>
-                    {% else %}
-                        <span class="glyphicon glyphicon-remove text-danger"></span>
+            <td id="{{ file.id }}" data=''></td>
+            <td>{{ file.hid }}.</td>
+            <td>{{ file.name }}</td>
+            <td id="state_{{ file.id }}">
+                {% if 'ok' in file.state %}
+                    <span class="glyphicon glyphicon-ok  text-success"></span>
+                {% elif 'queued' in file.state or 'new' in file.state %}
+                    <span class="glyphicon glyphicon-time text-info"></span>
+                {% elif "running" in file.state %}
+                    <span class="glyphicon glyphicon-refresh spin"></span>
+                {% else %}
+                    <span class="glyphicon glyphicon-remove text-danger"></span>
+                {% endif %}
+            </td>
+            <td id="action_{{ file.id }}">
+                {% if 'ok' in file.state %}
+                    {# <a class="btn btn-default" title="Export big data in your personal outputs folder" #}
+                    {# href="{% url 'export_file' file.id %}"> #}
+                    {# <span class="glyphicon glyphicon-export text-primary" aria-hidden="true"></span></a>#}
+                    {% if file.extension in "nhx,nwk" %}
+                        <a class="btn btn-success" title="Interactive Tree visualisation"
+                           href="{% url 'display_tree' file.id %}">
+                            <span class="glyphicon text-success" aria-hidden="true"><img
+                                    src="{% static 'images/ptree.svg' %}"> </span>
+                            Interactive tree
+                        </a>
+
+                        <a class="btn btn-warning" title="Export tree to iTOL: Interactive Tree Of Life"
+                           href="{% url 'export_to_itol' file.id %}"><span class="glyphicon glyphicon-export"
+                                                                           aria-hidden="true"> </span>
+                            Export to iTol
+                        </a>
                     {% endif %}
-                </td>
-                <td>
-                    {% if 'ok' in file.state %}
-                        {# <a class="btn btn-default" title="Export big data in your personal outputs folder" #}
-                        {# href="{% url 'export_file' file.id %}"> #}
-                        {# <span class="glyphicon glyphicon-export text-primary" aria-hidden="true"></span></a>#}
-                        {% if file.extension in "nhx,nwk" %}
-                            <a class="btn btn-success" title="Interactive Tree visualisation"
-                               href="{% url 'display_tree' file.id %}">
-                                <span class="glyphicon text-success" aria-hidden="true"><img src="{% static 'images/ptree.svg' %}"> </span>
-                                Interactive tree
-                            </a>
+                    <a class="btn btn-default" title="Dowload the file"
+                       href="{% url 'download_file' file.id %}">
+                        <span class="glyphicon glyphicon-download-alt text-primary"></span></a>
+                    <a class="btn btn-default" title="Display the content file"
+                       href="{% url 'display_file' file.id %}">
+                        <span class="glyphicon glyphicon-eye-open text-primary"></span></a>
+                {% elif 'error' in file.state %}
+                    <a class="btn btn-default" title="shows error"
+                       href="{% url 'galaxy_error_url' file.id %}">
+                        <span class="glyphicon glyphicon-exclamation-sign text-danger"></span></a>
+                {% endif %}
 
-                            <a class="btn btn-warning" title="Export tree to iTOL: Interactive Tree Of Life"
-                               href="{% url 'export_to_itol' file.id %}"><span class="glyphicon glyphicon-export" aria-hidden="true"> </span>
-                                Export to iTol
-                            </a>
-                        {% endif %}
-                        <a class="btn btn-default" title="Dowload the file"
-                           href="{% url 'download_file' file.id %}">
-                            <span class="glyphicon glyphicon-download-alt text-primary"></span></a>
-                        <a class="btn btn-default" title="Display the content file"
-                           href="{% url 'display_file' file.id %}">
-                            <span class="glyphicon glyphicon-eye-open text-primary"></span></a>
-                    {% elif 'error' in file.state %}
-                        <a class="btn btn-default" title="shows error"
-                           href="{% url 'galaxy_error_url' file.id %}">
-                            <span class="glyphicon glyphicon-exclamation-sign text-danger"></span></a>
-                    {% endif %}
+            </td>
 
-                </td>
-
-            </tr>
+        </tr>
     {% endfor %}
 </table>

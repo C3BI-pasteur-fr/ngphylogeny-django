@@ -57,6 +57,19 @@ header.jumbotron{
     font-color:#446cb3;
     padding:2px;
 }
+a:active>.glyphicon-refresh{
+    animation: spin 1s;
+}
+
+td>.glyphicon-refresh {
+    animation: spin 1s infinite linear;
+}
+
+@keyframes spin {
+    from { transform: scale(1) rotate(0deg);}
+    to { transform: scale(1) rotate(360deg);}
+}
+
 
 footer {
     min-height: 100px;

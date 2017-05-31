@@ -20,7 +20,7 @@ def create_history(request):
     gi = request.galaxy
     server = request.galaxy_server
 
-    history = gi.histories.create_history()
+    history = gi.histories.create_history(name='NGPhylogeny analyse')
     current_user = None
 
     if request.user.is_authenticated():
@@ -85,18 +85,6 @@ class HistoryDetailView(TemplateView):
         context['history_info'] = gi.histories.show_history(history_id)
         history_content = gi.histories.show_history(history_id, contents=True)
 
-        """"
-        # slow
-        for dataset in history_content:
-            dataset_provenance = gi.histories.show_dataset_provenance( history_id,
-                                                            dataset.get('id'),
-                                                            follow=False
-                                                          )
-            tool = gi.tools.get_tools(tool_id=dataset_provenance.get("tool_id"))[0]
-            dataset.update(tool_name=tool.get('name'),
-                           job_id=dataset_provenance.get("job_id")
-                           )
-        """
         context['history_content'] = history_content
         return context
 
@@ -104,7 +92,9 @@ class HistoryDetailView(TemplateView):
 
 @connection_galaxy
 def get_dataset_toolprovenance(request, history_id,):
-
+    """
+    Ajax: return tool id who produced the dataset
+    """
     context = dict()
     if request.POST:
         gi = request.galaxy

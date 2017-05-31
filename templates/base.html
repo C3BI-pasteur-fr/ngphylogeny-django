@@ -51,6 +51,13 @@
                 <a href ="{% url 'logout' %}">
                     <span class="glyphicon glyphicon-log-out"></span> Logout</a>
             </li>
+            {% if request.user.is_superuser %}
+            <li class="user navbar-right">
+                <a href ="{% url 'admin:index' %}">
+                   <span class="glyphicon glyphicon-wrench"></span>
+                </a>
+            </li>
+            {% endif %}
             <li class="user navbar-right">
                 <a href ="{% url 'account' %}">
                    <span class="glyphicon glyphicon-user"></span> {{user}}
