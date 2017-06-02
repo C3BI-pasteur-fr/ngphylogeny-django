@@ -21,8 +21,8 @@
                     name: $(element).attr("name"),
                     value: $(element).attr("value")
                 }).appendTo($(element).parent());
-            };
-        };
+            }
+        }
 
         function toggle_condition(test_field, toggle_elt) {
             var cond = $(toggle_elt).attr("data-case");
@@ -35,18 +35,19 @@
                 $(toggle_elt).hide();
                 $(toggle_elt).find(':input').attr('disabled', true);
             }
-        };
+        }
 
         function jq_conv_id(myid) {
             return myid.replace(/(:|\.|\[|\]|\||\,)/g, "\\$1");
-        };
+        }
+
     </script>
     <script>
         $(document).ready(function () {
             //file field
             $(':file').filer({
                 showThumbs: true,
-                changeInput: true,
+                changeInput: true
             });
 
             //put label on the top of checkbox//
@@ -58,35 +59,37 @@
                     parent.parent().removeClass("checkbox").before(parent);
                 }
             });
+
             //hide or show conditionals fields
             $('[data-test]').each(function (index, toggle_elt) {
 
                 var m_id = $(toggle_elt).attr("data-test");
-                var test_fields = $('input[name="' + jq_conv_id(m_id) + '"]');
-                var test_field;
+                var test_fields = $('input[name="' + jq_conv_id(m_id) + '"],' +
+                    'select[name="' + jq_conv_id(m_id) + '"]');
 
+                var test_field;
                 if (test_fields.length > 1) {
+                    //radiobox
                     test_field = test_fields.filter(':checked');
                 } else {
                     test_field = test_fields;
                 }
-
                 if (test_field.attr("data-toggle")) {
                     boolean_checkbox(test_field);
-                };
+                }
 
                 toggle_condition(test_field, toggle_elt);
                 test_fields.change(function () {
                     if (test_fields.length > 1) {
                         test_field = test_fields.filter(':checked');
                     }
-                    boolean_checkbox(this);
+                    //boolean_checkbox(this);
                     toggle_condition(test_field, toggle_elt);
                 });
 
             });
         });
-        </script>
+    </script>
 {% endblock %}
 {% block content %}
 

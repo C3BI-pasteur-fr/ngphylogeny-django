@@ -21,17 +21,19 @@ def create_history(request):
     server = request.galaxy_server
 
     history = gi.histories.create_history(name='NGPhylogeny analyse')
-    current_user = None
 
     if request.user.is_authenticated():
         current_user = request.user
+    else:
+        current_user = server.galaxyuser_set.get(anonymous=True).user
 
     wsph = WorkspaceHistory(history=history.get("id"),
                             name=history.get('name'),
                             user=current_user,
-                            galaxy_server = server )
-
+                            galaxy_server=server
+                            )
     wsph.save()
+
     request.session["last_history"] = wsph.history
 
     return wsph.history
@@ -40,7 +42,6 @@ def create_history(request):
 @connection_galaxy
 def get_history(request):
 
-    gi = request.galaxy
     return request.session.get('last_history')
 
 
@@ -58,6 +59,7 @@ def get_or_create_history(request):
     request.session["last_history"] = history_id
 
     return history_id
+
 
 @method_decorator(ensure_csrf_cookie, name="dispatch")
 @method_decorator(connection_galaxy, name="dispatch")
@@ -89,9 +91,8 @@ class HistoryDetailView(TemplateView):
         return context
 
 
-
 @connection_galaxy
-def get_dataset_toolprovenance(request, history_id,):
+def get_dataset_toolprovenance(request, history_id, ):
     """
     Ajax: return tool id who produced the dataset
     """
@@ -102,21 +103,16 @@ def get_dataset_toolprovenance(request, history_id,):
         data_id = request.POST.get('dataset_id')
         if data_id:
             dataset_provenance = gi.histories.show_dataset_provenance(history_id,
-                            data_id,
-                            follow=False)
+                                                                      data_id,
+                                                                      follow=False)
 
-            context.update({'tool_id':dataset_provenance.get("tool_id"),
-                            'dataset_id':data_id})
+            context.update({'tool_id': dataset_provenance.get("tool_id"),
+                            'dataset_id': data_id})
 
     return HttpResponse(json.dumps(context), content_type='application/json')
 
 
-
-
 @method_decorator(connection_galaxy, name="dispatch")
 class GalaxyErrorView(RedirectView):
-
     def get_redirect_url(self, *args, **kwargs):
-
-        return "%s/dataset/errors?id=%s" %(self.request.galaxy_server.url, kwargs.get('id'))
-
+        return "%s/dataset/errors?id=%s" % (self.request.galaxy_server.url, kwargs.get('id'))

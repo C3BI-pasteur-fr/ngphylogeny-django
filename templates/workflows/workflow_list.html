@@ -22,7 +22,7 @@ $(function() {
             {% for workflow in workflow_list|dictsort:"name" %}
                 <li {% if forloop.first %}class="active"{%endif%}>
                     <a href="#{{ workflow.slug }}">
-                        <span class="glyphicon glyphicon-wheel"></span>
+                        <span class="glyphicon glyphicon-cog"></span>
                         {{ workflow.name }}
                     </a>
                 </li>
