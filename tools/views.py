@@ -1,23 +1,24 @@
+import json
 import tempfile
 
 from bioblend.galaxy.tools.inputs import inputs
 from django.core.urlresolvers import reverse_lazy
-
+from django.http import HttpResponse
 from django.shortcuts import render, get_object_or_404, redirect
 from django.views.generic import DetailView, ListView
 
-from account.decorator import connection_galaxy
+from galaxy.decorator import connection_galaxy
+from workspace.views import create_history
 from .forms import ToolForm
 from .models import Tool
-from workspace.views import create_history
 
 
 class ToolListView(ListView):
-    queryset = Tool.objects.filter(galaxy_server__galaxyconf__active=True)
+    queryset = Tool.objects.filter(galaxy_server__current=True)
 
 
 class ToolDetailView(DetailView):
-    queryset = Tool.objects.filter(galaxy_server__galaxyconf__active=True)
+    queryset = Tool.objects.filter(galaxy_server__current=True)
 
 
 @connection_galaxy
@@ -73,7 +74,9 @@ def tool_exec_view(request, pk, store_output=None):
                 tool_outputs = gi.tools.run_tool(history_id=history_id,
                                                  tool_id=tool_obj.id_galaxy,
                                                  tool_inputs=tool_inputs)
-                print "#4", tool_outputs
+
+
+                print "#4", tool_inputs
                 if store_output:
                     request.session['output'] = tool_outputs
 
@@ -97,6 +100,8 @@ def tool_exec_view(request, pk, store_output=None):
                }
 
     return render(request, 'tools/tool_form.html', context)
+
+
 
 
 @connection_galaxy
@@ -153,3 +158,14 @@ def tool_exec(request, tool_form, store_output=None):
                     tool_form.add_error(reverse_dict_field.get(field),
                                         ValidationError(err_msg, code='invalid'))
             return tool_outputs
+
+
+@connection_galaxy
+def get_tool_name(request):
+    context = dict()
+    if request.POST:
+        gi = request.galaxy
+        toolid = request.POST.get('tool_id')
+        tool = gi.tools.get_tools(tool_id=toolid )[0]
+        context.update({'tool_id':toolid, 'name':tool.get('name')})
+    return  HttpResponse(json.dumps(context), content_type='application/json')

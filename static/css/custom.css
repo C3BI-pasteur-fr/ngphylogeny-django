@@ -1,14 +1,26 @@
-@import 'https://fonts.googleapis.com/css?family=Bungee+Inline|Fascinate+Inline|Francois+One';
+@import 'https://fonts.googleapis.com/css?family=Bungee+Inline|Francois+One';
 /*font-family: 'Francois One', sans-serif;
 font-family: 'Fascinate Inline', cursive;
 font-family: 'Bungee Inline', cursive;*/
 
-.title-cap{
+.title-bg {
+    background-color: rgb(0, 0, 0);
+    background-color: rgba(0, 0, 0, 0.6);
+    padding: 10px;
+}
+
+.title-cap {
     font-family: 'Bungee Inline', cursive;
 }
 
-header.jumbotron{
-    color:#ffffff ;
+.nav {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 14px;
+}
+
+header.jumbotron {
+
+    color: #ffffff;
     background-color: #446cb3;
     background-size: 100%;
     background-image: url("/static/images/header.jpg");
@@ -16,7 +28,75 @@ header.jumbotron{
     background-repeat: no-repeat;
     font-family: 'Ubuntu', sans-serif;
     margin-bottom: 0px;
+
 }
+
+.row-eq-height {
+    display: -webkit-box;
+    display: -webkit-flex;
+    display: -ms-flexbox;
+    display: flex;
+}
+
+.sidenav {
+    background-color: #f2f2f2;
+    border-right: 15px;
+
+}
+
+.table > tbody > tr > td {
+    vertical-align: middle;
+}
+
+.phylo-analysis > .col-md-4 > div {
+    padding: 10px 0;
+    margin-top: 30px;
+    height: 90%;
+    width: 90%;
+    border-bottom-color: #1f77b4;
+    border-bottom-style: solid;
+    border-top-color: white;
+    border-top-style: solid;
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.0), rgba(255, 255, 255, 0.95), rgba(242, 242, 242, 0.95));
+}
+
+.phylo-analysis > .col-md-4 > div:hover {
+    border-top-color: #1f77b4;
+    border-top-style: solid;
+}
+
+.phylo-analysis a:hover {
+    text-decoration: none;
+}
+
+.miniworkflow .panel {
+    top: 0px;
+    width: 120px;
+}
+
+.miniworkflow .glyphicon-arrow-right {
+    font-size: 20px;
+    font-color: #446cb3;
+    padding: 2px;
+}
+
+a:active > .glyphicon-refresh {
+    animation: spin 1s;
+}
+
+td > .glyphicon-refresh {
+    animation: spin 1s infinite linear;
+}
+
+@keyframes spin {
+    from {
+        transform: scale(1) rotate(0deg);
+    }
+    to {
+        transform: scale(1) rotate(360deg);
+    }
+}
+
 footer {
     min-height: 100px;
 }

@@ -4,7 +4,7 @@ from django.contrib.auth.models import User
 from django.db import models
 from django.db.models.signals import pre_delete
 
-from account.models import GalaxyServer, GalaxyUser
+from galaxy.models import Server, GalaxyUser
 
 
 class WorkspaceHistory(models.Model):
@@ -15,7 +15,7 @@ class WorkspaceHistory(models.Model):
     name = models.CharField(max_length=100)
     created_date = models.DateField(auto_now=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
-    galaxy_server = models.ForeignKey(GalaxyServer, on_delete=models.CASCADE )
+    galaxy_server = models.ForeignKey(Server, on_delete=models.CASCADE)
 
     def get_galaxy_user(self):
         if self.user:

@@ -12,9 +12,15 @@
   pk: 3
   fields:
     name: tree
-    verbose_name: Construction of phylogenetic tree
+    verbose_name: Phylogeny
 - model: tools.toolflag
   pk: 4
   fields:
     name: visu
-    verbose_name: Visualisation of phylogenetic tree
+    verbose_name: Tree rendering
+
+- model: tools.toolflag
+  pk: 5
+  fields:
+    name: conve
+    verbose_name: Format conversion

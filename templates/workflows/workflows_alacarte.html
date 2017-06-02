@@ -3,113 +3,114 @@
 {% load static %}
 {% block nav-analysis %}class="active"{% endblock %}
 {% block stylesheet %}
-{#    <script src="https://code.jquery.com/ui/1.12.0/jquery-ui.js" xmlns="http://www.w3.org/1999/html"></script>#}
-{#    <script>#}
-{#     $( function() {#}
-{#          $( "#mini-wk" ).sortable();#}
-{#          $( "#mini-wk" ).disableSelection();#}
-{#     });#}
-{#      </script>#}
-  <script>
-  $( function() {
-    $( 'input:radio:checked').each( function () {
-        $('#'+$(this).attr('data-target')).show().empty().append($('#'+$(this).attr('data-panel')).clone().show());
-        $(this).parent().addClass('active btn-info');
-    });
+    {#    <script src="https://code.jquery.com/ui/1.12.0/jquery-ui.js" xmlns="http://www.w3.org/1999/html"></script>#}
+    {#    <script>#}
+    {#     $( function() {#}
+    {#          $( "#mini-wk" ).sortable();#}
+    {#          $( "#mini-wk" ).disableSelection();#}
+    {#     });#}
+    {#      </script>#}
+    <script>
+        $(function () {
+            $('input:radio:checked').each(function () {
+                $('#' + $(this).attr('data-target')).show().empty().append($('#' + $(this).attr('data-panel')).clone().show());
+                $(this).parent().addClass('active btn-info');
+            });
 
-    $('input:radio').change( function() {
-        $('input:radio').parent().removeClass('active btn-info');
-        $('input:radio:checked').parent().addClass('active btn-info');
-        if ($(this).is(':checked')){
-            $('#'+$(this).attr('data-target')).show().empty().append($('#'+$(this).attr('data-panel')).clone().show());
+            $('input:radio').change(function () {
+                $('input:radio').parent().removeClass('active btn-info');
+                $('input:radio:checked').parent().addClass('active btn-info');
+                if ($(this).is(':checked')) {
+                    $('#' + $(this).attr('data-target')).show().empty().append($('#' + $(this).attr('data-panel')).clone().show());
+                }
+            });
+        });
+    </script>
+    <script>
+        function remove_panel(obj) {
+            $(obj).parent().parent().hide();
+            $('[data-panel="' + $(obj).parent().attr('id') + '"]').prop('checked', false).parent().removeClass('active btn-info');
+            $(obj).parent().remove();
         }
-    });
-  });
-  </script>
-<script>
-  function remove_panel(obj){
-    $(obj).parent().parent().hide();
-    $('[data-panel="'+$(obj).parent().attr('id')+'"]').prop('checked', false).parent().removeClass('active btn-info');
-    $(obj).parent().remove();
-  }
 
-</script>
-
+    </script>
 
 {% endblock %}
 {% block content %}
+    <div class="row row-eq-height">
+        <div class="col-md-2 text-center sidenav">
+            <h3>A la carte</h3>
+            <ul class="nav nav-pills nav-stacked">
 
-    <div>
-        <div class="row">
-            <h3 class="text-justify"><span class="glyphicon glyphicon-chevron-right small"></span>List of Tools</h3>
-        </div>
-        <div class="col-md-2">
-            <h4 class="text-left">0. Set Input</h4>
-            <div class="btn-group-vertical"  role="group">
-                <label class="btn btn-default"><span class="glyphicon glyphicon-file"></span> Browse
-                    <input type="file" style="display: none;">
-                </label>
-            </div>
-        </div>
-        {% for step in workflow|dictsort:"step"%}
-            <div class="col-md-2">
-                <h4 class="text-left">{{forloop.counter}}. {{step.group.verbose_name}}</h4>
-                <div class="btn-group-vertical"  role="group">
-                {% for tool in step.group.tool.all %}
-                    <label class="btn btn-default" for="radio-{{ tool.pk }}">{{ tool.name }}
-                        <input type="radio"
-                               id="radio-{{ tool.pk }}"
-                               name="radio-{{ step.group.name }}"
-                               data-panel="toolbox-{{ tool.pk }}"
-                               data-target="wk-display-{{ step.group.name }}"
-                               >
-                    </label>
-                    {# tool panel #}
-                    <div id="toolbox-{{ tool.pk }}"  style="display:none;">
-                        <button type="button" class="close" data-dismiss="alert" aria-label="Close"
-                                onclick="remove_panel(this);">
-                            <span aria-hidden="true">&times;</span>
-                        </button>
-                        {% include 'tools/tool_panel.html' %}
+                <li><h5> Workflow Name: </h5>
+                    <div class="btn-group-vertical" role="group">
+                        <input placeholder="Workflow name.." type="text">
                     </div>
-                    {# end tool panel #}
+                </li>
+                <li>-----</li>
+                <li>
+                    <button type="submit" class="btn btn-primary" name="run" value="Build workflow">
+                        <span class="glyphicon glyphicon-play-circle"></span> Create workflow
+                    </button>
+                </li>
+            </ul>
+        </div>
 
-                {% endfor %}
+        <div class="col-md-10">
+            <h3 class="text-justify"><span class="glyphicon glyphicon-chevron-right small"></span>List of Tools</h3>
+
+
+            {% for step in workflow|dictsort:"step" %}
+                <div class="col-md-3">
+                    <h4 class="text-left">{{ forloop.counter }}. {{ step.group.verbose_name }}</h4>
+                    <div class="btn-group-vertical" role="group">
+                        {% for tool in step.group.tool.all %}
+                            <label class="btn btn-default" for="radio-{{ tool.pk }}">{{ tool.name }}
+                                <input type="radio"
+                                       id="radio-{{ tool.pk }}"
+                                       name="radio-{{ step.group.name }}"
+                                       data-panel="toolbox-{{ tool.pk }}"
+                                       data-target="wk-display-{{ step.group.name }}">
+                            </label>
+                            {# tool panel #}
+                            <div id="toolbox-{{ tool.pk }}" style="display:none;">
+                                <button type="button" class="close"
+                                        data-dismiss="alert" aria-label="Close"
+                                        onclick="remove_panel(this);">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                                <input name="{{ step.category }}" value="{{ tool.pk }}" hidden=true/>
+                                {% include 'tools/tool_panel.html' %}
+                            </div>
+                            {# end tool panel #}
+
+                        {% endfor %}
+                    </div>
                 </div>
-            </div>
-        {% endfor %}
-        <div class="row">
-                <button type="submit" class="btn btn-primary" name="run" value="Build workflow">
-                    <span class="glyphicon glyphicon-play-circle"></span> Run workflow
-                </button>
+            {% endfor %}
         </div>
     </div>
-        <div>
-        <div class="row">
-            <h3  class="text-justify"><span class="glyphicon glyphicon-chevron-right small"></span>Workflow</h3>
-        </div>
-        <form method="post">
+
+    <div class="row">
+        <h3 class="text-justify"><span class="glyphicon glyphicon-chevron-right small"></span>Workflow</h3>
+        <form action="" method="post">
+            {% csrf_token %}
             <div id="mini-wk" class="row">
-                {% csrf_token %}
                 <div class="col-md-2">
                     <div class="panel panel-info">
                         <div class="panel-heading"></div>
                         <div class="panel-body">Input</div>
                         <div class="panel-footer">
                         </div>
-                        <input type="hidden" name="tools"/>
                     </div>
                 </div>
-                {% for step in workflow|dictsort:"step"%}
-                  <div id=wk-display-{{ step.group.name}}  class="col-md-2"> </div>
+                {% for step in workflow|dictsort:"step" %}
+                    <div id=wk-display-{{ step.group.name }} class="col-md-2" style="display:none"></div>
                 {% endfor %}
-
-                <div class="row">
-                    <button type="submit" class="btn btn-primary" name="run" value="Build workflow">
-                        <span class="glyphicon glyphicon-play-circle"></span> Run workflow
-                    </button>
-                </div>
             </div>
+            <button type="submit" class="btn btn-primary" name="run" value="build_workflow">
+                <span class="glyphicon glyphicon-play-circle"></span> Create workflow
+            </button>
         </form>
     </div>
 {% endblock content %}

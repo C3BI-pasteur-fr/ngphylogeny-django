@@ -1,14 +1,18 @@
 import tempfile
 import urllib
 import urlparse
-from django.shortcuts import render
-from django.urls import reverse_lazy
+
+import requests
 from django.http import StreamingHttpResponse
-from django.views.generic import FormView
-from forms import UploadForm
+from django.shortcuts import render, redirect
+from django.urls import reverse_lazy
 from django.utils.decorators import method_decorator
-from account.decorator import connection_galaxy
+from django.views.generic import FormView
+
+from forms import UploadForm
+from galaxy.decorator import connection_galaxy
 from workspace.views import get_or_create_history
+
 
 @method_decorator(connection_galaxy, name="dispatch")
 class UploadView(FormView):
@@ -56,15 +60,49 @@ def download_file(request, file_id):
     # TODO test if bigDATA
     return stream_response
 
-@connection_galaxy
+
+#@connection_galaxy
 def display_file(request, file_id):
-    """Affiche le fichier dans le navigateur"""
+    """Display file content to the web browser """
     if request.is_ajax():
         stream_response = download_file(request, file_id)
         del stream_response['Content-Disposition']
         return stream_response
     else:
         return render(request, 'display.html')
+
+
+@connection_galaxy
+def tree_visualization(request, file_id):
+
+    gi = request.galaxy
+    data = gi.datasets.show_dataset(dataset_id=file_id)
+    url = urlparse.urljoin(gi.base_url, data['download_url'])
+    response = urllib.urlopen(url)
+
+    return render(request, template_name='treeviz/tree.html', context={'newick_tree':response.read()})
+
+@connection_galaxy
+def export_to_itol(request, file_id):
+
+    #retrieve newick from galaxy server
+    gi = request.galaxy
+    data = gi.datasets.show_dataset(dataset_id=file_id)
+    url = urlparse.urljoin(gi.base_url, data['download_url'])
+    response = urllib.urlopen(url)
+
+    tmpfile = tempfile.NamedTemporaryFile()
+    tmpfile.write(response.read())
+    tmpfile.flush()
+
+    #send file to itol server
+    url_itol = 'http://itol.embl.de/upload.cgi'
+    payload = { 'tname':"" ,'tfile':open(tmpfile.name,'rb'), }
+    r = requests.post(url_itol, files=payload)
+
+    return redirect(r.url)
+
+
 
 @connection_galaxy
 def export_file(request):

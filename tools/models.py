@@ -1,8 +1,11 @@
+import ast
 import urllib
+
 import requests
 from django.db import models
 
-from account.models import GalaxyServer
+from forms import ToolForm
+from galaxy.models import Server
 
 TOOL_TAGS = (
     ('', '----'),
@@ -13,26 +16,29 @@ TOOL_TAGS = (
 )
 
 
+
 class Tool(models.Model):
     """
 
     """
 
-    galaxy_server = models.ForeignKey(GalaxyServer, on_delete=models.CASCADE, null=True, blank=True)
+    galaxy_server = models.ForeignKey(Server, on_delete=models.CASCADE, null=True, blank=True)
     id_galaxy = models.CharField(max_length=250, unique=True)
     toolshed = models.CharField(max_length=100, blank=True)
     name = models.CharField(max_length=100, blank=True)
     version = models.CharField(max_length=20, blank=True)
     description = models.CharField(max_length=250)
+    toolshed_revision= models.CharField(max_length=250, blank=True)
+    visible = models.BooleanField(default=True, help_text="display this tool on the user web interface")
 
     @classmethod
-    def import_tools_from_url(cls, galaxy_url, query="phylogeny"):
+    def import_tools_from_url(cls, galaxy_url, query="phylogeny" ):
         try:
-            galaxy_server = GalaxyServer.objects.get(url=galaxy_url)
+            galaxy_server = Server.objects.get(url=galaxy_url)
         except:
             raise Exception("NGPhylogeny server is not properly configured,"
                             "Please ensure that the Galaxy server is correctly set up")
-        return cls.import_tools(galaxy_server)
+        return cls.import_tools(galaxy_server, query)
 
     @classmethod
     def import_tools(cls, galaxy_server, query="phylogeny"):
@@ -61,8 +67,11 @@ class Tool(models.Model):
                     t.description = tool_info.get('description')
                     t.version = tool_info.get('version')
 
-                    if "toolshed" in t.id_galaxy:
-                        t.toolshed = t.id_galaxy.split('/')[0]
+                    toolshed = tool_info.get('tool_shed_repository')
+                    if toolshed:
+                        t.toolshed = toolshed.get('tool_shed')
+                        t.toolshed_revision = toolshed.get('changeset_revision')
+
                     t.save()
 
                     # save inputs
@@ -76,7 +85,7 @@ class Tool(models.Model):
                             if edam:
                                 ed_format = edam.get('edam_formats')
 
-                            input_obj = ToolDataInput(name=input_d.get('name'),
+                            input_obj = ToolInputData(name=input_d.get('name'),
                                                       edam_formats=ed_format,
                                                       extensions=input_d.get('extensions'),
                                                       tool=t
@@ -86,10 +95,9 @@ class Tool(models.Model):
                     # save outputs
                     outputs_tools = tool_info.get('outputs')
                     for output_d in outputs_tools:
-                        output_obj = ToolDataOutput(name=output_d.get('name'),
-                                                    edam_formats=output_d.get('edam_format'),
-                                                    extensions=output_d.get('format'),
-                                                    type="o",
+                        output_obj = ToolOutputData(name=output_d.get('name'),
+                                                    edam_format=output_d.get('edam_format'),
+                                                    extension=output_d.get('format'),
                                                     tool=t
                                                     )
                         output_obj.save()
@@ -104,10 +112,10 @@ class Tool(models.Model):
 
             ie: tool.output.format == next_tool.input.format
         """
-        outputs = ToolDataOutput.objects.filter(tool=self)
+        outputs = ToolOutputData.objects.filter(tool=self)
         outputs_formats = outputs.values_list('edam_formats', flat=True)
 
-        tools_data_input = ToolDataInput.objects.filter(tool=self)
+        tools_data_input = ToolInputData.objects.filter(tool=self)
         tools_compatible = []
 
         from ast import literal_eval
@@ -120,6 +128,25 @@ class Tool(models.Model):
 
         return Tool.objects.filter(pk__in=tools_compatible)
 
+    def form_class(self, galaxy_server):
+        """
+        toolform class factory
+        :param galaxy_server:
+        :return: Form class
+        """
+
+        params = urllib.urlencode({'io_details': "true"}, True)
+        tool_url = '%s/%s/%s/%s/?%s' % (galaxy_server.url, 'api', 'tools', self.id_galaxy, params)
+        tool_info_request = requests.get(tool_url)
+        tool_inputs_details = tool_info_request.json()
+
+        return type(str(self.name) + 'Form',
+                        (ToolForm,),
+                         {'tool_params': tool_inputs_details.get('inputs'),
+                        'tool_id': self.id_galaxy
+                        }
+                    )
+
     def __unicode__(self):
         return self.name
 
@@ -128,73 +155,88 @@ class ToolData(models.Model):
     """
         Generic model for Input/output data
     """
-    DATA_TYPE_CHOICES = (
-        ('i', "input"),
-        ('o', "output"),
-    )
+
     name = models.CharField(max_length=250)
-    format = models.CharField(max_length=100, blank=True)
-    extensions = models.CharField(max_length=100)
+    edam_data = models.CharField(max_length=250, null=True)
+
+    class Meta:
+        abstract = True
+
+
+class ToolInputData(ToolData):
+    """
+    Tool input data information extract from Galaxy
+    """
     edam_formats = models.CharField(max_length=250, null=True)
-    type = models.CharField(max_length=1, choices=DATA_TYPE_CHOICES, default='i')
+    extensions = models.CharField(max_length=100)
+
     tool = models.ForeignKey(Tool, on_delete=models.CASCADE)
 
-    class Meta:
-        verbose_name_plural = "Tool Data"
+
+    def get_extensions(self):
+        return  ast.literal_eval(self.extensions)
+
+
+    def search_compatible_outputs(self):
+        """
+        Search compatible data produced by others tools
+        :return: list of <ToolOutputData>
+        """
+        l_ext = self.get_extensions()
+        return ToolOutputData.objects.filter(extension__in=l_ext)
+
+
 
     def __unicode__(self):
-        return "%s_%s" % (self.name, self.tool)
-
-
-class ToolDataOutputManager(models.Manager):
-    def get_queryset(self):
-        return super(ToolDataOutputManager, self).get_queryset().filter(
-            type='o')
-
-
-class ToolDataInputManager(models.Manager):
-    def get_queryset(self):
-        return super(ToolDataInputManager, self).get_queryset().filter(
-            type='i')
-
-
-class ToolDataInput(ToolData):
-    objects = ToolDataInputManager()
+        return "%s %s" % (self.tool, self.extensions)
 
     class Meta:
-        proxy = True
-        default_related_name = 'data_input'
+        verbose_name_plural = "Tool input data"
 
 
-class ToolDataOutput(ToolData):
-    objects = ToolDataOutputManager()
+
+class ToolOutputData(ToolData):
+    """
+    Tool output data extract from Galaxy
+    """
+    edam_format = models.CharField(max_length=250, null=True)
+    extension = models.CharField(max_length=100)
+
+    tool = models.ForeignKey(Tool, on_delete=models.CASCADE)
+    compatible_inputs = models.ManyToManyField(ToolInputData)
+
+    def search_compatible_inputs(self):
+        return ToolInputData.objects(extensions__contains=self.extension)
+
+
+    def __unicode__(self):
+        return "%s %s" % (self.tool, self.extension)
 
     class Meta:
-        proxy = True
-        default_related_name = 'data_output'
+        verbose_name_plural = "Tool output data"
 
 
 class ToolFlag(models.Model):
+    """
+    Help to Organize tools by category
+    """
+
     name = models.CharField(max_length=5, unique=True)
     verbose_name = models.CharField(max_length=250, unique=True)
     tool = models.ManyToManyField(Tool)
+    rank = models.IntegerField(default=999, help_text="order flag")
 
     def __unicode__(self):
         return self.verbose_name
 
 
-class ToolInterconnections(models.Model):
-    data = models.ForeignKey(ToolDataOutput, on_delete=models.CASCADE, related_name='data_output_producted')
-
-    @property
-    def producted_by(self):
-        return self.tool_output.tool
-
-    @property
-    def compatible_with(self):
-        return self.next_tool_input.tool
-
-    input_field = models.ForeignKey(ToolDataInput, on_delete=models.CASCADE, related_name='data_input_compatible')
 
     class Meta:
-        verbose_name_plural = "Tool Interconnections"
+        ordering = ["rank",]
+
+
+
+
+
+
+

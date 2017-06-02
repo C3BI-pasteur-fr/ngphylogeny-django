@@ -11,12 +11,11 @@ https://docs.djangoproject.com/en/1.9/ref/settings/
 """
 
 import os
-from galaxyconf import *
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-LOGIN_URL = '/account/login'
+LOGIN_URL = '/galaxy/login'
 LOGIN_REDIRECT_URL = '/'
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/1.9/howto/deployment/checklist/
@@ -27,7 +26,7 @@ SECRET_KEY = '_m(y$t1ukdw&!z-e_)ig5h!=*#y*3db3vh81il_i=n*y24ih9k'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["127.0.0.1",]
 
 CRISPY_TEMPLATE_PACK = "bootstrap4"
 
@@ -44,6 +43,7 @@ INSTALLED_APPS = [
     'formtools',
     'crispy_forms',
     'account',
+    'galaxy',
     'data',
     'tools',
     'workflows',
@@ -142,3 +142,20 @@ STATICFILES_DIRS = (
     os.path.join(BASE_DIR, 'static'),
 
 )
+
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO'),
+        },
+    },
+}
