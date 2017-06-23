@@ -103,6 +103,7 @@ class WorkflowsMakerView(UploadView):
         gi = self.request.galaxy
         workflow_obj = self.get_object()
         workflow_json = gi.workflows.show_workflow(workflow_id=workflow_obj.id_galaxy)
+        workflow_obj.name = workflow_json.get('name') or workflow_obj.name
 
         # parse galaxy workflows json informations
         wk_galaxy = WorkflowStepInformation(workflow_json)

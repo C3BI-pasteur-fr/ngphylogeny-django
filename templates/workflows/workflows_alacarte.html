@@ -27,6 +27,9 @@
             $('#wkname').change(function () {
                 $("input[name='wkname']").val($('#wkname').val()) ;
             });
+            $("#submit1").click(function () {
+                $("#wkform").submit();
+            });
         });
     </script>
     <script>
@@ -52,7 +55,7 @@
                 </li>
                 <li>-----</li>
                 <li>
-                    <button type="submit" class="btn btn-primary" name="run" value="Build workflow">
+                    <button id="submit1" type="submit" class="btn btn-primary" name="run" value="Build workflow">
                         <span class="glyphicon glyphicon-play-circle"></span> Create workflow
                     </button>
                 </li>
@@ -96,7 +99,7 @@
 
     <div class="row">
         <h3 class="text-justify"><span class="glyphicon glyphicon-chevron-right small"></span>Workflow</h3>
-        <form action="" method="post">
+        <form id="wkform" action="" method="post">
             {% csrf_token %}
             <input name=wkname type="hidden" value="">
             <div id="mini-wk" class="row">
