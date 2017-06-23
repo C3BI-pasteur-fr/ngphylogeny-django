@@ -100,4 +100,4 @@ class WorkflowOneClickView(UploadView):
             self.success_url = reverse_lazy("history_detail", kwargs={'history_id': history_id}, )
         else:
             print "Fail import workflow"
-        return super(UploadView, self).form_valid(form)
+        return super(WorkflowOneClickView, self).form_valid(form)

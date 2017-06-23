@@ -3,7 +3,7 @@ import urllib
 import urlparse
 
 import requests
-from django.http import StreamingHttpResponse
+from django.http import StreamingHttpResponse, HttpResponseRedirect
 from django.shortcuts import render, redirect
 from django.urls import reverse_lazy
 from django.utils.decorators import method_decorator
@@ -42,7 +42,7 @@ class UploadView(FormView):
         outputs = self.upload_file(form)
         self.success_url = reverse_lazy("history_detail", kwargs={'history_id': self.history_id}, )
 
-        return super(UploadView, self).form_valid(form)
+        return HttpResponseRedirect(self.get_success_url())
 
 
 @connection_galaxy

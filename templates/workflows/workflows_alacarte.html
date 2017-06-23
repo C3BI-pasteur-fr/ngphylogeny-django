@@ -24,6 +24,9 @@
                     $('#' + $(this).attr('data-target')).show().empty().append($('#' + $(this).attr('data-panel')).clone().show());
                 }
             });
+            $('#wkname').change(function () {
+                $("input[name='wkname']").val($('#wkname').val()) ;
+            });
         });
     </script>
     <script>
@@ -44,7 +47,7 @@
 
                 <li><h5> Workflow Name: </h5>
                     <div class="btn-group-vertical" role="group">
-                        <input placeholder="Workflow name.." type="text">
+                        <input id='wkname' placeholder="Workflow name.." type="text">
                     </div>
                 </li>
                 <li>-----</li>
@@ -62,15 +65,15 @@
 
             {% for step in workflow|dictsort:"step" %}
                 <div class="col-md-3">
-                    <h4 class="text-left">{{ forloop.counter }}. {{ step.group.verbose_name }}</h4>
+                    <h4 class="text-left">{{ forloop.counter }}. {{ step.flag.verbose_name }}</h4>
                     <div class="btn-group-vertical" role="group">
-                        {% for tool in step.group.tool.all %}
+                        {% for tool in step.tools %}
                             <label class="btn btn-default" for="radio-{{ tool.pk }}">{{ tool.name }}
                                 <input type="radio"
                                        id="radio-{{ tool.pk }}"
-                                       name="radio-{{ step.group.name }}"
+                                       name="radio-{{ step.flag.name }}"
                                        data-panel="toolbox-{{ tool.pk }}"
-                                       data-target="wk-display-{{ step.group.name }}">
+                                       data-target="wk-display-{{ step.flag.name }}">
                             </label>
                             {# tool panel #}
                             <div id="toolbox-{{ tool.pk }}" style="display:none;">
@@ -95,6 +98,7 @@
         <h3 class="text-justify"><span class="glyphicon glyphicon-chevron-right small"></span>Workflow</h3>
         <form action="" method="post">
             {% csrf_token %}
+            <input name=wkname type="hidden" value="">
             <div id="mini-wk" class="row">
                 <div class="col-md-2">
                     <div class="panel panel-info">
@@ -105,7 +109,7 @@
                     </div>
                 </div>
                 {% for step in workflow|dictsort:"step" %}
-                    <div id=wk-display-{{ step.group.name }} class="col-md-2" style="display:none"></div>
+                    <div id=wk-display-{{ step.category }} class="col-md-2" style="display:none"></div>
                 {% endfor %}
             </div>
             <button type="submit" class="btn btn-primary" name="run" value="build_workflow">
