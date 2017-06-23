@@ -6,6 +6,7 @@ from django.http import Http404, HttpResponseGone
 from django.shortcuts import redirect
 
 from galaxy.models import Server, GalaxyUser
+
 logger = logging.getLogger(__name__)
 
 
@@ -69,8 +70,8 @@ def connection_galaxy(view_function):
                 logger.exception("Anonymous user not set")
                 raise Http404(msg)
 
-            except:
-                logger.exception("Galaxy account Error")
+            except Exception as e:
+                logger.exception("Galaxy anonymous account Error: "+e)
                 return HttpResponseGone()
 
         return view_function(request, *args, **kwargs)
