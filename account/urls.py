@@ -2,7 +2,7 @@ from django.conf.urls import url
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import login, logout
 
-from galaxy.views import *
+from galaxy.views import UpdateApiKey
 
 urlpatterns = [
     url(r'^login$', login, {'template_name': "account/login.html" }, name='login'),
