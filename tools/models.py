@@ -31,6 +31,11 @@ class Tool(models.Model):
     toolshed_revision= models.CharField(max_length=250, blank=True)
     visible = models.BooleanField(default=True, help_text="display this tool on the user web interface")
 
+    @property
+    def toolflags(self):
+        return ",".join(self.toolflag_set.all().values_list('verbose_name',flat=True))
+
+
     @classmethod
     def import_tools_from_url(cls, galaxy_url, query="phylogeny" ):
         try:

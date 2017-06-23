@@ -14,11 +14,11 @@ from .models import Tool
 
 
 class ToolListView(ListView):
-    queryset = Tool.objects.filter(galaxy_server__current=True)
+    queryset = Tool.objects.filter(galaxy_server__current=True, visible=True)
 
 
 class ToolDetailView(DetailView):
-    queryset = Tool.objects.filter(galaxy_server__current=True)
+    queryset = Tool.objects.filter(galaxy_server__current=True, visible=True)
 
 
 @connection_galaxy
@@ -114,6 +114,7 @@ def tool_exec(request, tool_form, store_output=None):
 
             tool_inputs = inputs()
             for key, value in request.POST.items():
+                # set the Galaxy parameter ( name, value)
                 tool_inputs.set_param(tool_form.fieds_ids_mapping.get(key), value)
 
             if request.FILES:
@@ -128,6 +129,7 @@ def tool_exec(request, tool_form, store_output=None):
                     # send file to galaxy
                     outputs = gi.tools.upload_file(tmp_file.name, history_id, file_name=uploaded_file.name)
                     file_id = outputs.get('outputs')[0].get('id')
+                    #set
                     tool_inputs.set_dataset_param(tool_form.fieds_ids_mapping.get(input_file_id.strip('[]')), file_id)
 
             else:
@@ -163,6 +165,7 @@ def tool_exec(request, tool_form, store_output=None):
 @connection_galaxy
 def get_tool_name(request):
     context = dict()
+
     if request.POST:
         gi = request.galaxy
         toolid = request.POST.get('tool_id')
