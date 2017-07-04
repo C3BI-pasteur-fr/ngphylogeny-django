@@ -6,7 +6,7 @@ from django.views.generic import ListView
 from data.views import UploadView
 from galaxy.decorator import connection_galaxy
 from workflows.models import Workflow, WorkflowStepInformation
-from workspace.views import get_or_create_history
+from workspace.views import create_history
 
 
 @method_decorator(connection_galaxy, name="dispatch")
@@ -77,7 +77,7 @@ class WorkflowOneClickView(UploadView):
             # upload user file
             upfile = self.upload_file(form)
             file_id = upfile.get('outputs')[0].get('id')
-            history_id = get_or_create_history(self.request)
+            history_id = create_history(self.request)
 
             # load workflow
             workflow_json = gi.workflows.show_workflow(wf_import.get('id'))
