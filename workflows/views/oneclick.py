@@ -15,11 +15,12 @@ class WorkflowOneClickListView(ListView):
     """
     Generic class-based view
     """
-    queryset = Workflow.objects.filter(galaxy_server__current=True).select_related()
+    model = Workflow
     template_name = 'workflows/workflows_oneclick_choices.html'
 
     def get_queryset(self):
 
+        self.queryset = Workflow.objects.filter(galaxy_server__current=True).select_related()
         gi = self.request.galaxy
         for workflow in self.queryset:
             workflow_json = gi.workflows.show_workflow(workflow_id=workflow.id_galaxy)
