@@ -23,7 +23,7 @@ class Tool(models.Model):
     """
 
     galaxy_server = models.ForeignKey(Server, on_delete=models.CASCADE, null=True, blank=True)
-    id_galaxy = models.CharField(max_length=250, unique=True)
+    id_galaxy = models.CharField(max_length=250)
     toolshed = models.CharField(max_length=100, blank=True)
     name = models.CharField(max_length=100, blank=True)
     version = models.CharField(max_length=20, blank=True)
@@ -34,6 +34,9 @@ class Tool(models.Model):
     @property
     def toolflags(self):
         return ",".join(self.toolflag_set.all().values_list('verbose_name',flat=True))
+
+    class Meta:
+        unique_together = (('galaxy_server','id_galaxy'),)
 
 
     @classmethod
@@ -162,7 +165,7 @@ class ToolData(models.Model):
     """
 
     name = models.CharField(max_length=250)
-    edam_data = models.CharField(max_length=250, null=True)
+    edam_data = models.CharField(max_length=250, null=True, blank=True)
 
     class Meta:
         abstract = True
@@ -172,7 +175,7 @@ class ToolInputData(ToolData):
     """
     Tool input data information extract from Galaxy
     """
-    edam_formats = models.CharField(max_length=250, null=True)
+    edam_formats = models.CharField(max_length=250, null=True, blank=True)
     extensions = models.CharField(max_length=100)
 
     tool = models.ForeignKey(Tool, on_delete=models.CASCADE)
@@ -204,11 +207,11 @@ class ToolOutputData(ToolData):
     """
     Tool output data extract from Galaxy
     """
-    edam_format = models.CharField(max_length=250, null=True)
+    edam_format = models.CharField(max_length=250, null=True, blank=True)
     extension = models.CharField(max_length=100)
 
     tool = models.ForeignKey(Tool, on_delete=models.CASCADE)
-    compatible_inputs = models.ManyToManyField(ToolInputData)
+    compatible_inputs = models.ManyToManyField(ToolInputData, blank=True)
 
     def search_compatible_inputs(self):
         return ToolInputData.objects(extensions__contains=self.extension)
@@ -233,7 +236,6 @@ class ToolFlag(models.Model):
 
     def __unicode__(self):
         return self.verbose_name
-
 
 
     class Meta:
