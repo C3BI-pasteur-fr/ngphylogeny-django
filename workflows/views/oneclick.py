@@ -1,4 +1,5 @@
 from django.core.urlresolvers import reverse_lazy
+from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
 from django.views.generic import ListView
@@ -100,4 +101,4 @@ class WorkflowOneClickView(UploadView):
             self.success_url = reverse_lazy("history_detail", kwargs={'history_id': history_id}, )
         else:
             print "Fail import workflow"
-        return super(WorkflowOneClickView, self).form_valid(form)
+        return HttpResponseRedirect(self.get_success_url())
