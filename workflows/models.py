@@ -10,7 +10,7 @@ from tools.models import Tool, ToolOutputData
 
 class Workflow(models.Model):
     """
-    Galaxy Workflow informations
+    Galaxy Workflow information
     """
     galaxy_server = models.ForeignKey(Server, on_delete=models.CASCADE, null=True, blank=True)
     id_galaxy = models.CharField(max_length=250, unique=True)
@@ -26,6 +26,7 @@ class WorkflowStepInformation(object):
     Parse Galaxy Workflow json:
         :graph: {step_input: [step_output, step_output], ...}
         :params: {step_id: param_dict}
+        :annotation: {step_id: annotation }
         :tool_list: list of tuple, [(step_id, queryset.tool)..]
         :sorted_tool_list: list of tuple, [(step_id, queryset.tool)..]
     """
@@ -67,6 +68,7 @@ class WorkflowStepInformation(object):
         self.workflow_json = workflow_json
         self.graph = {}
         self.params = {}
+        self.annotation = {}
         self.tool_list = []
         self.sorted_tool_list = []
 
@@ -77,6 +79,7 @@ class WorkflowStepInformation(object):
         for step_id, step in self.workflow_json.get('steps').items():
             if step.get('tool_id'):
                 self.params[step_id] = step.get('tool_inputs')
+                self.annotation[step_id] = step.get('annotation')
                 self.tool_list.append([step_id, query.filter(id_galaxy=step.get('tool_id'))])
 
             for input, step_output in step.get("input_steps", {}).items():
