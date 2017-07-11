@@ -3,7 +3,7 @@ import urllib
 import urlparse
 
 import requests
-from django.http import StreamingHttpResponse, HttpResponseRedirect
+from django.http import StreamingHttpResponse
 from django.shortcuts import render, redirect
 from django.urls import reverse_lazy
 from django.utils.decorators import method_decorator
@@ -17,15 +17,15 @@ from workspace.views import get_or_create_history
 @method_decorator(connection_galaxy, name="dispatch")
 class UploadView(FormView):
     """
-        Upload file into Galaxy Server
+       Upload file into Galaxy Server
     """
 
     template_name = 'upload_form.html'
     form_class = UploadForm
     success_url = reverse_lazy("home")
 
-    def upload_file(self, form):
-        """upload file into current galaxy history: return galaxy response
+    def upload_file(self, form, history_id=None):
+        """upload file into galaxy history: return galaxy response
         """
         myfile = form.cleaned_data['file']
         tmpfile = tempfile.NamedTemporaryFile()
@@ -33,7 +33,11 @@ class UploadView(FormView):
             tmpfile.write(chunk)
         tmpfile.flush()
 
-        self.history_id = get_or_create_history(self.request)
+        if history_id:
+            self.history_id = history_id
+        else:
+            self.history_id = get_or_create_history(self.request)
+
         return self.request.galaxy.tools.upload_file(tmpfile.name, self.history_id, file_name=myfile.name)
 
 
@@ -42,7 +46,7 @@ class UploadView(FormView):
         outputs = self.upload_file(form)
         self.success_url = reverse_lazy("history_detail", kwargs={'history_id': self.history_id}, )
 
-        return HttpResponseRedirect(self.get_success_url())
+        return super(UploadView, self).form_valid()
 
 
 @connection_galaxy
