@@ -3,7 +3,7 @@ import json
 from django.http import HttpResponse
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
-from django.views.generic import TemplateView, RedirectView
+from django.views.generic import TemplateView, RedirectView, ListView
 
 from galaxy.decorator import connection_galaxy
 from models import WorkspaceHistory
@@ -16,7 +16,6 @@ def create_history(request):
     :param request:
     :return: history_id
     """
-
     gi = request.galaxy
     server = request.galaxy_server
 
@@ -34,14 +33,16 @@ def create_history(request):
                             )
     wsph.save()
 
+    # save the current history in session
+    request.session.setdefault('histories', [])
+    request.session['histories'].append(wsph.history)
     request.session["last_history"] = wsph.history
-
+    request.session.modified = True
     return wsph.history
 
 
 @connection_galaxy
 def get_history(request):
-
     return request.session.get('last_history')
 
 
@@ -54,9 +55,6 @@ def get_or_create_history(request):
     if not history_id:
         # Create a new galaxy history
         history_id = create_history(request)
-
-    # save the current history
-    request.session["last_history"] = history_id
 
     return history_id
 
@@ -116,3 +114,16 @@ def get_dataset_toolprovenance(request, history_id, ):
 class GalaxyErrorView(RedirectView):
     def get_redirect_url(self, *args, **kwargs):
         return "%s/dataset/errors?id=%s" % (self.request.galaxy_server.url, kwargs.get('id'))
+
+
+@method_decorator(connection_galaxy, name="dispatch")
+class PreviousHistoryListView(ListView):
+    queryset = WorkspaceHistory.objects.none()
+    template_name = 'workspace/previous_analyses.html'
+    context_object_name = 'histories'
+
+    def get_queryset(self):
+        gi = self.request.galaxy
+        self.queryset = WorkspaceHistory.objects.filter(history__in=self.request.session.get('histories', []))
+
+        return self.queryset

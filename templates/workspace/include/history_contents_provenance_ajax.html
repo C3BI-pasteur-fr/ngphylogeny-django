@@ -52,6 +52,9 @@
         $.get('{% url 'history_detail' history_info.id %}',
             function (data) {
                 var html = $.parseHTML(data);
+                var nbstate = $(html).find('[id^=state_]').length
+                if ($('[id^=state_]').length != nbstate )
+                { location.reload();}
                 $(html).find('[id^=state_]').each(function (index, el) {
                     $('#' + $(el).attr('id')).replaceWith($(el));
                 });
@@ -75,7 +78,7 @@
     <th>Tool</th>
     <th>Step</th>
     <th>File Name</th>
-    <th>Statut</th>
+    <th>Status</th>
     </thead>
 
     {% for file in history_content|dictsortreversed:"hid" %}

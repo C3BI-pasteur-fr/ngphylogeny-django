@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% load static %}
+{% block stylesheet %}
+
+{% endblock %}
+{% block nav-workspace %}class="active"{% endblock %}
+{% block content %}
+<div class="row">
+    <h3>Previous analyzes</h3>
+    <br>
+    <div class="col-md-1"></div>
+    <div class="col-md-9">
+        <ul class="nav nav-pills  navbar-default nav-stacked ">
+            {% for history in histories %}
+            <li style="background-color:{% cycle '#f5f9fb' '#fcfcfc'%}">
+                <a href="{% url 'history_detail' history.history %}">
+                    <span class="badge">{{forloop.counter}}</span>
+                    <span class="label label-default">{{ history.created_date }}</span>
+                    <span class="label label-info">{{ history.history|truncatechars:9 }}</span>
+                    <span class="glyphicon glyphicon-cog"></span>
+                    {{ history.name }}
+                </a>
+
+            </li>
+            {% empty %}
+        </ul>
+    </div>
+    <div class="jumbotron">
+        You haven't any recent analyzes in progress
+    </div>
+    {% endfor %}
+</div>
+</div>
+{% endblock %}

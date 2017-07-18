@@ -1,5 +1,6 @@
 from __future__ import unicode_literals
 
+import collections
 import json
 
 from django.db import models
@@ -45,50 +46,46 @@ class WorkflowStepInformation(object):
                 next_steps.extend(graph.get(current_step, []))
         return step_visited
 
-    @staticmethod
-    def __sort_tools(sorted_step, unsorted_tool_list):
-        """
-        :param sorted_step: list of steps
-        :param unsorted_tool_list: list of tuple (step, tool)
-        :return: list of tuple sorted (step, tools)
-        """
-
-        sorted_tool_list = []
-        for e, step in enumerate(sorted_step):
-            for y, x in unsorted_tool_list:
-                if step == y:
-                    if x:
-                        sorted_tool_list.append((e, x[0]))
-        return sorted_tool_list
-
     def __init__(self, workflow_json):
         """
         :param workflow_json: Galaxy workflow json
         """
         self.workflow_json = workflow_json
-        self.graph = {}
-        self.params = {}
-        self.annotation = {}
-        self.tool_list = []
+        self.graph = {}  # { parent : [ child, child ], ...
+        self.steps_tooldict = {}
         self.sorted_tool_list = []
-
-        # get known tools
-        query = Tool.objects.filter()
-
+        self.toolset = set()
         # parse galaxy workflow information
         for step_id, step in self.workflow_json.get('steps').items():
             if step.get('tool_id'):
-                self.params[step_id] = step.get('tool_inputs')
-                self.annotation[step_id] = step.get('annotation')
-                self.tool_list.append([step_id, query.filter(id_galaxy=step.get('tool_id'))])
+                self.toolset.update([step.get('tool_id')])
+                self.steps_tooldict[step_id] = {'tool_idgalaxy': step.get('tool_id'),
+                                                'annotation': step.get('annotation'),
+                                                'params': step.get('tool_inputs')
+                                                }
 
             for input, step_output in step.get("input_steps", {}).items():
                 self.graph.setdefault(str(step_output.get('source_step')), []).append(str(step_id))
 
-        first_step = self.workflow_json['inputs'].keys()[0]
-        sorted_step = self.__graph_search(self.graph, first_step)
-        self.sorted_tool_list = self.__sort_tools(sorted_step, self.tool_list)
+        # get known tools
+        queryset = Tool.objects.filter(id_galaxy__in=self.toolset).prefetch_related('toolflag_set')
 
+        for tool in queryset:
+            for nbstep, step in self.steps_tooldict.items():
+
+                if step.get('tool_idgalaxy') == tool.id_galaxy:
+                    step['tool'] = tool
+
+
+        first_step = self.workflow_json['inputs'].keys()[0]
+
+        #travesing graph
+        sorted_step = self.__graph_search(self.graph, first_step)
+
+        ord_step = collections.OrderedDict.fromkeys(sorted_step)
+        ord_step.update(self.steps_tooldict)
+        self.sorted_tool_list = list((k, v.get('tool')) for k, v in ord_step.iteritems() if v and 'tool' in v)
+        print self.sorted_tool_list
 
 class WorkflowGalaxyFactory(object):
     """
@@ -178,23 +175,20 @@ class WorkflowGalaxyFactory(object):
                                 conv_tool_input = conv_tool.toolinputdata_set.filter().first()
                                 output_name = ToolOutputData.objects.filter(compatible_inputs=conv_tool_input,
                                                                             tool__id_galaxy=previous_step.tool_id
-                                                                           )
+                                                                            )
 
                                 self.steps[str(step)].set_input_connections(
                                     stepid=step - 1,
                                     input_name=conv_tool_input.name,
-                                    output_name= output_name.first().name
+                                    output_name=output_name.first().name
                                 )
-
 
     def __repr__(self):
         return str(self.__dict__)
 
-
     def to_json(self):
         import ast
         return ast.literal_eval(str(self))
-
 
 
 class WorkflowToolInformation(object):

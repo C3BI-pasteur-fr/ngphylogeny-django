@@ -25,13 +25,17 @@ $(function() {
     $(this).addClass("active");
     $('.miniworkflow').addClass("hidden");
     $($(this).find('a').attr('id')).removeClass("hidden");
-    $('form').attr('action', $(this).find('a').attr('id').replace("#", ""));
+    $('form').attr('action', $(this).find('a').attr('id').replace("#", ''));
   });
 });
 </script>
+<h4>One Click Workflows</h4>
 <div class="row row-eq-height">
+    <span>
+
+    </span>
     <div class="col-md-3 sidenav">
-            <h4>One Click Workflows</h4>
+            <br>
             <ul class="nav nav-pills nav-stacked">
             {% for workflow in workflow_list|dictsort:"name" %}
                 <li {% if forloop.first %}class="active"{%endif%}>
@@ -42,6 +46,7 @@ $(function() {
                 </li>
             {% endfor %}
             </ul>
+         <br>
     </div>
 
    <div class="col-md-9">

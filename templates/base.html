@@ -36,14 +36,19 @@
             <li {% block nav-tools %}{% endblock %}><a href="{% url 'tools' %}">
                 <span class="glyphicon glyphicon-play"></span> Tools</a></li>
             <li {% block nav-workspace %}{% endblock %}>
-                <a {% if request.session.last_history %}
-                   href="{% url 'history_current_detail' %}"
-                   {% else %}
-                   class="text-muted"
-                   {% endif %}>
+                <a {% if request.session.histories|length > 1 %}
+                    href="{% url 'previous_analyses' %}"
+                    {% elif request.session.histories|length is 1%}
+                    href="{% url 'history_current_detail' %}"
+                    {% else %}
+                    class="text-muted"
+                    {% endif %}
+                    >
                     <span class="glyphicon glyphicon-list-alt"></span> Workspace
+                    <span class="badge">{{ request.session.histories|length }}</span>
                 </a>
             </li>
+
             <li {% block nav-doc %}{% endblock %}><a href="{% url 'documentation' %}">
                 <span class="glyphicon glyphicon-book"></span> Documentation</a></li>
             <li class="user navbar-right">

@@ -18,6 +18,7 @@ font-family: 'Bungee Inline', cursive;*/
     font-size: 14px;
 }
 
+
 header.jumbotron {
 
     color: #ffffff;
@@ -81,10 +82,10 @@ header.jumbotron {
 }
 
 a:active > .glyphicon-refresh {
-    animation: spin 1s;
+    animation: spin 0.5s;
 }
 
-td > .glyphicon-refresh {
+.glyphicon-refresh.spin {
     animation: spin 1s infinite linear;
 }
 

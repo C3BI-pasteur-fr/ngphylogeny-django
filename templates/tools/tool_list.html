@@ -3,20 +3,21 @@
 {% block nav-tools %}class="active"{% endblock %}
 
 {% block content %}
-    <div class="row">
-        <div class="col-md-2"></div>
-        <div class="col-md-8" >
-            <table class="table table-hover">
+<div class="row">
+    <div class="col-md-2"></div>
+    <div class="col-md-8">
+        <table class="table table-hover">
             {% for tool in tool_list|dictsort:"name" %}
-                <tr class="list-inline">
-                    <td><a class="btn btn-toolbar" href="{%  url 'tool_detail' tool.pk %}">
-                        <span class="glyphicon glyphicon-info-sign"></span></a>
-                    </td>
-                    <td><a class="btn btn-toolbar" href="{%  url 'tool_form' tool.pk %}">{{ tool.name }}</a></td>
-                    <td><a class="btn btn-toolbar" href="{%  url 'tool_form' tool.pk %}">{{ tool.version }}</a></td>
-                </tr>
+            <tr class="list-inline">
+                <td><a class="btn btn-toolbar" href="{%  url 'tool_detail' tool.pk %}">
+                    <span class="glyphicon glyphicon-info-sign"></span></a>
+                </td>
+                <td><a class="btn btn-toolbar" href="{%  url 'tool_form' tool.pk %}">{{ tool.name }}</a></td>
+                <td><a class="btn btn-toolbar" href="{%  url 'tool_form' tool.pk %}"><span
+                        class="badge">{{ tool.version }}</span></a></td>
+            </tr>
             {% endfor %}
-            </table>
-        </div>
+        </table>
     </div>
+</div>
 {% endblock %}

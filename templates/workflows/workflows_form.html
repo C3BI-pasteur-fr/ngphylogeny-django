@@ -4,7 +4,7 @@
 {% block nav-analysis %}class="active"{% endblock %}
 {% block stylesheet %}
 <script src="{% static 'js/jquery.filer.min.js' %} "></script>
-<link rel="stylesheet" href="{% static 'css/jquery.filer.css' %}" />
+<link rel="stylesheet" href="{% static 'css/jquery.filer.css' %}"/>
 <script>
     $(document).ready(function () {
         var myInputFile = $(':file');
@@ -15,62 +15,73 @@
         });
         myInputFile.attr({name: myInputFilename});
     });
+
+
+
+
+
+
 </script>
 {% endblock %}
 {% block content %}
+<div class="h4 text-center">
+    <span class="glyphicon glyphicon-cog"></span>
+    {{ workflow.name }}
+</div>
+<br>
+<div class="col-md-2">
+</div>
 
-<div class="row row-eq-height">
-    <div class="col-md-3 sidenav">
-            <h4> Workflow </h4>
-            <ul class="nav nav-pills nav-stacked">
-                <li class="active">
-                    <a id="#{{ workflow.slug }}" >
-                        <span class="glyphicon glyphicon-cog"></span>
-                        {{ workflow.name }}
-                    </a>
-                </li>
-            </ul>
-    </div>
-
-   <div class="col-md-9">
-        <table id="{{ workflow.slug }}" class="table-responsive miniworkflow" >
-            <tr>{% for step, tool in steps  %}
-                <td class="d-inline-block">
-                     <div class="panel-group">
-                        <div class="panel panel-info">
-                            <div class="panel-heading">{{ tool.toolflag_set.first|default_if_none:""  }}</div>
-                            <div class="panel-body">
-                                <a data-toggle="collapse" href="#collapse-{{ step }}-{{ workflow.slug }}"><span class="glyphicon glyphicon-info-sign"></span></a> {{ tool.name }}
-                            </div>
-                            <div id="collapse-{{ step }}-{{ workflow.slug }}" class="panel-collapse collapse">
-                                <div class="panel-footer">
-                                {{ tool.description }}
-                                </div>
+<div class="col-md-8">
+    <table id="{{ workflow.slug }}" class="table-responsive">
+        <tr>
+            <div class="panel panel-info">
+                <div class="panel-heading">Input Data</div>
+                <div class="panel-body">
+                    <form method="POST" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <input id="id_file" type="file" name="file" required="" multiple="multiple">
+                        <input type="submit" name="submit" value="Submit" class="btn btn-primary"
+                               id="submit-id-submit">
+                    </form>
+                </div>
+            </div>
+        </tr>
+        {% for nbstep, step in steps.items %}
+        <tr class="d-inline-block text-center">
+            <td>
+                <span class="glyphicon glyphicon-arrow-down"> </span>
+            </td>
+        </tr>
+        <tr>
+            <td class="d-inline-block">
+                <div class="panel-group">
+                    <div class="panel panel-info">
+                        <div class="panel-heading">{{ step.tool.toolflag_set.first|default_if_none:"" }}</div>
+                        <div class="panel-body">
+                            <a data-toggle="collapse" href="#collapse-{{ nbstep }}-{{ workflow.slug }}">
+                                <span class="glyphicon glyphicon-info-sign"></span></a> {{ step.tool.name }}
+                        </div>
+                        <div id="collapse-{{ nbstep }}-{{ workflow.slug }}" class="panel-collapse collapse">
+                            <div class="panel-footer">
+                                {{ step.tool.description }}
                             </div>
                         </div>
-                     </div>
-                 </td>
-                {% if not forloop.last %}
-                <td class="d-inline-block align-middle text-center">
-                    <span class="glyphicon glyphicon-arrow-right"></span>
-                </td>
-                {% endif %}
-            {% endfor %}
-            </tr>
-        </table>
-       <br>
-        <div class="col-md-9">
-           <div class="panel panel-info">
-               <div class="panel-heading">Input Data</div>
-               <div class="panel-body">
-                   <form method="POST" enctype="multipart/form-data">
-                           {% csrf_token %}
-                           <input  id="id_file" type="file" name="file" required="" multiple="multiple">
-                        <input type="submit" name="submit" value="Submit" class="btn btn-primary" id="submit-id-submit">
-                   </form>
-               </div>
-           </div>
-        </div>
+                        <div class="panel-footer">
+                            {{ step.annotation | safe }}
+                        </div>
+                    </div>
+                </div>
+
+            </td>
+        </tr>
+        {% endfor %}
+
+    </table>
+    <br>
+    <div class="col-md-9">
+
     </div>
+</div>
 </div>
 {% endblock content %}

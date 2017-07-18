@@ -5,6 +5,7 @@ from formtools.wizard.views import SessionWizardView
 
 from data.views import UploadView
 from galaxy.decorator import connection_galaxy
+from tools.forms import tool_form_factory
 from tools.views import tool_exec
 from workflows.models import Workflow, WorkflowStepInformation
 from workspace.views import create_history
@@ -29,7 +30,7 @@ class WorkflowFormView(UploadView):
             # parse galaxy workflow json information
             wk_galaxy = WorkflowStepInformation(wk.json)
             context["inputs"] = wk.json['inputs'].keys()
-            context["steps"] = wk_galaxy.sorted_tool_list
+            context["steps"] = wk_galaxy.steps_tooldict
 
         context["workflow"] = wk
         return context
@@ -98,7 +99,7 @@ def form_class_list(galaxy_server, tools):
     """
     tools_inputs_details = []
     for tool in tools:
-        tools_inputs_details.append(tool.form_class(galaxy_server=galaxy_server))
+        tools_inputs_details.append(tool_form_factory(tool, galaxy_server=galaxy_server))
     return tools_inputs_details
 
 
