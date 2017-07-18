@@ -1,44 +1,64 @@
+import requests
 from crispy_forms.bootstrap import FormActions
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Submit, Layout, Field, Div
 from django import forms
 
 
+def tool_form_factory(tool, galaxy_server):
+    """
+    toolform class factory
+    :param galaxy_server:
+    :return: Form class
+    """
+
+    tool_url = '%s/%s/%s/%s/' % (galaxy_server.url, 'api', 'tools', tool.id_galaxy)
+    tool_info_request = requests.get(tool_url, params={'io_details': "true"})
+    tool_inputs_details = tool_info_request.json()
+
+    return type(str(tool.name) + 'Form', (ToolForm,),
+                {'tool_params': tool_inputs_details.get('inputs'),
+                 'tool_id': tool.id_galaxy
+                 }
+                )
+
+
 def map_galaxy_tool_input(attr):
-        """Convert Galaxy tool input information to django field attribute dict"""
+    """Convert Galaxy tool input information to django field attribute dict"""
 
-        field_map = dict()
-        field_map['initial'] = attr.get('default_value', attr.get('value', ""))
-        field_map['required'] = attr.get('optional', "")
-        field_map['help_text'] = attr.get('help', "")
-        field_map['label'] = attr.get('label', "")
+    field_map = {'initial': attr.get('default_value', attr.get('value', "")),
+                 'required': attr.get('optional', ""),
+                 'help_text': attr.get('help', ""),
+                 'label': attr.get('label', ""),
+                 }
 
-        if attr.get("type", "") == "select":
+    if attr.get("type", "") == "select":
+        field_map['choices'] = []
+        for opt in attr.get("options", ""):
+            field_map['choices'].append((opt[1], opt[0]))
+
+    if attr.get("type", "") == "data":
+
+        opt = attr.get("options", "").get('hda')
+        if opt:
             field_map['choices'] = []
-            for opt in attr.get("options", ""):
-                field_map['choices'].append((opt[1], opt[0]))
+        for data in opt:
+            field_map['choices'].append((data.get('id'), data.get('name')))
 
-        if attr.get("type", "") == "data":
-
-            opt = attr.get("options", "").get('hda')
-            if opt:
-                field_map['choices'] = []
-            for data in opt:
-                field_map['choices'].append((data.get('id'), data.get('name')))
-
-        return field_map
+    return field_map
 
 
 class ToolForm(forms.Form):
+    """"""
 
-    n = 0
-    #keep link between unique id field to galaxy params name
-    fieds_ids_mapping = {}
     tool_params = None
+    # map field id to galaxy params name
+    fields_ids_mapping = {}
+    n = 0
 
     def create_field(self, attrfield):
 
-        self.n +=1
+        self.n += 1
         field_id = str(self.n)
         fieldtype = attrfield.get("type", "")
 
@@ -63,13 +83,13 @@ class ToolForm(forms.Form):
             data_offvalue = attrfield.get("falsevalue", None)
 
             self.fields[field_id] = forms.CharField(widget=forms.CheckboxInput(
-                                                    attrs={'data-toggle': "toggle",
-                                                           'data-on': 'Yes',
-                                                           'data-off': 'No',
-                                                           'data-on-value': data_onvalue,
-                                                           'data-off-value': data_offvalue,
-                                                           }),
-                                                    **map_galaxy_tool_input(attrfield))
+                attrs={'data-toggle': "toggle",
+                       'data-on': 'Yes',
+                       'data-off': 'No',
+                       'data-on-value': data_onvalue,
+                       'data-off-value': data_offvalue,
+                       }),
+                **map_galaxy_tool_input(attrfield))
 
         elif fieldtype == "text":
             self.fields[field_id] = forms.CharField(**map_galaxy_tool_input(attrfield))
@@ -93,7 +113,7 @@ class ToolForm(forms.Form):
                 cond_name = input_tool.get('name') + '|'
 
                 conditional_field = self.create_field(cond_input)
-                self.fieds_ids_mapping[conditional_field] = cond_name+cond_input['name']
+                self.fields_ids_mapping[conditional_field] = cond_name + cond_input['name']
 
                 nested_field = []
                 cases = input_tool.get('cases', '')
@@ -110,16 +130,14 @@ class ToolForm(forms.Form):
             else:
                 new_field = self.create_field(input_tool)
                 fields_created.append(Field(new_field))
-                self.fieds_ids_mapping[new_field] = cond_name + input_tool['name']
+                self.fields_ids_mapping[new_field] = cond_name + input_tool['name']
 
         return fields_created
 
-    def __init__(self, tool_params=None, tool_id='', *args, **kwargs):
+    def __init__(self, tool_params, tool_id, *args, **kwargs):
         super(ToolForm, self).__init__(*args, **kwargs)
 
-        if tool_params:
-            self.tool_params = tool_params
-        assert self.tool_params, 'tool_params is needed'
+        self.tool_params = tool_params
         self.tool_id = tool_id
         self.input_file_ids = []
         self.helper = FormHelper(self)
@@ -130,4 +148,3 @@ class ToolForm(forms.Form):
                                                 Submit('submit', 'Submit', css_class="pull-right"),
                                                 )
                                     )
-

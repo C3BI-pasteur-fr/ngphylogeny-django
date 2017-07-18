@@ -46,7 +46,7 @@ def tool_exec_view(request, pk, store_output=None):
 
             tool_inputs = inputs()
             for key, value in request.POST.items():
-                tool_inputs.set_param(tool_form.fieds_ids_mapping.get(key), value)
+                tool_inputs.set_param(tool_form.fields_ids_mapping.get(key), value)
 
             if request.FILES:
                 for input_file_id in request.FILES:
@@ -60,13 +60,13 @@ def tool_exec_view(request, pk, store_output=None):
                     # send file to galaxy
                     outputs = gi.tools.upload_file(tmp_file.name, history_id, file_name=uploaded_file.name)
                     file_id = outputs.get('outputs')[0].get('id')
-                    tool_inputs.set_dataset_param(tool_form.fieds_ids_mapping.get(input_file_id.strip('[]')), file_id)
+                    tool_inputs.set_dataset_param(tool_form.fields_ids_mapping.get(input_file_id.strip('[]')), file_id)
 
             else:
                 for input_file_id in tool_form.input_file_ids:
                     if input_file_id in request.POST.keys():
                         tool_inputs.set_dataset_param(
-                                                      tool_form.fieds_ids_mapping.get(input_file_id.strip('[]')),
+                                                      tool_form.fields_ids_mapping.get(input_file_id.strip('[]')),
                                                       request.POST.get(input_file_id))
 
             try:
@@ -87,7 +87,7 @@ def tool_exec_view(request, pk, store_output=None):
                 from django.forms import ValidationError
 
                 message = ast.literal_eval(e.body)
-                reverse_dict_field = {v: k for k, v in tool_form.fieds_ids_mapping.items()}
+                reverse_dict_field = {v: k for k, v in tool_form.fields_ids_mapping.items()}
 
                 for field, err_msg in message.get('err_data').items():
                     tool_form.add_error(reverse_dict_field.get(field),

@@ -17,5 +17,3 @@ class Command(BaseCommand):
             for t_output in tool_outputs:
                 t_output.compatible_inputs.add(t_input)
                 t_output.save()
-
-

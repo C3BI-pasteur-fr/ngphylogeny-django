@@ -41,11 +41,16 @@ class ToolFlagInline(admin.TabularInline):
 
 
 class ToolOutputDataAdmin(admin.ModelAdmin):
-    pass
+    filter_horizontal = ('compatible_inputs',)
 
 
 class ToolInputDataAdmin(admin.ModelAdmin):
     pass
+
+
+class ToolFlagAdmin(admin.ModelAdmin):
+    filter_horizontal = ('tool',)
+
 
 
 class ToolAdmin(admin.ModelAdmin):
@@ -112,7 +117,10 @@ def make_actions_addflag(flag):
     return assign_flag
 
 
+
+
 admin.site.register(Tool, ToolAdmin)
 admin.site.register(ToolInputData, ToolInputDataAdmin)
 admin.site.register(ToolOutputData, ToolOutputDataAdmin)
-admin.site.register(ToolFlag)
+admin.site.register(ToolFlag,ToolFlagAdmin)
+admin.site.register(ToolOutputData.compatible_inputs.through)
