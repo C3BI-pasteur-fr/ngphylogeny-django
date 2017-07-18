@@ -1,12 +1,10 @@
 from django.contrib import admin
 
-# Register your models here.
-# Register your models here.
-from .models import *
+from .models import WorkspaceHistory
 
 
 class WorkspaceAdmin(admin.ModelAdmin):
 
-    list_display = ('name','history','user', 'galaxy_server',)
+    list_display = ('name','history','user','created_date', 'galaxy_server',)
 
 admin.site.register(WorkspaceHistory,WorkspaceAdmin)
