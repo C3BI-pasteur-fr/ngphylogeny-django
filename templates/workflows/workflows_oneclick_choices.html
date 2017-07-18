@@ -20,8 +20,8 @@
 {% block content %}
 <script>
 $(function() {
-  $(".nav li").on("click", function() {
-    $(".nav li").removeClass("active");
+  $(".nav.nav-pills li").on("click", function() {
+    $(".nav.nav-pills li").removeClass("active");
     $(this).addClass("active");
     $('.miniworkflow').addClass("hidden");
     $($(this).find('a').attr('id')).removeClass("hidden");
