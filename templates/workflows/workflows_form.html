@@ -16,11 +16,6 @@
         myInputFile.attr({name: myInputFilename});
     });
 
-
-
-
-
-
 </script>
 {% endblock %}
 {% block content %}
@@ -29,13 +24,12 @@
     {{ workflow.name }}
 </div>
 <br>
+<div class="row">
 <div class="col-md-2">
 </div>
 
-<div class="col-md-8">
-    <table id="{{ workflow.slug }}" class="table-responsive">
-        <tr>
-            <div class="panel panel-info">
+<div class="col-md-8 ">
+    <div class="panel panel-info nomargin">
                 <div class="panel-heading">Input Data</div>
                 <div class="panel-body">
                     <form method="POST" enctype="multipart/form-data">
@@ -45,8 +39,16 @@
                                id="submit-id-submit">
                     </form>
                 </div>
-            </div>
-        </tr>
+    </div>
+</div>
+</div>
+<div class="row">
+<div class="col-md-2">
+</div>
+
+<div class="col-md-8" >
+    <table id="{{ workflow.slug }}" class="table-responsive center">
+
         {% for nbstep, step in steps.items %}
         <tr class="d-inline-block text-center">
             <td>
@@ -54,8 +56,8 @@
             </td>
         </tr>
         <tr>
-            <td class="d-inline-block">
-                <div class="panel-group">
+            <td>
+                <div class="panel-group nomargin">
                     <div class="panel panel-info">
                         <div class="panel-heading">{{ step.tool.toolflag_set.first|default_if_none:"" }}</div>
                         <div class="panel-body">
@@ -72,12 +74,12 @@
                         </div>
                     </div>
                 </div>
-
             </td>
         </tr>
         {% endfor %}
 
     </table>
+    </div>
     <br>
     <div class="col-md-9">
 

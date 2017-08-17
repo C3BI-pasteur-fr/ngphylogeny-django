@@ -18,7 +18,16 @@ font-family: 'Bungee Inline', cursive;*/
     font-size: 14px;
 }
 
+table.center {
+    float: none;
+    margin: 0 auto;
+    text-align:center;
+}
 
+.nomargin {
+    margin: 0 auto;
+    width: inherit;
+}
 header.jumbotron {
 
     color: #ffffff;
