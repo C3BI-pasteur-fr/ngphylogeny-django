@@ -55,10 +55,12 @@ class WorkflowStepInformation(object):
         self.steps_tooldict = {}
         self.sorted_tool_list = []
         self.toolset = set()
+
         # parse galaxy workflow information
         for step_id, step in self.workflow_json.get('steps').items():
             if step.get('tool_id'):
                 self.toolset.update([step.get('tool_id')])
+                print step.get('tool_id')
                 self.steps_tooldict[step_id] = {'tool_idgalaxy': step.get('tool_id'),
                                                 'annotation': step.get('annotation'),
                                                 'params': step.get('tool_inputs')
@@ -68,13 +70,15 @@ class WorkflowStepInformation(object):
                 self.graph.setdefault(str(step_output.get('source_step')), []).append(str(step_id))
 
         # get known tools
-        queryset = Tool.objects.filter(id_galaxy__in=self.toolset).prefetch_related('toolflag_set')
+        queryset = Tool.objects.filter(id_galaxy__in=self.toolset, visible=True).prefetch_related('toolflag_set')
 
-        for tool in queryset:
-            for nbstep, step in self.steps_tooldict.items():
-
+        for nbstep, step in self.steps_tooldict.items():
+            for tool in queryset:
                 if step.get('tool_idgalaxy') == tool.id_galaxy:
                     step['tool'] = tool
+                    break
+            else:
+                del self.steps_tooldict[nbstep]
 
 
         first_step = self.workflow_json['inputs'].keys()[0]
@@ -84,6 +88,7 @@ class WorkflowStepInformation(object):
 
         ord_step = collections.OrderedDict.fromkeys(sorted_step)
         ord_step.update(self.steps_tooldict)
+        print self.steps_tooldict
         self.sorted_tool_list = list((k, v.get('tool')) for k, v in ord_step.iteritems() if v and 'tool' in v)
         print self.sorted_tool_list
 
