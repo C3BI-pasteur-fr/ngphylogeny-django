@@ -3,7 +3,7 @@ from django.conf.urls import url
 from views import *
 
 urlpatterns = [
-    url(r'^upload/$', UploadView.as_view(), name='upload'),
+    url(r'^upload/$', ImportPastedContentView.as_view(), name='upload'),
 
     url(r'^display/(?P<file_id>[\w-]+)$', display_file, name="display_file"),
     url(r'^displaytree/(?P<file_id>[\w-]+)$', tree_visualization, name="display_tree"),

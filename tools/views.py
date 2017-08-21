@@ -58,7 +58,7 @@ def tool_exec_view(request, pk, store_output=None):
                     tmp_file.flush()
 
                     # send file to galaxy
-                    outputs = gi.tools.upload_file(tmp_file.name, history_id, file_name=uploaded_file.name)
+                    outputs = gi.tools.upload_file(path=tmp_file.name,file_name=uploaded_file.name, history_id=history_id)
                     file_id = outputs.get('outputs')[0].get('id')
                     tool_inputs.set_dataset_param(tool_form.fields_ids_mapping.get(input_file_id.strip('[]')), file_id)
 
@@ -75,8 +75,6 @@ def tool_exec_view(request, pk, store_output=None):
                                                  tool_id=tool_obj.id_galaxy,
                                                  tool_inputs=tool_inputs)
 
-
-                print "#4", tool_inputs
                 if store_output:
                     request.session['output'] = tool_outputs
 
@@ -127,7 +125,7 @@ def tool_exec(request, tool_form, store_output=None):
                     tmp_file.flush()
 
                     # send file to galaxy
-                    outputs = gi.tools.upload_file(tmp_file.name, history_id, file_name=uploaded_file.name)
+                    outputs = gi.tools.upload_file(path=tmp_file.name,file_name=uploaded_file.name, history_id=history_id)
                     file_id = outputs.get('outputs')[0].get('id')
                     #set
                     tool_inputs.set_dataset_param(tool_form.fieds_ids_mapping.get(input_file_id.strip('[]')), file_id)

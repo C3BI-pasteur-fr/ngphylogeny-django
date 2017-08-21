@@ -3,7 +3,7 @@ from django.http import HttpResponseRedirect
 from django.shortcuts import redirect
 from formtools.wizard.views import SessionWizardView
 
-from data.views import UploadView
+from data.views import UploadView, ImportPastedContentView
 from galaxy.decorator import connection_galaxy
 from tools.forms import tool_form_factory
 from tools.views import tool_exec
@@ -11,10 +11,12 @@ from workflows.models import Workflow, WorkflowStepInformation
 from workspace.views import create_history
 
 
-class WorkflowFormView(UploadView):
+class WorkflowFormView(UploadView, ImportPastedContentView):
     """
     Generic Workflow form view, upload one file and run workflow
     """
+    form_class = UploadView.form_class
+    form2_class = ImportPastedContentView.form_class
 
     object = Workflow
     template_name = 'workflows/workflows_form.html'
@@ -39,6 +41,33 @@ class WorkflowFormView(UploadView):
 
         return self.get_object()
 
+    def post(self, request, *args, **kwargs):
+
+        # determine which form is being submitted
+        # uses the name of the form's submit button
+        if request.FILES:
+
+            # get the primary form
+            form_class = self.get_form_class()
+            form_name = 'form'
+
+        else:
+
+            # get the secondary form
+            form_class = self.form2_class
+            form_name = 'form2'
+
+        # get the form
+        form = self.get_form(form_class)
+
+        # validate
+        if form.is_valid():
+
+            return self.form_valid(form)
+        else:
+            return self.form_invalid(**{form_name: form})
+
+
     def form_valid(self, form):
 
         gi = self.request.galaxy
@@ -47,13 +76,19 @@ class WorkflowFormView(UploadView):
         history_id = create_history(self.request)
 
         # upload user file
-        upfile = self.upload_file(form, history_id)
-        file_id = upfile.get('outputs')[0].get('id')
+        submitted_file = form.cleaned_data.get('file')
+        if submitted_file:
+            u_file = self.upload_file(submitted_file, history_id)
+
+        # or upload user pasted content
+        else:
+            u_file = self.upload_content(form.cleaned_data['pasted_text'])
+
+        file_id = u_file.get('outputs')[0].get('id')
 
         workflow = self.get_workflow()
 
         i_input = workflow.json['inputs'].keys()[0]
-
         # input file
         dataset_map = dict()
         dataset_map[i_input] = {'id': file_id, 'src': 'hda'}
@@ -61,9 +96,11 @@ class WorkflowFormView(UploadView):
 
         try:
             # run workflow
-            gi.workflows.invoke_workflow(workflow_id=workflow.id_galaxy,
+            gi.workflows.run_workflow(workflow_id=workflow.id_galaxy,
                                          history_id=history_id,
-                                         inputs=dataset_map)  # ,params=wk_galaxy.params)
+                                         dataset_map=dataset_map,
+                                         # inputs=dataset_map
+                                      )  # ,params=wk_galaxy.params)
 
         except Exception, galaxy_exception:
             raise galaxy_exception

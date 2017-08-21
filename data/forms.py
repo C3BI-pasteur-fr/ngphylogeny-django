@@ -11,3 +11,11 @@ class UploadForm(forms.Form):
     helper.form_method = 'POST'
     helper.layout = Layout('file',
                            FormActions(Submit('submit', 'Submit')))
+
+
+class PastedContentForm(forms.Form):
+    pasted_text = forms.CharField(widget=forms.Textarea)
+    helper = FormHelper()
+    helper.form_method = 'POST'
+    helper.layout = Layout('pasted_text',
+                           FormActions(Submit('submit', 'Submit')))

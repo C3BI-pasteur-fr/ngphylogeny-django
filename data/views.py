@@ -9,7 +9,7 @@ from django.urls import reverse_lazy
 from django.utils.decorators import method_decorator
 from django.views.generic import FormView
 
-from forms import UploadForm
+from forms import UploadForm, PastedContentForm
 from galaxy.decorator import connection_galaxy
 from workspace.views import get_or_create_history
 
@@ -24,12 +24,12 @@ class UploadView(FormView):
     form_class = UploadForm
     success_url = reverse_lazy("home")
 
-    def upload_file(self, form, history_id=None):
+    def upload_file(self, file, history_id=None):
         """upload file into galaxy history: return galaxy response
         """
-        myfile = form.cleaned_data['file']
+
         tmpfile = tempfile.NamedTemporaryFile()
-        for chunk in myfile.chunks():
+        for chunk in file.chunks():
             tmpfile.write(chunk)
         tmpfile.flush()
 
@@ -38,15 +38,48 @@ class UploadView(FormView):
         else:
             self.history_id = get_or_create_history(self.request)
 
-        return self.request.galaxy.tools.upload_file(tmpfile.name, self.history_id, file_name=myfile.name)
+        return self.request.galaxy.tools.upload_file(path=tmpfile.name,file_name=file.name, history_id=self.history_id)
 
 
     def form_valid(self, form):
 
-        outputs = self.upload_file(form)
+        myfile = form.cleaned_data['file']
+        outputs = self.upload_file(myfile)
         self.success_url = reverse_lazy("history_detail", kwargs={'history_id': self.history_id}, )
 
         return super(UploadView, self).form_valid()
+
+
+@method_decorator(connection_galaxy, name="dispatch")
+class ImportPastedContentView(FormView):
+    """
+       Import user pasted content into Galaxy Server
+    """
+
+    form_class = PastedContentForm
+    success_url = reverse_lazy("home")
+
+    def upload_content(self, content, history_id=None):
+        """
+            send content into galaxy history: return galaxy response
+        """
+        if history_id:
+            self.history_id = history_id
+        else:
+            self.history_id = get_or_create_history(self.request)
+
+        return self.request.galaxy.tools.paste_content(content=content, file_name="pasted_data", history_id=self.history_id)
+
+
+    def form_valid(self, form):
+
+        p_content = form.cleaned_data['pasted_text']
+        outputs = self.upload_content(p_content)
+        self.success_url = reverse_lazy("history_detail", kwargs={'history_id': self.history_id}, )
+
+        return super(ImportPastedContentView, self).form_valid()
+
+
 
 
 @connection_galaxy

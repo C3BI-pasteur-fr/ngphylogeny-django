@@ -19,29 +19,44 @@
 </script>
 {% endblock %}
 {% block content %}
-<div class="h4 text-center">
+<h3 class="text-center">
     <span class="glyphicon glyphicon-cog"></span>
     {{ workflow.name }}
-</div>
+</h3>
 <br>
-<div class="row">
-<div class="col-md-2">
-</div>
-
-<div class="col-md-8 ">
-    <div class="panel panel-info nomargin">
-                <div class="panel-heading">Input Data</div>
-                <div class="panel-body">
-                    <form method="POST" enctype="multipart/form-data">
-                        {% csrf_token %}
-                        <input id="id_file" type="file" name="file" required="" multiple="multiple">
-                        <input type="submit" name="submit" value="Submit" class="btn btn-primary"
-                               id="submit-id-submit">
-                    </form>
+<div class="row row-eq-height">
+    <div class="col-md-6 ">
+        <div class="panel panel-info">
+            <div class="panel-heading">Select a Input Data file</div>
+            <div class="panel-body">
+                <form method="POST" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <input id="id_file" type="file" name="file" required="" multiple="multiple">
+                    <input type="submit" name="submit" value="Submit" class="btn btn-primary"
+                           id="submit-id-submit">
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 ">
+        <div class="panel panel-info">
+            <div class="panel-heading">
+                <span class="h4">... OR</span> Paste yours sequences (Fasta format)
+            </div>
+            <div class="panel-body">
+                 <form method="POST">
+                    {% csrf_token %}
+                <div class="form-group">
+                    <textarea id="id_text" class="form-control" name="pasted_text" required="" ></textarea>
                 </div>
+                <input id="submit-id-text" type="submit" name="submit2" value="Submit"
+                       class="btn btn-primary">
+                 </form>
+            </div>
+        </div>
     </div>
 </div>
-</div>
+
 <div class="row">
 <div class="col-md-2">
 </div>
