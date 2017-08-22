@@ -48,7 +48,7 @@ $(function() {
     </div>
 
     <div class="col-md-10">
-        {% for workflow in workflow_list|dictsort:"name" %}
+        {% for workflow in workflow_list|dictsort:"rank" %}
         <table id="{{ workflow.slug }}" class="table-responsive miniworkflow
             {% if not forloop.first %}hidden{%endif%}">
             <tr>
@@ -99,7 +99,7 @@ $(function() {
         <ul class="nav nav-pills nav-stacked">
             <h4>One click workflow list:</h4>
             <hr/>
-            {% for workflow in workflow_list|dictsort:"name" %}
+            {% for workflow in workflow_list|dictsort:"rank" %}
             <li {% if forloop.first %}class="active" {%endif%}>
                 <a id="#{{ workflow.slug }}">
                     <span class="glyphicon glyphicon-cog"></span>

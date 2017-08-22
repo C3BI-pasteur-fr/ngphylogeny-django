@@ -75,7 +75,7 @@ class WorkflowStepInformation(object):
                 self.graph.setdefault(str(step_output.get('source_step')), []).append(str(step_id))
 
         # get known tools
-        queryset = Tool.objects.filter(id_galaxy__in=self.toolset, visible=True).prefetch_related('toolflag_set')
+        queryset = Tool.objects.filter(id_galaxy__in=self.toolset).prefetch_related('toolflag_set')
 
         for nbstep, step in self.steps_tooldict.items():
             for tool in queryset:

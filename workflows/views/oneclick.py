@@ -23,6 +23,7 @@ class WorkflowOneClickListView(ListView):
     Generic class-based view
     """
     model = Workflow
+    context_object_name = "workflow_list"
     template_name = 'workflows/workflows_oneclick_choices.html'
 
     def get_queryset(self):
