@@ -13,6 +13,7 @@ class Workflow(models.Model):
     """
     Galaxy Workflow information
     """
+
     galaxy_server = models.ForeignKey(Server, on_delete=models.CASCADE, null=True, blank=True)
     id_galaxy = models.CharField(max_length=250, unique=True)
     name = models.CharField(max_length=100, unique=True)
@@ -20,6 +21,10 @@ class Workflow(models.Model):
     version = models.CharField(max_length=10, blank=True)
     description = models.CharField(max_length=250)
     slug = models.SlugField(max_length=100, unique=True)
+    rank = models.IntegerField(default=999, help_text="Workflows order")
+
+    class Meta:
+        ordering = ["rank", ]
 
 
 class WorkflowStepInformation(object):

@@ -2,11 +2,19 @@ from __future__ import absolute_import
 
 from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
-from django.views.generic import ListView
+from django.views.generic import ListView, View
 
 from galaxy.decorator import connection_galaxy
 from workflows.models import Workflow, WorkflowStepInformation
 from workflows.views.generic import WorkflowFormView
+
+
+class WorkflowStartedView(View):
+    "redirect to workflows form class"
+
+    def get(self, request):
+        wk = Workflow.objects.order_by('rank').first()
+        return WorkflowOneClickView.as_view()(request, slug=wk.slug)
 
 
 @method_decorator(connection_galaxy, name="dispatch")

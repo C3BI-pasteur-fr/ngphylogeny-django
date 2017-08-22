@@ -202,7 +202,7 @@ class ToolFlag(models.Model):
     name = models.CharField(max_length=5, unique=True)
     verbose_name = models.CharField(max_length=250, unique=True)
     tool = models.ManyToManyField(Tool)
-    rank = models.IntegerField(default=999, help_text="order flag")
+    rank = models.IntegerField(default=999, help_text="flags order")
 
     def __unicode__(self):
         return self.verbose_name
