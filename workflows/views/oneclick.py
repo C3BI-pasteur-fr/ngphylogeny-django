@@ -2,19 +2,11 @@ from __future__ import absolute_import
 
 from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
-from django.views.generic import ListView, View
+from django.views.generic import ListView
 
 from galaxy.decorator import connection_galaxy
 from workflows.models import Workflow, WorkflowStepInformation
 from workflows.views.generic import WorkflowFormView
-
-
-class WorkflowStartedView(View):
-    "redirect to workflows form class"
-
-    def get(self, request):
-        wk = Workflow.objects.order_by('rank').first()
-        return WorkflowOneClickView.as_view()(request, slug=wk.slug)
 
 
 @method_decorator(connection_galaxy, name="dispatch")
@@ -64,7 +56,15 @@ class WorkflowOneClickView(WorkflowFormView):
 
         wk_obj = get_object_or_404(Workflow, slug=self.kwargs['slug'])
         wk_obj.json = self.request.galaxy.workflows.show_workflow(workflow_id=wk_obj.id_galaxy)
-
         return wk_obj
 
 
+@method_decorator(connection_galaxy, name="dispatch")
+class WorkflowStartedView(WorkflowOneClickView):
+    "redirect to workflows form class"
+
+    def get_object(self, queryset=None):
+
+        wk_obj = Workflow.objects.order_by('rank').first()
+        wk_obj.json = self.request.galaxy.workflows.show_workflow(workflow_id=wk_obj.id_galaxy)
+        return wk_obj

@@ -29,7 +29,7 @@
         <div class="panel panel-info">
             <div class="panel-heading">Select a Input Data file</div>
             <div class="panel-body">
-                <form method="POST" action="{% url 'workflow_oneclick_form' slug=workflow.slug %}" enctype="multipart/form-data">
+                <form method="POST" enctype="multipart/form-data">
                     {% csrf_token %}
                     <input id="id_file" type="file" name="file" required="" multiple="multiple">
                     <input type="submit" name="submit" value="Submit" class="btn btn-primary"
@@ -44,7 +44,7 @@
                 <span class="h4">... OR</span> Paste yours sequences (Fasta format)
             </div>
             <div class="panel-body">
-                 <form method="POST" action="{% url 'workflow_oneclick_form' slug=workflow.slug %}">
+                 <form method="POST" >
                     {% csrf_token %}
                 <div class="form-group">
                     <textarea id="id_text" class="form-control" name="pasted_text" required="" ></textarea>
