@@ -31,9 +31,9 @@
             <li {% block nav-home %}{% endblock %}><a href="{% url 'home' %}">
                 <span class="glyphicon glyphicon-home"></span> Home</a></li>
             <li {% block nav-analysis %}{% endblock %}><a href="{% url 'analysis_list' %}">
-                <span class="glyphicon glyphicon-road"></span> Phylogeny Analysis</a></li>
+                <span class="glyphicon glyphicon-cog"></span> Phylogeny Analysis</a></li>
             <li {% block nav-tools %}{% endblock %}><a href="{% url 'tools' %}">
-                <span class="glyphicon glyphicon-play"></span> Tools</a></li>
+                <span class="glyphicon glyphicon-briefcase"></span> Tools</a></li>
             <li {% block nav-workspace %}{% endblock %}>
                 <a {% if request.session.histories|length > 1 %}
                     href="{% url 'previous_analyses' %}"
