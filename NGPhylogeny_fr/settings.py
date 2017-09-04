@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'galaxy',
     'data',
     'tools',
+    'surveys',
     'workflows',
     'workspace',
 ]
