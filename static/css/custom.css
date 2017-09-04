@@ -4,8 +4,8 @@ font-family: 'Fascinate Inline', cursive;
 font-family: 'Bungee Inline', cursive;*/
 
 .title-bg {
-    background-color: rgb(0, 0, 0);
-    background-color: rgba(0, 0, 0, 0.6);
+    #background-color: rgb(0, 0, 0);
+    #background-color: rgba(0, 0, 0, 0.6);
     padding: 10px;
 }
 
@@ -30,13 +30,13 @@ table.center {
 }
 header.jumbotron {
 
-    color: #ffffff;
-    background-color: #446cb3;
-    background-size: 100%;
-    background-image: url("/static/images/header.jpg");
+    background-image: url("/static/images/banner.png");
+    background-color: #f8f8f8;
     background-position: center;
     background-repeat: no-repeat;
-    font-family: 'Ubuntu', sans-serif;
+    background-size: 100%;
+    color: #444;
+    font-family: 'Hallo sans', sans-serif;
     margin-bottom: 0px;
 
 }
@@ -118,4 +118,10 @@ footer {
     max-height: 50px;
     height:  auto;
     width: auto;
+}
+
+textarea {
+  min-width: 102%;
+  font-family: Courier New, Consolas,Monaco,Lucida Console, monospace;
+
 }

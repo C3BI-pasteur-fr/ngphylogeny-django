@@ -3,8 +3,6 @@
 {% load static %}
 {% block nav-analysis %}class="active"{% endblock %}
 {% block stylesheet %}
-<script src="{% static 'js/jquery.filer.min.js' %} "></script>
-<link rel="stylesheet" href="{% static 'css/jquery.filer.css' %}"/>
 <script>
     $(document).ready(function () {
         var myInputFile = $(':file');
@@ -15,10 +13,6 @@
         });
         myInputFile.attr({name: myInputFilename});
     });
-
-
-
-
 </script>
 {% endblock %}
 {% block content %}
@@ -27,15 +21,12 @@ $(function() {
   $(".nav.nav-pills li").on("click", function() {
     $(".nav.nav-pills li").removeClass("active");
     $(this).addClass("active");
-    $('.miniworkflow').addClass("hidden");
-    $($(this).find('a').attr('id')).removeClass("hidden");
+    $('.miniworkflow').hide();
+    $($(this).find('a').attr('id')).show();
     $('form').attr('action', $(this).find('a').attr('id').replace("#", ''));
     $('#more_info').attr('href', $(this).find('a').attr('id').replace("#", ''))
   });
 });
-
-
-
 
 </script>
 <h3>One Click Workflows</h3>
@@ -49,15 +40,15 @@ $(function() {
 
     <div class="col-md-10">
         {% for workflow in workflow_list|dictsort:"rank" %}
-        <table id="{{ workflow.slug }}" class="table-responsive miniworkflow
-            {% if not forloop.first %}hidden{%endif%}">
+        <table id="{{ workflow.slug }}" class="table-responsive miniworkflow"
+               {% if not forloop.first %}style="display:none;" {%endif%}>
             <tr>
                 <td class="d-inline-block">
                     <div class="panel-group">
                         <div class="panel panel-info">
-                            <div class="panel-heading"></div>
+                            <div class="panel-heading">Input data</div>
                             <div class="panel-body">
-                                Input data
+                                Fasta format
                             </div>
                         </div>
                     </div>
@@ -97,7 +88,7 @@ $(function() {
     <div class="col-md-3 sidenav">
         <br>
         <ul class="nav nav-pills nav-stacked">
-            <h4>One click workflow list:</h4>
+            <h4>One click Workflow List:</h4>
             <hr/>
             {% for workflow in workflow_list|dictsort:"rank" %}
             <li {% if forloop.first %}class="active" {%endif%}>
@@ -110,36 +101,27 @@ $(function() {
         </ul>
         <br>
     </div>
-    <div class="col-md-6">
-        <form name="form" action="{{ workflow_list.0.slug }}" method="POST" enctype="multipart/form-data">
-            <h4>Select an input file</h4>
-            <div class="panel panel-info">
-                <div class="panel-heading">Input Data</div>
+    <div class="col-md-7">
+        <h4>Select an input data file</h4>
+        {% load crispy_forms_tags %}
+         <div class="panel panel-info">
+                <div class="panel-heading">Input Data (Fasta format)</div>
                 <div class="panel-body">
-                    {% csrf_token %}
-                    <input id="id_file" type="file" name="file" required="" multiple="multiple">
-                    <input id="submit-id" type="submit" name="submit" value="Submit" class="btn btn-primary">
-
-                </div>
+                    <div class="form-group">
+                    {% crispy form %}
+                    </div>
             </div>
-        </form>
+         </div>
         <h4>OR</h4>
-        <form name="form2" action="{{ workflow_list.0.slug }}" method="POST">
-            {% csrf_token %}
-            <div class="panel panel-info">
+         {% load crispy_forms_tags %}
+         <div class="panel panel-info">
                 <div class="panel-heading">Paste yours sequences (Fasta format)</div>
                 <div class="panel-body">
                     <div class="form-group">
-                        <textarea id="id_text" class="form-control" name="pasted_text" required="" rows="5"></textarea>
+                    {% crispy textarea_form %}
                     </div>
-                    <input id="submit-id-text" type="submit" name="submit" value="Submit"
-                           class="btn btn-primary">
-                </div>
             </div>
-
-
-        </form>
+         </div>
     </div>
 </div>
-
 {% endblock content %}

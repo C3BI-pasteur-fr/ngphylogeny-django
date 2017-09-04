@@ -3,8 +3,6 @@
 {% load static %}
 {% block nav-analysis %}class="active"{% endblock %}
 {% block stylesheet %}
-<script src="{% static 'js/jquery.filer.min.js' %} "></script>
-<link rel="stylesheet" href="{% static 'css/jquery.filer.css' %}"/>
 <script>
     $(document).ready(function () {
         var myInputFile = $(':file');
@@ -26,74 +24,66 @@
 <br>
 <div class="row row-eq-height">
     <div class="col-md-6 ">
+        <h4>Select an input data file</h4>
+        {% load crispy_forms_tags %}
         <div class="panel panel-info">
-            <div class="panel-heading">Select a Input Data file</div>
+            <div class="panel-heading">Input Data (Fasta format)</div>
             <div class="panel-body">
-                <form method="POST" enctype="multipart/form-data">
-                    {% csrf_token %}
-                    <input id="id_file" type="file" name="file" required="" multiple="multiple">
-                    <input type="submit" name="submit" value="Submit" class="btn btn-primary"
-                           id="submit-id-submit">
-                </form>
+                <div class="form-group">
+                    {% crispy form %}
+                </div>
             </div>
         </div>
     </div>
     <div class="col-md-6 ">
+        {% load crispy_forms_tags %}
         <div class="panel panel-info">
             <div class="panel-heading">
-                <span class="h4">... OR</span> Paste yours sequences (Fasta format)
+                <span class="h4">... OR</span> Paste yours sequences (Fasta format)</span>
             </div>
             <div class="panel-body">
-                 <form method="POST" >
-                    {% csrf_token %}
                 <div class="form-group">
-                    <textarea id="id_text" class="form-control" name="pasted_text" required="" ></textarea>
+                    {% crispy textarea_form %}
                 </div>
-                <input id="submit-id-text" type="submit" name="submit2" value="Submit"
-                       class="btn btn-primary">
-                 </form>
             </div>
         </div>
     </div>
 </div>
 
 <div class="row">
-<div class="col-md-2">
-</div>
-
-<div class="col-md-8" >
-    <table id="{{ workflow.slug }}" class="table-responsive center">
-
-        {% for nbstep, step in steps.items %}
-        <tr class="d-inline-block text-center">
-            <td>
-                <span class="glyphicon glyphicon-arrow-down"> </span>
-            </td>
-        </tr>
-        <tr>
-            <td>
-                <div class="panel-group nomargin">
-                    <div class="panel panel-info">
-                        <div class="panel-heading">{{ step.tool.toolflag_set.first|default_if_none:"" }}</div>
-                        <div class="panel-body">
-                            <a data-toggle="collapse" href="#collapse-{{ nbstep }}-{{ workflow.slug }}">
-                                <span class="glyphicon glyphicon-info-sign"></span></a> {{ step.tool.name }}
-                        </div>
-                        <div id="collapse-{{ nbstep }}-{{ workflow.slug }}" class="panel-collapse collapse">
+    <div class="col-md-2"></div>
+    <div class="col-md-8">
+        <table id="{{ workflow.slug }}" class="table-responsive center">
+            {% for nbstep, step in steps.items %}
+            <tr class="d-inline-block text-center">
+                <td class="h2">
+                    <span class="glyphicon glyphicon-arrow-down"> </span>
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    <div class="panel-group nomargin">
+                        <div class="panel panel-info">
+                            <div class="panel-heading">{{ step.tool.toolflag_set.first|default_if_none:"" }}</div>
+                            <div class="panel-body">
+                                <a data-toggle="collapse" href="#collapse-{{ nbstep }}-{{ workflow.slug }}">
+                                    <span class="glyphicon glyphicon-info-sign"></span></a> {{ step.tool.name }}
+                            </div>
+                            <div id="collapse-{{ nbstep }}-{{ workflow.slug }}" class="panel-collapse collapse">
+                                <div class="panel-footer">
+                                    {{ step.tool.description }}
+                                </div>
+                            </div>
                             <div class="panel-footer">
-                                {{ step.tool.description }}
+                                {{ step.annotation | safe }}
                             </div>
                         </div>
-                        <div class="panel-footer">
-                            {{ step.annotation | safe }}
-                        </div>
                     </div>
-                </div>
-            </td>
-        </tr>
-        {% endfor %}
+                </td>
+            </tr>
+            {% endfor %}
 
-    </table>
+        </table>
     </div>
     <br>
     <div class="col-md-9">
