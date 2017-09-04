@@ -30,33 +30,19 @@ class Workflow(models.Model):
 class WorkflowStepInformation(object):
     """
     Parse Galaxy Workflow json:
-        :graph: {step_input: [step_output, step_output], ...}
-        :params: {step_id: param_dict}
-        :annotation: {step_id: annotation }
-        :tool_list: list of tuple, [(step_id, queryset.tool)..]
+
+        :steps_tooldict: dictionary , {'step_id' : { 'tool_idgalaxy':..,
+                                                      'annotation': ..,
+                                                     'params':.. }
+                                        }
         :sorted_tool_list: list of tuple, [(step_id, queryset.tool)..]
     """
-
-    @staticmethod
-    def __graph_search(graph, node):
-        """Breadth-first search (BFS) is an algorithm
-           :return: list of node
-        """
-        step_visited = []
-        next_steps = [node]
-        while next_steps:
-            current_step = next_steps.pop(0)
-            if not (current_step in step_visited):
-                step_visited.append(current_step)
-                next_steps.extend(graph.get(current_step, []))
-        return step_visited
 
     def __init__(self, workflow_json):
         """
         :param workflow_json: Galaxy workflow json
         """
         self.workflow_json = workflow_json
-        self.graph = {}  # { parent : [ child, child ], ...
         self.steps_tooldict = {}
         self.sorted_tool_list = []
         self.toolset = set()
@@ -65,18 +51,14 @@ class WorkflowStepInformation(object):
         for step_id, step in self.workflow_json.get('steps').items():
             if step.get('tool_id'):
                 self.toolset.update([step.get('tool_id')])
-                print step.get('tool_id')
                 self.steps_tooldict[step_id] = {'tool_idgalaxy': step.get('tool_id'),
                                                 'annotation': step.get('annotation'),
                                                 'params': step.get('tool_inputs')
                                                 }
-
-            for input, step_output in step.get("input_steps", {}).items():
-                self.graph.setdefault(str(step_output.get('source_step')), []).append(str(step_id))
-
         # get known tools
         queryset = Tool.objects.filter(id_galaxy__in=self.toolset).prefetch_related('toolflag_set')
 
+        # remove unknown tools
         for nbstep, step in self.steps_tooldict.items():
             for tool in queryset:
                 if step.get('tool_idgalaxy') == tool.id_galaxy:
@@ -85,17 +67,13 @@ class WorkflowStepInformation(object):
             else:
                 del self.steps_tooldict[nbstep]
 
-
-        first_step = self.workflow_json['inputs'].keys()[0]
-
-        #travesing graph
-        sorted_step = self.__graph_search(self.graph, first_step)
-
-        ord_step = collections.OrderedDict.fromkeys(sorted_step)
+        # sort steps
+        ord_step = collections.OrderedDict.fromkeys(sorted(self.steps_tooldict.keys()))
         ord_step.update(self.steps_tooldict)
-        print self.steps_tooldict
+
+        self.steps_tooldict = ord_step
         self.sorted_tool_list = list((k, v.get('tool')) for k, v in ord_step.iteritems() if v and 'tool' in v)
-        print self.sorted_tool_list
+
 
 class WorkflowGalaxyFactory(object):
     """
