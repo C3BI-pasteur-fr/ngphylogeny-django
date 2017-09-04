@@ -28,6 +28,9 @@ class WorkflowFormView(UploadView, ImportPastedContentView):
         # get workflows
         wk = self.get_object()
 
+        if 'textarea_form' not in context:
+            context['textarea_form'] = self.form2_class()
+
         if hasattr(wk, 'json'):
             # parse galaxy workflow json information
             wk_galaxy = WorkflowStepInformation(wk.json)

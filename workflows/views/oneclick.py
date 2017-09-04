@@ -10,28 +10,6 @@ from workflows.views.generic import WorkflowFormView
 
 
 @method_decorator(connection_galaxy, name="dispatch")
-class WorkflowOneClickListView(ListView):
-    """
-    Generic class-based view
-    """
-    model = Workflow
-    context_object_name = "workflow_list"
-    template_name = 'workflows/workflows_oneclick_choices.html'
-
-    def get_queryset(self):
-
-        self.queryset = Workflow.objects.filter(galaxy_server__current=True).select_related()
-        gi = self.request.galaxy
-        for workflow in self.queryset:
-            workflow_json = gi.workflows.show_workflow(workflow_id=workflow.id_galaxy)
-
-            # parse galaxy workflows json information
-            workflow.detail = WorkflowStepInformation(workflow_json).sorted_tool_list
-
-        return self.queryset
-
-
-@method_decorator(connection_galaxy, name="dispatch")
 class WorkflowOneClickView(WorkflowFormView):
     """
     Workflow oneclick form with the list of tools and
@@ -59,6 +37,7 @@ class WorkflowOneClickView(WorkflowFormView):
         return wk_obj
 
 
+
 @method_decorator(connection_galaxy, name="dispatch")
 class WorkflowStartedView(WorkflowOneClickView):
     "redirect to workflows form class"
@@ -68,3 +47,25 @@ class WorkflowStartedView(WorkflowOneClickView):
         wk_obj = Workflow.objects.order_by('rank').first()
         wk_obj.json = self.request.galaxy.workflows.show_workflow(workflow_id=wk_obj.id_galaxy)
         return wk_obj
+
+
+@method_decorator(connection_galaxy, name="dispatch")
+class WorkflowOneClickListView( WorkflowStartedView, ListView):
+    """
+    Generic class-based view
+    """
+    model = Workflow
+    context_object_name = "workflow_list"
+    template_name = 'workflows/workflows_oneclick_choices.html'
+
+    def get_queryset(self):
+
+        self.queryset = Workflow.objects.filter(galaxy_server__current=True).select_related()
+        gi = self.request.galaxy
+        for workflow in self.queryset:
+            workflow_json = gi.workflows.show_workflow(workflow_id=workflow.id_galaxy)
+
+            # parse galaxy workflows json information
+            workflow.detail = WorkflowStepInformation(workflow_json).sorted_tool_list
+
+        return self.queryset
