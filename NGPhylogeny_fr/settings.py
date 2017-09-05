@@ -63,8 +63,8 @@ MIDDLEWARE_CLASSES = [
     'debug_toolbar.middleware.DebugToolbarMiddleware'
 ]
 
-SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
-SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_ENGINE = 'django.contrib.sessions.backends.cached_db'
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 
 ROOT_URLCONF = 'NGPhylogeny_fr.urls'
 
