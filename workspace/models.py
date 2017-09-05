@@ -11,6 +11,7 @@ class WorkspaceHistory(models.Model):
     """
     Galaxy history information
     """
+
     history = models.CharField(max_length=20)
     galaxy_server = models.ForeignKey(Server, on_delete=models.CASCADE)
     name = models.CharField(max_length=100)
@@ -40,7 +41,7 @@ class WorkspaceHistory(models.Model):
 
 
 def send_delete_galaxy_history(sender, instance, using, **kwargs):
-    """remove history from db and from Galaxy serveur"""
+    """remove history from db and from Galaxy server"""
 
     gu = instance.get_galaxy_user()
     if gu:

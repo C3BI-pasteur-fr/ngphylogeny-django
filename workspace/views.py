@@ -1,9 +1,10 @@
 import json
 
 from django.http import HttpResponse
+from django.urls import reverse_lazy
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
-from django.views.generic import TemplateView, RedirectView, ListView
+from django.views.generic import TemplateView, RedirectView, ListView, DeleteView
 
 from galaxy.decorator import connection_galaxy
 from models import WorkspaceHistory
@@ -112,12 +113,18 @@ def get_dataset_toolprovenance(request, history_id, ):
 
 @method_decorator(connection_galaxy, name="dispatch")
 class GalaxyErrorView(RedirectView):
+    """
+    Redirect to Galaxy server error page
+    """
     def get_redirect_url(self, *args, **kwargs):
         return "%s/dataset/errors?id=%s" % (self.request.galaxy_server.url, kwargs.get('id'))
 
 
 @method_decorator(connection_galaxy, name="dispatch")
 class PreviousHistoryListView(ListView):
+    """
+    Display list of Previous analyses stored in the sessions cookies
+    """
     queryset = WorkspaceHistory.objects.none()
     template_name = 'workspace/previous_analyses.html'
     context_object_name = 'histories'
@@ -126,4 +133,30 @@ class PreviousHistoryListView(ListView):
         gi = self.request.galaxy
         self.queryset = WorkspaceHistory.objects.filter(history__in=self.request.session.get('histories', []))
 
+        #update session history
+        self.request.session['histories'] = list(self.queryset.values_list('history', flat=True))
+
         return self.queryset
+
+
+@method_decorator(connection_galaxy, name="dispatch")
+class WorkspaceDeleteView(DeleteView):
+    """
+    Delete Workspace and history
+    """
+    model = WorkspaceHistory
+    success_url = reverse_lazy('previous_analyses')
+    pk_url_kwarg = 'history_id'
+
+    def get_object(self, queryset=None):
+
+        if queryset is None:
+            queryset = self.get_queryset()
+
+        server = self.request.galaxy_server
+        hist_id = self.kwargs.get(self.pk_url_kwarg)
+
+        return queryset.get(history=hist_id,
+                            galaxy_server=server)
+
+

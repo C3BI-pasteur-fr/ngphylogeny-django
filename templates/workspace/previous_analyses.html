@@ -6,13 +6,13 @@
 {% block nav-workspace %}class="active"{% endblock %}
 {% block content %}
 <div class="row">
-    <h3>Previous analyzes</h3>
+    <h3>Previous analyses</h3>
     <br>
     <div class="col-md-1"></div>
     <div class="col-md-9">
-        <ul class="nav nav-pills  navbar-default nav-stacked ">
+        <ul class="nav ">
             {% for history in histories %}
-            <li style="background-color:{% cycle '#f5f9fb' '#fcfcfc'%}">
+            <li class="col-md-8" style="background-color:{% cycle '#f5f9fb' '#fcfcfc'%}">
                 <a href="{% url 'history_detail' history.history %}">
                     <span class="badge">{{forloop.counter}}</span>
                     <span class="label label-default">{{ history.created_date }}</span>
@@ -20,15 +20,19 @@
                     <span class="glyphicon glyphicon-cog"></span>
                     {{ history.name }}
                 </a>
-
+            </li>
+            <li class="col-md-1" style="background-color:{% cycle '#f5f9fb' '#fcfcfc'%}">
+                <a href="{% url 'history_delete' history.history %}">
+                    <span class='glyphicon glyphicon-trash text-default'></span>
+                </a>
             </li>
             {% empty %}
         </ul>
     </div>
     <div class="jumbotron">
-        You haven't any recent analyzes in progress
+        You haven't any recent analyses in progress
     </div>
     {% endfor %}
 </div>
-</div>
+
 {% endblock %}
