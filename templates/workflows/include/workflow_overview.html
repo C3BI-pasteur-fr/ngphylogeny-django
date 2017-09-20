@@ -1,0 +1,45 @@
+<table id="{{ workflow.slug }}" class="table-responsive miniworkflow"
+       {% if not forloop.first %}style="display:none;" {% endif %}>
+    <tr>
+        <td class="d-inline-block">
+            <div class="panel-group">
+                <div class="panel{% if steps_current == "0" %}
+                                            panel-info{% else %} panel-default {% endif %}">
+                    <div class="panel-heading">Input data</div>
+                    <div class="panel-body">
+                        Fasta format
+                    </div>
+                </div>
+            </div>
+        </td>
+        <td class="d-inline-block align-middle text-center">
+            <span class="glyphicon glyphicon-arrow-right"></span>
+        </td>
+        {% for step, tool in workflow.detail %}
+            <td class="d-inline-block">
+                <div class="panel-group">
+                    <div class="panel {% if steps_current == step %}
+                                            panel-info{% else %} panel-default {% endif %}">
+                        <div class="panel-heading">{{ tool.toolflag_set.first|default_if_none:"" }}</div>
+                        <div class="panel-body">
+                            <a data-toggle="collapse"
+                               href="#collapse-{{ step }}-{{ workflow.slug }}"><span
+                                    class="glyphicon glyphicon-info-sign"></span></a> {{ tool.name }}
+                        </div>
+                        <div id="collapse-{{ step }}-{{ workflow.slug }}"
+                             class="panel-collapse collapse">
+                            <div class="panel-footer">
+                                {{ tool.description }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </td>
+            {% if not forloop.last %}
+                <td class="d-inline-block align-middle text-center">
+                    <span class="glyphicon glyphicon-arrow-right"></span>
+                </td>
+            {% endif %}
+        {% endfor %}
+    </tr>
+</table>

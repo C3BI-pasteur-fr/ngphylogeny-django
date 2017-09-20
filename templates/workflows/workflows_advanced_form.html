@@ -1,0 +1,25 @@
+{% extends "workflows/workflows_oneclick_choices.html" %}
+{% load crispy_forms_tags %}
+{% load static %}
+{% load i18n %}
+{% block nav-analysis %}class="active"{% endblock %}
+{% block stylesheet %}
+    <link href="https://gitcdn.github.io/bootstrap-toggle/2.2.2/css/bootstrap-toggle.min.css" rel="stylesheet">
+    <script src="https://gitcdn.github.io/bootstrap-toggle/2.2.2/js/bootstrap-toggle.min.js"></script>
+    <script src="{% static 'js/jquery.filer.min.js' %} "></script>
+    <link rel="stylesheet" href="{% static 'css/jquery.filer.css' %}"/>
+{% endblock %}
+{% block workflow-type %}Advanced Workflows{% endblock %}
+{% block workflow-name %}
+    <div class="row">
+        <div class="col-md-1"></div>
+        <div class="col-md-6"><h3><span class="glyphicon glyphicon-chevron-right"></span>{{ workflow_list.0.name }}</h3>
+        </div>
+    </div>{% endblock %}
+{% block workflow-sidebar %}
+    <div class="col-md-2"></div>{% endblock %}
+{% block workflow-form %}
+    <div class="col-md-7">
+        {% include "workflows/include/workflow_wizardform.html" %}
+    </div>
+{% endblock %}
