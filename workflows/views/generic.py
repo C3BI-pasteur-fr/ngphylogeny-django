@@ -1,9 +1,12 @@
 from django.core.urlresolvers import reverse_lazy
 from django.http import HttpResponseRedirect
 from django.shortcuts import redirect
+from django.utils.decorators import method_decorator
+from django.views.generic import DetailView, ListView
+from django.views.generic.edit import FormMixin
 from formtools.wizard.views import SessionWizardView
 
-from data.views import UploadView, ImportPastedContentView
+from data.views import UploadView, ImportPastedContentView, UploadMixin
 from galaxy.decorator import connection_galaxy
 from tools.forms import tool_form_factory
 from tools.views import tool_exec
@@ -11,25 +14,66 @@ from workflows.models import Workflow, WorkflowStepInformation
 from workspace.views import create_history
 
 
-class WorkflowFormView(UploadView, ImportPastedContentView):
+@method_decorator(connection_galaxy, name="dispatch")
+class WorkflowListView(ListView):
     """
-    Generic Workflow form view, upload one file and run workflow
+    Generic class-based view
     """
-    form_class = UploadView.form_class
-    form2_class = ImportPastedContentView.form_class
+    model = Workflow
+    context_object_name = "workflow_list"
+    template_name = 'workflows/workflows_list.html'
 
-    object = Workflow
-    template_name = 'workflows/workflows_form.html'
+    def get_queryset(self):
+
+        self.queryset = Workflow.objects.filter(galaxy_server__current=True).select_related()
+        gi = self.request.galaxy
+        for workflow in self.queryset:
+            workflow_json = gi.workflows.show_workflow(workflow_id=workflow.id_galaxy)
+
+            # parse galaxy workflows json information
+            workflow.detail = WorkflowStepInformation(workflow_json).sorted_tool_list
+
+        return self.queryset
 
     def get_context_data(self, **kwargs):
 
-        context = super(WorkflowFormView, self).get_context_data(**kwargs)
+        context = super(WorkflowListView, self).get_context_data(**kwargs)
+        context['form'] = UploadView.form_class()
+        context['textarea_form'] = ImportPastedContentView.form_class()
+
+        return context
+
+
+@method_decorator(connection_galaxy, name="dispatch")
+class WorkflowDetailView(DetailView):
+    """
+    """
+    model = Workflow
+    object = Workflow
+    template_name = 'workflows/workflows_form.html'
+
+    def get_object(self, queryset=None, detail=False):
+        """Get Workflow object"""
+        wk_obj = super(WorkflowDetailView, self).get_object()
+
+        # add more information load from Galaxy
+        if detail and wk_obj:
+            wk_obj.json = self.request.galaxy.workflows.show_workflow(workflow_id=wk_obj.id_galaxy)
+
+        return wk_obj
+
+    def get_workflow(self):
+        return self.get_object(detail=True)
+
+    def get_context_data(self, **kwargs):
+
+        context = super(WorkflowDetailView, self).get_context_data(**kwargs)
 
         # get workflows
-        wk = self.get_object()
+        wk = self.get_workflow()
 
-        if 'textarea_form' not in context:
-            context['textarea_form'] = self.form2_class()
+        context['form'] = UploadView.form_class()
+        context['textarea_form'] = ImportPastedContentView.form_class()
 
         if hasattr(wk, 'json'):
             # parse galaxy workflow json information
@@ -40,23 +84,27 @@ class WorkflowFormView(UploadView, ImportPastedContentView):
         context["workflow"] = wk
         return context
 
-    def get_workflow(self):
 
-        return self.get_object()
+class WorkflowFormView(WorkflowDetailView, UploadMixin, FormMixin):
+    """
+    Generic Workflow form view, upload one file and run workflow
+    """
+    form_class = UploadView.form_class
+    form2_class = ImportPastedContentView.form_class
+
 
     def post(self, request, *args, **kwargs):
-
         # determine which form is being submitted
         # uses the name of the form's submit button
         if request.FILES:
 
-            # get the primary form
+            # get the primary form (upload file)
             form_class = self.get_form_class()
             form_name = 'form'
 
         else:
 
-            # get the secondary form
+            # get the secondary form (textaera)
             form_class = self.form2_class
             form_name = 'form2'
 
@@ -119,7 +167,7 @@ class WorkflowFormView(UploadView, ImportPastedContentView):
 
 class WorkflowWizard(SessionWizardView):
     """"""
-    template_name = 'workflows/workflows_form.html'
+    template_name = 'workflows/workflows_wizard_form.html'
 
     def done(self, form_list, **kwargs):
         for form in form_list:

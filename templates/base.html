@@ -11,6 +11,7 @@
 
     <!-- Bootstrap Material Design -->
     <link rel="stylesheet" type="text/css" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+    <link rel="stylesheet" type="text/css" href="{% static 'css/bootstrap.css' %}"/>
     <link rel="stylesheet" type="text/css" href="{% static 'css/custom.css' %}"/>
 
     {% block stylesheet %} {% endblock %}
@@ -25,13 +26,24 @@
         </div>
     </div>
 </header>
-<nav class="navbar-default">
-    <div class="container">
+<nav class="navbar-default" style="padding-left: 7%">
+    <div id="topnavbar" class="container-fluid">
         <ul class="nav nav-tabs">
             <li {% block nav-home %}{% endblock %}><a href="{% url 'home' %}">
                 <span class="glyphicon glyphicon-home"></span> Home</a></li>
-            <li {% block nav-analysis %}{% endblock %}><a href="{% url 'analysis_list' %}">
-                <span class="glyphicon glyphicon-cog"></span> Phylogeny Analysis</a></li>
+            <li {% block nav-analysis %}{% endblock %}>
+                <a class="dropdown-toggle" data-toggle="dropdown" href="#">
+                    <span class="glyphicon glyphicon-cog"></span> Phylogeny Analysis
+                    <span class="caret"></span>
+                </a>
+                <ul class="dropdown-menu">
+                    <li><a href="{% url 'workflow_oneclick_list' %}">One click workflows</a></li>
+                    <li><a href="{% url 'workflows_advanced' %}">Advanced workflows</a></li>
+                    <li><a href="{% url 'workflows_alacarte' %}">Workflows maker</a></li>
+                </ul>
+
+            </li>
+                </li>
             <li {% block nav-tools %}{% endblock %}><a href="{% url 'tools' %}">
                 <span class="glyphicon glyphicon-briefcase"></span> Tools</a></li>
             <li {% block nav-workspace %}{% endblock %}>
@@ -90,12 +102,11 @@
 </nav>
 <br>
 <div class="container">
-    <div class="alert alert-warning" role="alert">
-        <span class="glyphicon glyphicon-warning-sign"> </span>
-        <b>WARNING</b> It's a BETA version
-    </div>
     {% block jumbotron %}{% endblock %}
     {% block content %} {% endblock %}
+</div>
+<div class="container-fluid" style="padding-left: 4%;">
+{% block xl-content %} {% endblock %}
 </div>
 <footer class="footer container-fluid">
     <div class="container">

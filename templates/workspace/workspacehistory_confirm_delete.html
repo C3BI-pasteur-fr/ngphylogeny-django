@@ -2,7 +2,7 @@
 
 {% block content %}
 <h2>Are you sure?</h2>
-<p class="lead">Are you sure you want to delete this analyse {{ object.history }} create on {{ object.created_date }}?
+<p class="lead">Are you sure you want to delete "{{ object.name }}" : {{ object.history }} create on {{ object.created_date }}?
 </p>
 <form method="post">{% csrf_token %}
     <div>

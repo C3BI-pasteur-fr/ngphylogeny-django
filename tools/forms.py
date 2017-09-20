@@ -4,6 +4,8 @@ from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Submit, Layout, Field, Div
 from django import forms
 
+from models import ToolFieldWhiteList
+
 
 def tool_form_factory(tool, galaxy_server):
     """
@@ -18,7 +20,9 @@ def tool_form_factory(tool, galaxy_server):
 
     return type(str(tool.name) + 'Form', (ToolForm,),
                 {'tool_params': tool_inputs_details.get('inputs'),
-                 'tool_id': tool.id_galaxy
+                 'tool_id': tool.id_galaxy,
+                 'fields_ids_mapping': {},
+                  'n' : 0,
                  }
                 )
 
@@ -50,8 +54,8 @@ def map_galaxy_tool_input(attr):
 
 class ToolForm(forms.Form):
     """"""
-
-    tool_params = None
+    tool_id = None
+    tool_params = []
     # map field id to galaxy params name
     fields_ids_mapping = {}
     n = 0
@@ -102,49 +106,66 @@ class ToolForm(forms.Form):
 
         return field_id
 
-    def parse_galaxy_input_tool(self, list_inputs, cond_name=''):
+    def parse_galaxy_input_tool(self, list_inputs, cond_name='', whitelist=list()):
 
         fields_created = []
 
         for input_tool in list_inputs:
-            cond_input = input_tool.get('test_param')
 
-            if cond_input:
-                cond_name = input_tool.get('name') + '|'
+            if input_tool.get('name') in whitelist or not whitelist:
 
-                conditional_field = self.create_field(cond_input)
-                self.fields_ids_mapping[conditional_field] = cond_name + cond_input['name']
+                cond_input = input_tool.get('test_param')
+                if cond_input:
 
-                nested_field = []
-                cases = input_tool.get('cases', '')
-                for case in cases:
-                    case_inputs = case.get('inputs')
-                    if case_inputs:
-                        case_value = case.get('value')
-                        nested_field.append(Div(data_test=conditional_field, data_case=case_value, css_class="well",
-                                                *self.parse_galaxy_input_tool(case_inputs, cond_name)))
+                    cond_name = input_tool.get('name') + '|'
+                    conditional_field = self.create_field(cond_input)
+                    self.fields_ids_mapping[conditional_field] = cond_name + cond_input['name']
 
-                fields_created.append(Div(conditional_field, *nested_field))
-                cond_name = ''
+                    nested_field = []
+                    cases = input_tool.get('cases', '')
+                    for case in cases:
+                        case_inputs = case.get('inputs')
+                        if case_inputs:
+                            case_value = case.get('value')
+                            nested_field.append(Div(data_test=conditional_field, data_case=case_value, css_class="well",
+                                                    *self.parse_galaxy_input_tool(case_inputs, cond_name)))
 
-            else:
-                new_field = self.create_field(input_tool)
-                fields_created.append(Field(new_field))
-                self.fields_ids_mapping[new_field] = cond_name + input_tool['name']
+                    fields_created.append(Div(conditional_field, *nested_field))
+                    cond_name = ''
+
+                else:
+                    new_field = self.create_field(input_tool)
+                    fields_created.append(Field(new_field))
+                    self.fields_ids_mapping[new_field] = cond_name + input_tool['name']
 
         return fields_created
 
-    def __init__(self, tool_params, tool_id, *args, **kwargs):
+    def __init__(self, tool_params=None, tool_id=None, whitelist=None, *args, **kwargs):
         super(ToolForm, self).__init__(*args, **kwargs)
 
-        self.tool_params = tool_params
+        self.tool_params = tool_params or self.tool_params
         self.tool_id = tool_id
         self.input_file_ids = []
         self.helper = FormHelper(self)
         self.helper.form_class = 'blueForms'
         self.helper.form_tag = False
-        self.formset = self.parse_galaxy_input_tool(self.tool_params)
+
+        visible_field = whitelist or []
+        self.formset = self.parse_galaxy_input_tool(self.tool_params, whitelist=visible_field)
         self.helper.layout = Layout(FormActions(Field(*self.formset),
                                                 Submit('submit', 'Submit', css_class="pull-right"),
                                                 )
                                     )
+
+
+class ToolFieldWhiteListForm(forms.ModelForm):
+
+    _params = forms.MultipleChoiceField(label='Params')
+
+    model = ToolFieldWhiteList
+    fields = ['tool', 'context', '_params',]
+
+    def clean(self):
+        cleaned_data = super(ToolFieldWhiteListForm, self).clean()
+        cleaned_data['_params'] = ",".join(self.cleaned_data.get('_params'))
+        return cleaned_data

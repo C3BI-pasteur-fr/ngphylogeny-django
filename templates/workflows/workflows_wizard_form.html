@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 {% load crispy_forms_tags %}
 {% load static %}
-
 {% load i18n %}
 {% block nav-home %}class="active"{% endblock %}
 {% block stylesheet %}
@@ -95,19 +94,11 @@
 
 {% endblock %}
 {% block content %}
-
-    <div class="row">
-        <div class="col-md-2"></div>
-        <div class="col-md-4 text-center">
-            <h3>{{ tool.name }}</h3>
-        </div>
-    </div>
     <div class="row">
         <div class="col-md-2"></div>
         <div class="col-md-6">
-                <p>Step {{ wizard.steps.step1 }} of {{ wizard.steps.count }}</p>
+                <p>Step {{ wizard.steps.current }} of {{ wizard.steps.count }}</p>
                 <form action="" method="post">
-
                         {{ wizard.management_form }}
                         {% if wizard.form.forms %}
                             {{ wizard.form.management_form }}
@@ -126,7 +117,6 @@
                     {% endif %}
 
                 </form>
-
         </div>
     </div>
 {% endblock %}

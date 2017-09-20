@@ -34,9 +34,10 @@ def tool_exec_view(request, pk, store_output=None):
     message = ""
 
     tool_obj = get_object_or_404(Tool, pk=pk)
+
+    tool_visiblefield = []#tool_obj.toolfieldwhitelist_set.filter(context='t').first().saved_params
     tool_inputs_details = gi.tools.show_tool(tool_id=tool_obj.id_galaxy, io_details='true')
-    print tool_inputs_details
-    tool_form = ToolForm(tool_params=tool_inputs_details['inputs'], tool_id=pk, data=request.POST or None)
+    tool_form = ToolForm(tool_params=tool_inputs_details['inputs'], tool_id=pk, whitelist=tool_visiblefield, data=request.POST or None)
 
     if request.method == 'POST':
 
@@ -113,7 +114,7 @@ def tool_exec(request, tool_form, store_output=None):
             tool_inputs = inputs()
             for key, value in request.POST.items():
                 # set the Galaxy parameter ( name, value)
-                tool_inputs.set_param(tool_form.fieds_ids_mapping.get(key), value)
+                tool_inputs.set_param(tool_form.fields_ids_mapping.get(key), value)
 
             if request.FILES:
                 for input_file_id in request.FILES:

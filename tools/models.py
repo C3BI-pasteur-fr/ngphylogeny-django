@@ -44,6 +44,14 @@ class Tool(models.Model):
                             "Please ensure that the Galaxy server is correctly set up")
         return cls.import_tools(galaxy_server, query)
 
+    @property
+    def get_params_detail(self):
+
+        tool_url = '%s/%s/%s/%s' % ( self.galaxy_server.url,'api', 'tools', self.id_galaxy)
+        tool_info_request = requests.get(tool_url, params={'io_details': "true"})
+        return tool_info_request.json().get('inputs')
+
+
     @classmethod
     def import_tools(cls, galaxy_server, query="phylogeny"):
 
@@ -62,7 +70,7 @@ class Tool(models.Model):
 
                 t, created = Tool.objects.get_or_create(id_galaxy=id_tool, galaxy_server=galaxy_server)
 
-                if created:
+                if True:
                     tools_created.append(t)
 
                     # save tool informations
@@ -79,6 +87,7 @@ class Tool(models.Model):
 
                     # save inputs
                     inputs_tools = tool_info.get('inputs')
+                    inputs_list = []
                     for input_d in inputs_tools:
 
                         if input_d.get('type') == 'data':
@@ -94,6 +103,11 @@ class Tool(models.Model):
                                                       tool=t
                                                       )
                             input_obj.save()
+
+                        inputs_list.append(input_d.get('name'))
+
+                    w = ToolFieldWhiteList(tool_id=t.id, context='t', _params=",".join(inputs_list))
+                    w.save()
 
                     # save outputs
                     outputs_tools = tool_info.get('outputs')
@@ -185,7 +199,7 @@ class ToolOutputData(ToolData):
     compatible_inputs = models.ManyToManyField(ToolInputData, blank=True)
 
     def search_compatible_inputs(self):
-        return ToolInputData.objects(extensions__contains=self.extension)
+        return ToolInputData.objects.filter(extensions__contains=self.extension)
 
     def __unicode__(self):
         return "%s %s" % (self.tool, self.extension)
@@ -209,3 +223,44 @@ class ToolFlag(models.Model):
 
     class Meta:
         ordering = ["rank", ]
+
+
+class ToolFieldWhiteList(models.Model):
+    """
+    Models use to filter Galaxy render form
+    """
+    CONTEXT_CHOICES = (('w', 'Workflows'),
+               ('aw', 'Advanced Workflows'),
+               ('t', 'Tool Forms'),
+               ('at', 'Advanced Tool Forms'),
+               )
+
+    DICT_CONTEXT_CHOICES = dict(CONTEXT_CHOICES)
+
+    tool = models.ForeignKey(Tool, on_delete=models.CASCADE)
+    context = models.CharField(max_length=2, choices=CONTEXT_CHOICES, help_text='In which context use the whitelist')
+    _params = models.TextField(max_length=1000, blank=True)
+
+
+    @property
+    def saved_params(self):
+        return self._params.split(',')
+
+    @property
+    def get_params(self):
+        l = []
+        for p in self.tool.get_params_detail:
+            l.append(p.get('name'))
+            cond = p.get('test_param')
+            if cond:
+                l.append(cond.get('name'))
+
+        return l
+
+    @property
+    def get_json_params(self):
+        return self.tool.get_params_detail
+
+    def __unicode__(self):
+        return "%s ,%s" %(self.tool.name, self.DICT_CONTEXT_CHOICES.get(self.context))
+

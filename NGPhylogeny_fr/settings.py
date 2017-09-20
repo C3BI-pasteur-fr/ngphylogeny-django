@@ -27,6 +27,7 @@ SECRET_KEY = '_m(y$t1ukdw&!z-e_)ig5h!=*#y*3db3vh81il_i=n*y24ih9k'
 DEBUG = True
 
 ALLOWED_HOSTS = ["127.0.0.1",]
+INTERNAL_IPS = ["127.0.0.1",]
 
 CRISPY_TEMPLATE_PACK = "bootstrap4"
 

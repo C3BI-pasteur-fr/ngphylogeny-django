@@ -1,12 +1,32 @@
 from __future__ import absolute_import
 
-from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
-from django.views.generic import ListView
 
 from galaxy.decorator import connection_galaxy
 from workflows.models import Workflow, WorkflowStepInformation
-from workflows.views.generic import WorkflowFormView
+from workflows.views.generic import WorkflowFormView, WorkflowListView
+
+
+@method_decorator(connection_galaxy, name="dispatch")
+class WorkflowOneClickListView(WorkflowListView ):
+    """
+    Generic class-based view
+    """
+    model = Workflow
+    context_object_name = "workflow_list"
+    template_name = 'workflows/workflows_oneclick_choices.html'
+
+    def get_queryset(self):
+        self.queryset = Workflow.objects.filter(galaxy_server__current=True).select_related()
+        gi = self.request.galaxy
+        for workflow in self.queryset:
+            workflow_json = gi.workflows.show_workflow(workflow_id=workflow.id_galaxy)
+
+            # parse galaxy workflows json information
+            workflow.detail = WorkflowStepInformation(workflow_json).sorted_tool_list
+
+        return self.queryset
+
 
 
 @method_decorator(connection_galaxy, name="dispatch")
@@ -19,8 +39,7 @@ class WorkflowOneClickView(WorkflowFormView):
     def get_workflow(self):
         """create a work copy of workflow in user space, import workflow oneclick shared"""
         gi = self.request.galaxy
-
-        wk = self.get_object()
+        wk = self.get_object(detail=True)
         # import published shared workflow
         wf_import = gi.workflows.import_shared_workflow(wk.id_galaxy)
 
@@ -29,12 +48,6 @@ class WorkflowOneClickView(WorkflowFormView):
         wk.id_galaxy = wf_import.get('id')
 
         return wk
-
-    def get_object(self,queryset=None):
-
-        wk_obj = get_object_or_404(Workflow, slug=self.kwargs['slug'])
-        wk_obj.json = self.request.galaxy.workflows.show_workflow(workflow_id=wk_obj.id_galaxy)
-        return wk_obj
 
 
 
@@ -49,23 +62,3 @@ class WorkflowStartedView(WorkflowOneClickView):
         return wk_obj
 
 
-@method_decorator(connection_galaxy, name="dispatch")
-class WorkflowOneClickListView( WorkflowStartedView, ListView):
-    """
-    Generic class-based view
-    """
-    model = Workflow
-    context_object_name = "workflow_list"
-    template_name = 'workflows/workflows_oneclick_choices.html'
-
-    def get_queryset(self):
-
-        self.queryset = Workflow.objects.filter(galaxy_server__current=True).select_related()
-        gi = self.request.galaxy
-        for workflow in self.queryset:
-            workflow_json = gi.workflows.show_workflow(workflow_id=workflow.id_galaxy)
-
-            # parse galaxy workflows json information
-            workflow.detail = WorkflowStepInformation(workflow_json).sorted_tool_list
-
-        return self.queryset

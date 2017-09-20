@@ -18,7 +18,12 @@ def connection_galaxy(view_function):
         try:
             if hasattr(request, 'galaxy_server'):
                 galaxy_server = request.galaxy_server
+
+            elif request.session.get('galaxy_server'):
+                galaxy_server = Server.objects.get(id=request.session.get('galaxy_server'))
+
             else:
+                #by default use the current Galaxy server
                 galaxy_server = Server.objects.get(current=True)
 
         except Server.DoesNotExist :
@@ -32,6 +37,7 @@ def connection_galaxy(view_function):
             raise HttpResponseGone()
 
         request.galaxy_server = galaxy_server
+        request.session['galaxy_server'] = galaxy_server.id
 
         if request.user.is_authenticated():
             """Try to use related Galaxy user information"""

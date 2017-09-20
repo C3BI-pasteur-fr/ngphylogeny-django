@@ -7,25 +7,31 @@ from django.http import StreamingHttpResponse
 from django.shortcuts import render, redirect
 from django.urls import reverse_lazy
 from django.utils.decorators import method_decorator
-from django.views.generic import FormView
+from django.views.generic.edit import FormView, FormMixin
 
 from forms import UploadForm, PastedContentForm
 from galaxy.decorator import connection_galaxy
 from workspace.views import get_or_create_history
 
 
-@method_decorator(connection_galaxy, name="dispatch")
-class UploadView(FormView):
-    """
-       Upload file into Galaxy Server
-    """
+class UploadMixin(FormMixin):
 
-    template_name = 'upload_form.html'
-    form_class = UploadForm
-    success_url = reverse_lazy("home")
+    def upload_content(self, content, history_id=None):
+        """
+            send content into galaxy history: return galaxy response
+        """
+        if history_id:
+            self.history_id = history_id
+        else:
+            self.history_id = get_or_create_history(self.request)
+
+        return self.request.galaxy.tools.paste_content(content=content, file_name="pasted_data",
+                                                       history_id=self.history_id)
+
 
     def upload_file(self, file, history_id=None):
-        """upload file into galaxy history: return galaxy response
+        """
+            upload file into galaxy history: return galaxy response
         """
 
         tmpfile = tempfile.NamedTemporaryFile()
@@ -41,6 +47,17 @@ class UploadView(FormView):
         return self.request.galaxy.tools.upload_file(path=tmpfile.name,file_name=file.name, history_id=self.history_id)
 
 
+
+@method_decorator(connection_galaxy, name="dispatch")
+class UploadView(FormView, UploadMixin ):
+    """
+       Upload file into Galaxy Server
+    """
+
+    template_name = 'upload_form.html'
+    form_class = UploadForm
+    success_url = reverse_lazy("home")
+
     def form_valid(self, form):
 
         myfile = form.cleaned_data['file']
@@ -51,25 +68,13 @@ class UploadView(FormView):
 
 
 @method_decorator(connection_galaxy, name="dispatch")
-class ImportPastedContentView(FormView):
+class ImportPastedContentView(FormView, UploadMixin):
     """
        Import user pasted content into Galaxy Server
     """
 
     form_class = PastedContentForm
     success_url = reverse_lazy("home")
-
-    def upload_content(self, content, history_id=None):
-        """
-            send content into galaxy history: return galaxy response
-        """
-        if history_id:
-            self.history_id = history_id
-        else:
-            self.history_id = get_or_create_history(self.request)
-
-        return self.request.galaxy.tools.paste_content(content=content, file_name="pasted_data", history_id=self.history_id)
-
 
     def form_valid(self, form):
 
@@ -78,7 +83,6 @@ class ImportPastedContentView(FormView):
         self.success_url = reverse_lazy("history_detail", kwargs={'history_id': self.history_id}, )
 
         return super(ImportPastedContentView, self).form_valid()
-
 
 
 

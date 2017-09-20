@@ -4,7 +4,8 @@ from django.http import HttpResponse
 from django.urls import reverse_lazy
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
-from django.views.generic import TemplateView, RedirectView, ListView, DeleteView
+from django.views.generic import RedirectView, ListView, DeleteView, UpdateView, DetailView
+from django.views.generic.edit import SingleObjectMixin
 
 from galaxy.decorator import connection_galaxy
 from models import WorkspaceHistory
@@ -60,13 +61,35 @@ def get_or_create_history(request):
     return history_id
 
 
+class WorkspaceHistoryObjectMixin(SingleObjectMixin):
+
+    model = WorkspaceHistory
+    pk_url_kwarg = 'history_id'
+
+    def get_object(self, queryset=None):
+        if queryset is None:
+            queryset = self.get_queryset()
+
+        server = self.request.galaxy_server
+        hist_id = self.kwargs.get(self.pk_url_kwarg)
+
+        if not hist_id:
+            hist_id = self.request.session["last_history"]
+
+        return queryset.get(history=hist_id,
+                            galaxy_server=server)
+
+
+
+
 @method_decorator(ensure_csrf_cookie, name="dispatch")
 @method_decorator(connection_galaxy, name="dispatch")
-class HistoryDetailView(TemplateView):
+class HistoryDetailView(WorkspaceHistoryObjectMixin, DetailView):
     """
         Display Galaxy like history information
     """
     template_name = 'workspace/history.html'
+
 
     def get_context_data(self, **kwargs):
         # Call the base implementation first to get a context
@@ -140,23 +163,21 @@ class PreviousHistoryListView(ListView):
 
 
 @method_decorator(connection_galaxy, name="dispatch")
-class WorkspaceDeleteView(DeleteView):
+class WorkspaceDeleteView(WorkspaceHistoryObjectMixin, DeleteView):
     """
     Delete Workspace and history
     """
-    model = WorkspaceHistory
     success_url = reverse_lazy('previous_analyses')
-    pk_url_kwarg = 'history_id'
-
-    def get_object(self, queryset=None):
-
-        if queryset is None:
-            queryset = self.get_queryset()
-
-        server = self.request.galaxy_server
-        hist_id = self.kwargs.get(self.pk_url_kwarg)
-
-        return queryset.get(history=hist_id,
-                            galaxy_server=server)
 
 
+
+@method_decorator(connection_galaxy, name="dispatch")
+class WorkspaceRenameView(HistoryDetailView, UpdateView):
+    """
+    Rename Workspace
+    """
+    fields = ['name']
+    template_name = 'workspace/history.html'
+
+    def get_success_url(self):
+        return reverse_lazy('history_detail', args=(self.get_object().history, ))
