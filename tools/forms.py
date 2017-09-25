@@ -17,10 +17,12 @@ def tool_form_factory(tool, galaxy_server):
     tool_url = '%s/%s/%s/%s/' % (galaxy_server.url, 'api', 'tools', tool.id_galaxy)
     tool_info_request = requests.get(tool_url, params={'io_details': "true"})
     tool_inputs_details = tool_info_request.json()
+    tool_field_witeList = ToolFieldWhiteList.objects.get(tool=tool, context="w")
 
     return type(str(tool.name) + 'Form', (ToolForm,),
                 {'tool_params': tool_inputs_details.get('inputs'),
                  'tool_id': tool.id_galaxy,
+                 'visible_field': tool_field_witeList.saved_params,
                  'fields_ids_mapping': {},
                   'n' : 0,
                  }
@@ -58,6 +60,7 @@ class ToolForm(forms.Form):
     tool_params = []
     # map field id to galaxy params name
     fields_ids_mapping = {}
+    visible_field = []
     n = 0
 
     def create_field(self, attrfield):
@@ -144,14 +147,14 @@ class ToolForm(forms.Form):
         super(ToolForm, self).__init__(*args, **kwargs)
 
         self.tool_params = tool_params or self.tool_params
+        self.visible_field = whitelist or self.visible_field
         self.tool_id = tool_id
         self.input_file_ids = []
         self.helper = FormHelper(self)
         self.helper.form_class = 'blueForms'
         self.helper.form_tag = False
 
-        visible_field = whitelist or []
-        self.formset = self.parse_galaxy_input_tool(self.tool_params, whitelist=visible_field)
+        self.formset = self.parse_galaxy_input_tool(self.tool_params, whitelist=self.visible_field)
         self.helper.layout = Layout(FormActions(Field(*self.formset),
                                                 Submit('submit', 'Submit', css_class="pull-right"),
                                                 )

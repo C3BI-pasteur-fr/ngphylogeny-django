@@ -1,60 +1,25 @@
 from django.core.urlresolvers import reverse_lazy
 from django.http import HttpResponseRedirect
-from django.shortcuts import redirect
 from django.utils.decorators import method_decorator
 from django.views.generic import DetailView, ListView
-from django.views.generic.edit import FormMixin
-from formtools.wizard.views import SessionWizardView
+from django.views.generic.edit import SingleObjectMixin
 
-from data.views import UploadView, ImportPastedContentView, UploadMixin
+from data.views import UploadView, ImportPastedContentView
 from galaxy.decorator import connection_galaxy
-from tools.forms import tool_form_factory
-from tools.views import tool_exec
 from workflows.models import Workflow, WorkflowStepInformation
 from workspace.views import create_history
 
 
-@method_decorator(connection_galaxy, name="dispatch")
-class WorkflowListView(ListView):
-    """
-    Generic class-based view
-    """
-    model = Workflow
-    context_object_name = "workflow_list"
-    template_name = 'workflows/workflows_list.html'
-
-    def get_queryset(self):
-
-        self.queryset = Workflow.objects.filter(galaxy_server__current=True).select_related()
-        gi = self.request.galaxy
-        for workflow in self.queryset:
-            workflow_json = gi.workflows.show_workflow(workflow_id=workflow.id_galaxy)
-
-            # parse galaxy workflows json information
-            workflow.detail = WorkflowStepInformation(workflow_json).sorted_tool_list
-
-        return self.queryset
-
-    def get_context_data(self, **kwargs):
-
-        context = super(WorkflowListView, self).get_context_data(**kwargs)
-        context['form'] = UploadView.form_class()
-        context['textarea_form'] = ImportPastedContentView.form_class()
-
-        return context
-
-
-@method_decorator(connection_galaxy, name="dispatch")
-class WorkflowDetailView(DetailView):
+class WorkflowMixin(SingleObjectMixin):
     """
     """
     model = Workflow
     object = Workflow
     template_name = 'workflows/workflows_form.html'
 
-    def get_object(self, queryset=None, detail=False):
+    def get_object(self, queryset=None, detail=True):
         """Get Workflow object"""
-        wk_obj = super(WorkflowDetailView, self).get_object()
+        wk_obj = super(WorkflowMixin, self).get_object()
 
         # add more information load from Galaxy
         if detail and wk_obj:
@@ -65,9 +30,28 @@ class WorkflowDetailView(DetailView):
     def get_workflow(self):
         return self.get_object(detail=True)
 
+
+@method_decorator(connection_galaxy, name="dispatch")
+class WorkflowDetailView(DetailView, WorkflowMixin):
+    """
+        Workflow Detail View
+    """
+
+
+@method_decorator(connection_galaxy, name="dispatch")
+class WorkflowFormView(UploadView, ImportPastedContentView, WorkflowMixin):
+    """
+    Generic Workflow form view, upload one file and run workflow
+    """
+
+    form_class = UploadView.form_class
+    form2_class = ImportPastedContentView.form_class
+    template_name = 'workflows/workflows_form.html'
+    restrict_toolset = None
+
     def get_context_data(self, **kwargs):
 
-        context = super(WorkflowDetailView, self).get_context_data(**kwargs)
+        context = super(WorkflowFormView, self).get_context_data(**kwargs)
 
         # get workflows
         wk = self.get_workflow()
@@ -77,20 +61,14 @@ class WorkflowDetailView(DetailView):
 
         if hasattr(wk, 'json'):
             # parse galaxy workflow json information
-            wk_galaxy = WorkflowStepInformation(wk.json)
+
             context["inputs"] = wk.json['inputs'].keys()
-            context["steps"] = wk_galaxy.steps_tooldict
+
+            # add workfow galaxy information
+            context["steps"] = WorkflowStepInformation(wk.json, tools=self.restrict_toolset).steps_tooldict
 
         context["workflow"] = wk
         return context
-
-
-class WorkflowFormView(WorkflowDetailView, UploadMixin, FormMixin):
-    """
-    Generic Workflow form view, upload one file and run workflow
-    """
-    form_class = UploadView.form_class
-    form2_class = ImportPastedContentView.form_class
 
 
     def post(self, request, *args, **kwargs):
@@ -165,52 +143,24 @@ class WorkflowFormView(WorkflowDetailView, UploadMixin, FormMixin):
         return HttpResponseRedirect(self.get_success_url())
 
 
-class WorkflowWizard(SessionWizardView):
-    """"""
-    template_name = 'workflows/workflows_wizard_form.html'
-
-    def done(self, form_list, **kwargs):
-        for form in form_list:
-            # launch tools one by one
-            output = tool_exec(self.request, form)
-            print output
-
-        return redirect(reverse_lazy("history_detail", kwargs={'history_id': output}))
-
-
-def form_class_list(galaxy_server, tools):
+@method_decorator(connection_galaxy, name="dispatch")
+class WorkflowListView(ListView):
     """
-    Create ToolForm classes on the fly to be used by WizardForm
-    :param gi:
-    :param tools:
-    :return: list af Class form
+    Generic class-based view
     """
-    tools_inputs_details = []
-    for tool in tools:
-        tools_inputs_details.append(tool_form_factory(tool, galaxy_server=galaxy_server))
-    return tools_inputs_details
+    model = Workflow
+    context_object_name = "workflow_list"
+    template_name = 'workflows/workflows_list.html'
+    restrict_toolset = None
 
+    def get_queryset(self):
+        self.queryset = Workflow.objects.filter(galaxy_server__current=True).select_related()
 
-@connection_galaxy
-def workflow_form(request, slug_workflow):
-    """
-    :param request:
-    :param slug_workflow:
-    :return:
-    """
-    gi = request.galaxy
-    workflow = Workflow.objects.get(slug=slug_workflow)
-    workflow_json = gi.workflows.show_workflow(workflow_id=workflow.id_galaxy)
-    tools = [t[1] for t in WorkflowStepInformation(workflow_json).sorted_tool_list]
+        gi = self.request.galaxy
+        for workflow in self.queryset:
+            workflow_json = gi.workflows.show_workflow(workflow_id=workflow.id_galaxy)
 
-    # parse galaxy workflows json information
-    # todo use get_form
-    form_list = form_class_list(request.galaxy_server, tools)
-    selected_tools = request.session.get('selected_tools')
+            # add galaxy workflows json information
+            workflow.detail = WorkflowStepInformation(workflow_json, tools=self.restrict_toolset).sorted_tool_list
 
-    if selected_tools:
-        form_list = form_class_list(request.galaxy_server, selected_tools)
-
-    ClassWizardView = type(str(slug_workflow) + "Wizard", (WorkflowWizard,), {'form_list': form_list})
-
-    return ClassWizardView.as_view()(request)
+        return self.queryset

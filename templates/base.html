@@ -11,13 +11,17 @@
 
     <!-- Bootstrap Material Design -->
     <link rel="stylesheet" type="text/css" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
-    <link rel="stylesheet" type="text/css" href="{% static 'css/bootstrap.css' %}"/>
     <link rel="stylesheet" type="text/css" href="{% static 'css/custom.css' %}"/>
 
     {% block stylesheet %} {% endblock %}
     {% block javascripts %} {% endblock %}
 </head>
 <body>
+<div class="alert alert-warning" role="alert">
+    <span class="glyphicon glyphicon-warning-sign"> </span>
+    <b>WARNING</b> This BETA version may be unstable, Please to contribute by submitting your bug report at <a
+        href="{% url 'feedback' %}">Contact</a>
+</div>
 <header class="jumbotron">
     <div class="container text-center">
         <div class="title-bg">
@@ -43,7 +47,6 @@
                 </ul>
 
             </li>
-                </li>
             <li {% block nav-tools %}{% endblock %}><a href="{% url 'tools' %}">
                 <span class="glyphicon glyphicon-briefcase"></span> Tools</a></li>
             <li {% block nav-workspace %}{% endblock %}>

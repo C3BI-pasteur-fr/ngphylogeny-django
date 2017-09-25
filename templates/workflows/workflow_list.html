@@ -10,8 +10,8 @@
                 $(this).addClass("active");
                 $('.miniworkflow').hide();
                 $($(this).find('a').attr('id')).show();
-                $('form').attr('action', $(this).find('a').attr('id').replace("#", window.location.href+'/' ));
-                $('#more_info').attr('href', $(this).find('a').attr('id').replace("#", ''))
+                $('form').attr('action', $(this).find('a').attr('id').replace("#", ""));
+                $('#more_info').attr('href', $(this).find('a').attr('id').replace("#", ""));
             });
         });
     </script>
@@ -47,7 +47,7 @@
                             {% include "workflows/include/workflow_overview.html" %}
                         {% endfor %}
                     {% endwith %}
-                    <a id='more_info' href=" window.location.href+'/'{{ workflow_list.0.slug }}"><span
+                    <a id='more_info' href="{{ workflow_list.0.slug }}"> <span
                             class="glyphicon glyphicon-question-sign"></span> See more detail
                     </a>
                     <br>

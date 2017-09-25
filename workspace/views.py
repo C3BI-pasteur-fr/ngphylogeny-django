@@ -154,7 +154,8 @@ class PreviousHistoryListView(ListView):
 
     def get_queryset(self):
         gi = self.request.galaxy
-        self.queryset = WorkspaceHistory.objects.filter(history__in=self.request.session.get('histories', []))
+        self.queryset = WorkspaceHistory.objects.filter(history__in=self.request.session.get('histories', [])
+                                                        ).order_by("created_date")
 
         #update session history
         self.request.session['histories'] = list(self.queryset.values_list('history', flat=True))

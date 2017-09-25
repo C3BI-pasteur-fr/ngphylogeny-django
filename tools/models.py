@@ -105,8 +105,12 @@ class Tool(models.Model):
                             input_obj.save()
 
                         inputs_list.append(input_d.get('name'))
+                    try:
+                        inputs_list.remove('input')
+                    except:
+                        pass
 
-                    w = ToolFieldWhiteList(tool_id=t.id, context='t', _params=",".join(inputs_list))
+                    w = ToolFieldWhiteList(tool_id=t.id, context='w', _params=",".join(inputs_list))
                     w.save()
 
                     # save outputs

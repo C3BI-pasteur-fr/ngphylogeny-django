@@ -7,13 +7,15 @@ from django import forms
 
 
 class UploadForm(forms.Form):
-    file = forms.FileField(widget=forms.FileInput(attrs={'multiple': 'true'}))
-    helper = FormHelper()
-    helper.form_method = 'POST'
-    helper.layout = Layout('file',
-                           FormActions(
-                               Submit('submit', 'Submit')))
+    input_file = forms.FileField(widget=forms.FileInput(attrs={'multiple': 'true'}))
 
+    def __init__(self, *args, **kwargs):
+        super(UploadForm, self).__init__(*args, **kwargs)
+        self.helper = FormHelper(self)
+        self.helper.form_method = 'POST'
+        self.helper.layout = Layout('input_file',
+                                    FormActions(
+                                        Submit('submit', 'Submit')))
 
     class Media:
 
@@ -21,6 +23,7 @@ class UploadForm(forms.Form):
         css= {
                 'all':("css/jquery.filer.css",)
               }
+
 
 class PastedContentForm(forms.Form):
     pasted_text = forms.CharField(widget=forms.Textarea)

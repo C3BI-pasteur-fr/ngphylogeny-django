@@ -38,10 +38,31 @@ class WorkflowStepInformation(object):
         :sorted_tool_list: list of tuple, [(step_id, queryset.tool)..]
     """
 
-    def __init__(self, workflow_json):
+    tool_queryset = Tool.objects.filter()
+
+    def get_tools(self):
+        # get known tools
+        return self.tool_queryset.filter(id_galaxy__in=self.toolset).prefetch_related('toolflag_set')
+
+    def update_dict_tools(self):
+        # remove unknown tools
+        for nbstep, step in self.steps_tooldict.items():
+
+            for tool in self.get_tools():
+                if step.get('tool_idgalaxy') == tool.id_galaxy:
+                    step['tool'] = tool
+                    break
+            else:
+                del self.steps_tooldict[nbstep]
+
+    def __init__(self, workflow_json, tools=None):
         """
         :param workflow_json: Galaxy workflow json
+        :param tools <queryset>: limits the list of available tools
         """
+        if isinstance(tools, type(self.tool_queryset)):
+            self.tool_queryset = tools
+
         self.workflow_json = workflow_json
         self.steps_tooldict = {}
         self.sorted_tool_list = []
@@ -51,21 +72,14 @@ class WorkflowStepInformation(object):
         for step_id, step in self.workflow_json.get('steps').items():
             if step.get('tool_id'):
                 self.toolset.update([step.get('tool_id')])
-                self.steps_tooldict[step_id] = {'tool_idgalaxy': step.get('tool_id'),
+                self.steps_tooldict[step_id] = {'tool': None,
+                                                'tool_idgalaxy': step.get('tool_id'),
                                                 'annotation': step.get('annotation'),
                                                 'params': step.get('tool_inputs')
                                                 }
-        # get known tools
-        queryset = Tool.objects.filter(id_galaxy__in=self.toolset).prefetch_related('toolflag_set')
 
-        # remove unknown tools
-        for nbstep, step in self.steps_tooldict.items():
-            for tool in queryset:
-                if step.get('tool_idgalaxy') == tool.id_galaxy:
-                    step['tool'] = tool
-                    break
-            else:
-                del self.steps_tooldict[nbstep]
+        # update dict with known tool and remove steps with unknown tools
+        self.update_dict_tools()
 
         # sort steps
         ord_step = collections.OrderedDict.fromkeys(sorted(self.steps_tooldict.keys()))

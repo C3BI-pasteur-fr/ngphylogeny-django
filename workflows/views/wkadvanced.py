@@ -5,10 +5,12 @@ from django.utils.decorators import method_decorator
 from django.utils.text import slugify
 from formtools.wizard.views import SessionWizardView
 
+from data.views import UploadView
 from galaxy.decorator import connection_galaxy
 from tools.forms import tool_form_factory
+from tools.models import Tool
 from workflows.models import Workflow, WorkflowStepInformation
-from workflows.views.generic import WorkflowDetailView
+from workflows.views.generic import WorkflowDetailView, WorkflowMixin
 from workflows.views.oneclick import WorkflowOneClickListView
 from workspace.views import create_history
 
@@ -25,49 +27,54 @@ def form_class_list(galaxy_server, tools):
         tool_form_class.append(tool_form_factory(tool, galaxy_server=galaxy_server))
     return tool_form_class
 
-class WorkflowsAdvancedList(WorkflowOneClickListView):
 
-    template_name = 'workflows/workflows_advanced_list.html'
+from django.core.files.storage import FileSystemStorage
 
-class WorkflowWizard(SessionWizardView):
-    """"""
+
+class WorkflowWizard(SessionWizardView, WorkflowMixin):
+    """
+
+    """
     template_name = 'workflows/workflows_advanced_form.html'
-
+    file_storage = FileSystemStorage('/tmp')
 
     def done(self, form_list, **kwargs):
 
         history_id = create_history(self.request)
-
         params = {}
-        for idx, tool_form in enumerate(form_list):
-            params[str(idx)] =  inputs()
-
-            for key, value in tool_form.cleaned_data.items():
-                # set the Galaxy parameter ( name, value)
-                params[str(idx)].set_param(tool_form.fields_ids_mapping.get(key), value)
-
 
         workflow = self.get_object(detail=True)
-
         i_input = workflow.json['inputs'].keys()[0]
         # input file
         dataset_map = dict()
-        dataset_map[i_input] = {'id': "file_id", 'src': 'hda'}
-        print dataset_map
 
+        for idx, tool_form in enumerate(form_list):
+            params[str(idx)] = inputs()
+
+            for key, form in tool_form.cleaned_data.items():
+                if "file" in key:
+
+                    output = self.request.galaxy.tools.upload_file(path=str(form.file), file_name=str(form.name),
+                                                                   history_id=history_id)
+                    galaxy_file = output.get('outputs')[0]
+                    self.file_storage.delete(form)
+                    dataset_map[i_input] = {'id': galaxy_file.get('id'), 'src': 'hda'}
+
+                else:
+                    # set the Galaxy parameter ( name, value)
+                    params[str(idx)].set_param(tool_form.fields_ids_mapping.get(key), form)
+            params[str(idx)] = params[str(idx)].to_dict()
+
+        print dataset_map
 
         # run workflow
         self.request.galaxy.workflows.run_workflow(workflow_id=workflow.id_galaxy,
-                                         history_id=history_id,
-                                         dataset_map=dataset_map,
-                                         # inputs=dataset_map
-                                         params=params)
+                                                   history_id=history_id,
+                                                   dataset_map=dataset_map,
+                                                   # inputs=dataset_map
+                                                   params=params)
 
-
-        self.success_url = reverse_lazy("history_detail", kwargs={'history_id': history_id}, )
-
-        return HttpResponseRedirect(self.get_success_url())
-
+        return HttpResponseRedirect(reverse_lazy("history_detail", kwargs={'history_id': history_id}))
 
 
 @method_decorator(connection_galaxy, name="dispatch")
@@ -78,7 +85,7 @@ class WorkflowsAdvancedView(WorkflowDetailView):
     model = Workflow
     context_object_name = "workflow_list"
     template_name = 'workflows/workflows_advanced_form.html'
-
+    restrict_toolset = Tool.objects.filter(toolflag__name='wadv')
 
     def get_context_data(self, **kwargs):
         context = super(WorkflowsAdvancedView, self).get_context_data(**kwargs)
@@ -88,7 +95,7 @@ class WorkflowsAdvancedView(WorkflowDetailView):
         workflow_json = gi.workflows.show_workflow(workflow_id=wk.id_galaxy)
 
         # parse galaxy workflows json information
-        wk.detail = WorkflowStepInformation(workflow_json).sorted_tool_list
+        wk.detail = WorkflowStepInformation(workflow_json, tools=self.restrict_toolset).sorted_tool_list
 
         tools = []
         context['tool_list'] = []
@@ -101,20 +108,28 @@ class WorkflowsAdvancedView(WorkflowDetailView):
 
         return context
 
-class WorkflowAdvWizardClass(WorkflowWizard, WorkflowsAdvancedView ):
+
+class WorkflowAdvWizardClass(WorkflowWizard, WorkflowsAdvancedView):
     pass
 
 
 class WorkflowsAdvancedRedirectView(WorkflowsAdvancedView):
     """
     """
+
     def get(self, request, *args, **kwargs):
         context = self.get_context_data()
-        #named_forms = zip( context['tool_list'], context['form_list'])
+        context['form_list'] = [UploadView.form_class] + context['form_list']
 
-        #WorkflowAdvWizardClass.form_list= context['form_list']
-        #return ClassWizardView.as_view(named_forms, url_name='workflows_advanced_step', done_step_name='home')(request, *args, **kwargs)
         return WorkflowAdvWizardClass.as_view(form_list=context['form_list'])(request, *args, **kwargs)
 
     def post(self, request, *args, **kwargs):
         return self.get(request, *args, **kwargs)
+
+
+class WorkflowsAdvancedList(WorkflowOneClickListView):
+    """
+        Workflow Advanced ListView
+    """
+    template_name = 'workflows/workflows_advanced_list.html'
+    restrict_toolset = Tool.objects.filter(toolflag__name='wadv')
