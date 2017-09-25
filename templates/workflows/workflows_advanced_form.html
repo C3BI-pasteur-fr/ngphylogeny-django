@@ -99,7 +99,9 @@
                 });
             }
             if ('{{ wizard.steps.index }}' != '{{ wizard.steps.last }}') {
-                $("input[name='submit']").hide();
+                $("input[name='submit']").hide()
+            } else {
+                $('#lastnext').hide();
             }
         });
     </script>

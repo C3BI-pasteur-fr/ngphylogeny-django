@@ -21,10 +21,9 @@
                 value="{{ wizard.steps.prev }}"><span
                 class="glyphicon glyphicon-chevron-left"></span>{% trans "Prev step" %}</button>
     {% endif %}
-    {% if wizard.steps.prev %}
-        <button class="btn btn-success" name="wizard_goto_step" type="submit"
-                value="submit"><span class="glyphicon glyphicon-chevron-right"></span>{% trans "Next step" %}</button>
-    {% endif %}
+    <button id='lastnext' class="btn btn-success" name="wizard_goto_step" type="submit"
+            value="submit"><span class="glyphicon glyphicon-chevron-right"></span>{% trans "Next step" %}</button>
+
 </form>
 
 
