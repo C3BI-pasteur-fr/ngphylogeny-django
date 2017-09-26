@@ -60,7 +60,7 @@ class WorkflowStepInformation(object):
         :param workflow_json: Galaxy workflow json
         :param tools <queryset>: limits the list of available tools
         """
-        if isinstance(tools, type(self.tool_queryset)):
+        if isinstance(tools, type(self.tool_queryset)) and tools:
             self.tool_queryset = tools
 
         self.workflow_json = workflow_json

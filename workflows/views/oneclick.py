@@ -14,7 +14,7 @@ class WorkflowOneClickListView(WorkflowListView):
     """
     OneClick workflows class-based view
     """
-    template_name = 'workflows/workflows_oneclick_choices.html'
+    template_name = 'workflows/workflows_oneclick_list.html'
     restrict_toolset = Tool.objects.filter(toolflag__name='oclik')
 
     def get_queryset(self):

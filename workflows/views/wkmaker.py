@@ -6,7 +6,8 @@ from galaxy.decorator import connection_galaxy
 from tools.models import ToolFlag, Tool
 from workflows.models import Workflow
 from workflows.models import WorkflowGalaxyFactory
-from workflows.views.generic import WorkflowFormView
+from workflows.views.generic import WorkflowWizard, UploadView
+from workflows.views.wkadvanced import WorkflowsAdvancedFormView, WorkflowsAdvancedRedirectView
 from workspace.views import create_history
 
 WORKFLOW_STATIC_STEPS = [{"step": 0, "category": 'algn', "group": ""},
@@ -50,7 +51,8 @@ def workflows_alacarte_build(request):
                 wkg.name = "Workflow_generated_"
                 wkg.name += ''.join(random.sample(string.ascii_letters + string.digits, 8))
 
-            # create the JSON of generated workflow and import into Galaxy
+            # create the JSON of generated workflow
+            # create new entry into Galaxy
             wkgi = gi.workflows.import_workflow_json(wkg.to_json())
             wk_id = wkgi.get('id')
 
@@ -63,12 +65,13 @@ def workflows_alacarte_build(request):
 
 
 @method_decorator(connection_galaxy, name="dispatch")
-class WorkflowsMakerView(WorkflowFormView):
+class WorkflowsMakerView(WorkflowsAdvancedFormView):
     """
     Workflow form with the list of tools and launch workflow
     """
+    restrict_toolset = None  # Tool.objects.filter(toolflag__name='wmake')
 
-    def get_object(self, queryset=None):
+    def get_object(self, queryset=None, detail=True):
         # load workflow
         wk_json = self.request.galaxy.workflows.show_workflow(workflow_id=self.kwargs['id'])
         wkname = wk_json.get('name')
@@ -84,3 +87,18 @@ class WorkflowsMakerView(WorkflowFormView):
         # add galaxy json information
         wk_obj.json = wk_json
         return wk_obj
+
+
+class WorkflowMarkerWizardClass(WorkflowWizard, WorkflowsMakerView):
+    template_name = 'workflows/workflows_maker_form.html'
+
+
+class WorkflowsMarkerRedirectView(WorkflowsMakerView, WorkflowsAdvancedRedirectView):
+    def get(self, request, *args, **kwargs):
+        context = self.get_context_data()
+        context['form_list'] = [UploadView.form_class] + context['form_list']
+
+        return WorkflowMarkerWizardClass.as_view(form_list=context['form_list'])(request, *args, **kwargs)
+
+    def post(self, request, *args, **kwargs):
+        return self.get(request, *args, **kwargs)

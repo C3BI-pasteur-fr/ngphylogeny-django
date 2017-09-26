@@ -18,7 +18,7 @@ from django.conf.urls import url
 
 from views.oneclick import WorkflowStartedView, WorkflowOneClickListView, WorkflowOneClickFormView
 from views.wkadvanced import WorkflowsAdvancedListView, WorkflowsAdvancedRedirectView
-from views.wkmaker import WorkflowsMakerView, workflows_alacarte_build
+from views.wkmaker import WorkflowsMarkerRedirectView, workflows_alacarte_build
 
 urlpatterns = [
 
@@ -29,6 +29,6 @@ urlpatterns = [
     url(r'^advanced/(?P<slug>[\w-]+)/$', WorkflowsAdvancedRedirectView.as_view(), name="workflows_advanced_step"),
 
     url(r'^alacarte$', workflows_alacarte_build, name="workflows_alacarte"),
-    url(r'^wkmake/(?P<id>[\w-]+)/$', WorkflowsMakerView.as_view(), name="workflow_maker_form"),
+    url(r'^wkmake/(?P<id>[\w-]+)/$', WorkflowsMarkerRedirectView.as_view(), name="workflow_maker_form"),
 
 ]
