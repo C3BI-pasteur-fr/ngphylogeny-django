@@ -10,7 +10,7 @@ from workflows.views.generic import WorkflowFormView, WorkflowListView
 
 
 @method_decorator(connection_galaxy, name="dispatch")
-class WorkflowOneClickListView(WorkflowListView ):
+class WorkflowOneClickListView(WorkflowListView):
     """
     OneClick workflows class-based view
     """
@@ -26,6 +26,7 @@ class WorkflowOneClickListView(WorkflowListView ):
         context['textarea_form'] = ImportPastedContentView.form_class()
 
         return context
+
 
 @method_decorator(connection_galaxy, name="dispatch")
 class WorkflowOneClickFormView(WorkflowFormView):

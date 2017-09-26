@@ -15,6 +15,7 @@
                 changeInput: true,
             });
             myInputFile.attr({name: myInputFilename});
+            $('form').attr('action', "{{ workflow_list.0.slug }}");
         });
     </script>
 {% endblock %}

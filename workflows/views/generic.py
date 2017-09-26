@@ -1,8 +1,11 @@
+from bioblend.galaxy.tools.inputs import inputs
+from django.core.files.storage import FileSystemStorage
 from django.core.urlresolvers import reverse_lazy
 from django.http import HttpResponseRedirect
 from django.utils.decorators import method_decorator
-from django.views.generic import DetailView, ListView
+from django.views.generic import ListView
 from django.views.generic.edit import SingleObjectMixin
+from formtools.wizard.views import SessionWizardView
 
 from data.views import UploadView, ImportPastedContentView
 from galaxy.decorator import connection_galaxy
@@ -29,13 +32,6 @@ class WorkflowMixin(SingleObjectMixin):
 
     def get_workflow(self):
         return self.get_object(detail=True)
-
-
-@method_decorator(connection_galaxy, name="dispatch")
-class WorkflowDetailView(DetailView, WorkflowMixin):
-    """
-        Workflow Detail View
-    """
 
 
 @method_decorator(connection_galaxy, name="dispatch")
@@ -105,7 +101,7 @@ class WorkflowFormView(UploadView, ImportPastedContentView, WorkflowMixin):
         history_id = create_history(self.request)
 
         # upload user file
-        submitted_file = form.cleaned_data.get('file')
+        submitted_file = form.cleaned_data.get('input_file')
         if submitted_file:
             u_file = self.upload_file(submitted_file, history_id)
 
@@ -164,3 +160,49 @@ class WorkflowListView(ListView):
             workflow.detail = WorkflowStepInformation(workflow_json, tools=self.restrict_toolset).sorted_tool_list
 
         return self.queryset
+
+
+class WorkflowWizard(SessionWizardView, WorkflowMixin):
+    """
+
+    """
+    template_name = 'workflows/include/workflows_wizardform.html'
+    file_storage = FileSystemStorage('/tmp')
+
+    def done(self, form_list, **kwargs):
+
+        history_id = create_history(self.request)
+        params = {}
+
+        workflow = self.get_object(detail=True)
+        i_input = workflow.json['inputs'].keys()[0]
+        # input file
+        dataset_map = dict()
+
+        for idx, tool_form in enumerate(form_list):
+            params[str(idx)] = inputs()
+
+            for key, form in tool_form.cleaned_data.items():
+                if "file" in key:
+
+                    output = self.request.galaxy.tools.upload_file(path=str(form.file), file_name=str(form.name),
+                                                                   history_id=history_id)
+                    galaxy_file = output.get('outputs')[0]
+                    self.file_storage.delete(form)
+                    dataset_map[i_input] = {'id': galaxy_file.get('id'), 'src': 'hda'}
+
+                else:
+                    # set the Galaxy parameter ( name, value)
+                    params[str(idx)].set_param(tool_form.fields_ids_mapping.get(key), form)
+            params[str(idx)] = params[str(idx)].to_dict()
+
+        print dataset_map
+
+        # run workflow
+        self.request.galaxy.workflows.run_workflow(workflow_id=workflow.id_galaxy,
+                                                   history_id=history_id,
+                                                   dataset_map=dataset_map,
+                                                   # inputs=dataset_map
+                                                   params=params)
+
+        return HttpResponseRedirect(reverse_lazy("history_detail", kwargs={'history_id': history_id}))
