@@ -18,7 +18,7 @@
         {% for step, tool in workflow.detail %}
             <td class="d-inline-block">
                 <div class="panel-group">
-                    <div class="panel {% if steps_current == step %}
+                    <div class="panel {% if steps_current == forloop.counter|stringformat:"i" %}
                                             panel-info{% else %} panel-default {% endif %}">
                         <div class="panel-heading">{{ tool.toolflag_set.first|default_if_none:"" }}</div>
                         <div class="panel-body">
