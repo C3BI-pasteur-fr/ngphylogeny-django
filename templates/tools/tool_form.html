@@ -12,29 +12,22 @@
         function boolean_checkbox(element) {
             if ($(element).prop('checked')) {
                 $(element).attr('value', $(element).attr("data-on-value"));
-                $("#" + $(element).attr("name") + "_unchecked").remove()
             } else {
                 $(element).attr('value', $(element).attr("data-off-value"));
-                $('<input/>', {
-                    id: $(element).attr("name") + "_unchecked",
-                    type: 'hidden',
-                    name: $(element).attr("name"),
-                    value: $(element).attr("value")
-                }).appendTo($(element).parent());
+            }
+        }
+
+        function test_data_case(test_param, data_case) {
+            if ($(data_case).attr('data-case') === test_param.val()) {
+                $(data_case).show();
+            } else {
+                $(data_case).hide();
             }
         }
 
         function toggle_condition(test_field, toggle_elt) {
-            var cond = $(toggle_elt).attr("data-case");
-            var test = test_field.val();
-            if (test == cond) {
-                $(toggle_elt).show();
-                $(toggle_elt).find(':input').attr('disabled', false);
-            }
-            else {
-                $(toggle_elt).hide();
-                $(toggle_elt).find(':input').attr('disabled', true);
-            }
+            boolean_checkbox(test_field);
+            test_data_case(test_field, toggle_elt);
         }
 
         function jq_conv_id(myid) {
@@ -42,14 +35,15 @@
         }
 
     </script>
-    <script>
+    <script type="text/javascript">
         $(document).ready(function () {
             //file field
             $(':file').filer({
+                limit: 1,
                 showThumbs: true,
                 changeInput: true
-            });
 
+            });
             //put label on the top of checkbox//
             $('[data-toggle="toggle"]').each(function () {
                 if (this.id) {
@@ -61,33 +55,47 @@
             });
 
             //hide or show conditionals fields
-            $('[data-test]').each(function (index, toggle_elt) {
+            $('[data-test]').each(function (index, elt) {
 
-                var m_id = $(toggle_elt).attr("data-test");
-                var test_fields = $('input[name="' + jq_conv_id(m_id) + '"],' +
-                    'select[name="' + jq_conv_id(m_id) + '"]');
+                // search related test_param
+                var m_id = $(elt).attr("data-test");
+                var test_param = $('input[name="' + jq_conv_id(m_id) + '"], ' +
+                    'select[name="' + jq_conv_id(m_id) + '"]'
+                );
 
-                var test_field;
-                if (test_fields.length > 1) {
-                    //radiobox
-                    test_field = test_fields.filter(':checked');
-                } else {
-                    test_field = test_fields;
+                // if radiobox
+                if (test_param.length > 1) {
+                    test_data_case(test_param.filter(':checked'), $(elt));
                 }
-                if (test_field.attr("data-toggle")) {
-                    boolean_checkbox(test_field);
-                }
+                else if (test_param.length === 1) {
 
-                toggle_condition(test_field, toggle_elt);
-                test_fields.change(function () {
-                    if (test_fields.length > 1) {
-                        test_field = test_fields.filter(':checked');
+                    // if checkbox
+                    if (test_param.attr("data-toggle")) {
+                        toggle_condition(test_param, $(elt));
+                    } else {
+                        // if selectbox
+                        test_data_case(test_param, $(elt));
                     }
-                    boolean_checkbox(this);
-                    toggle_condition(test_field, toggle_elt);
-                });
+                }
 
+                test_param.change(function () {
+                    // if radiobox
+                    if (test_param.length > 1) {
+                        test_data_case(test_param.filter(':checked'), $(elt));
+                    }
+                    else if (test_param.length === 1) {
+
+                        // if checkbox
+                        if (test_param.attr("data-toggle")) {
+                            toggle_condition(test_param, $(elt));
+                        } else {
+                            // if selectbox
+                            test_data_case(test_param, $(elt));
+                        }
+                    }
+                });
             });
+
         });
     </script>
 {% endblock %}
@@ -96,7 +104,7 @@
     <div class="row">
         <div class="col-md-2"></div>
         <div class="col-md-4 text-center">
-            <h3>{{ tool.name }} <span class="badge">{{tool.version}}</span></h3>
+            <h3>{{ tool.name }} <span class="badge">{{ tool.version }}</span></h3>
         </div>
     </div>
 
