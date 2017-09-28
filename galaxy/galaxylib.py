@@ -1,9 +1,35 @@
 import json
 
 import requests
-from bioblend.galaxy import GalaxyInstance
+from bioblend.galaxy import GalaxyInstance as GalaxyI
 from bioblend.galaxyclient import ConnectionError
+from django.core.cache import cache
+from django.utils.decorators import method_decorator
+from requests import Request
 from requests_toolbelt import MultipartEncoder
+
+
+def get_request_cache(func):
+    def wrapper(url, **kwargs):
+        pre_req = Request('GET', url, params=kwargs.get('params', '')).prepare()
+        print pre_req.url
+        c = cache.get(pre_req.url)
+        if c:
+            return c
+        else:
+            r = func(url, **kwargs)
+            cache.set(pre_req.url, r, 60 * 15)
+        return r
+
+    return wrapper
+
+
+@method_decorator(get_request_cache, name="make_get_request")
+class GalaxyInstance(GalaxyI):
+    """
+    Overlaod GalaxyInstance make_get_request method to use django cache
+    """
+    pass
 
 
 class GalaxyInstanceAnonymous(GalaxyInstance):
