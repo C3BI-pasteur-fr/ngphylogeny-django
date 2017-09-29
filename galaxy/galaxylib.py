@@ -1,40 +1,45 @@
 import json
+from functools import wraps
 
 import requests
-from bioblend.galaxy import GalaxyInstance as GalaxyI
+from bioblend.galaxy import GalaxyInstance as BioblendGalaxyInstance
 from bioblend.galaxyclient import ConnectionError
 from django.core.cache import cache
-from django.utils.decorators import method_decorator
 from requests import Request
 from requests_toolbelt import MultipartEncoder
 
 
 def get_request_cache(func):
-    def wrapper(url, **kwargs):
-        pre_req = Request('GET', url, params=kwargs.get('params', '')).prepare()
-        print pre_req.url
+    @wraps(func)
+    def wrapper(self, url, **kwargs):
+
+        params = dict(kwargs.get('params') or {})
+        params['key'] = self.key
+        pre_req = Request('GET', url, params=params).prepare()
+
         c = cache.get(pre_req.url)
         if c:
             return c
         else:
-            r = func(url, **kwargs)
-            cache.set(pre_req.url, r, 60 * 15)
+            r = func(self, url, **kwargs)
+            cache.set(r.url, r)
         return r
-
     return wrapper
 
 
-@method_decorator(get_request_cache, name="make_get_request")
-class GalaxyInstance(GalaxyI):
+class GalaxyInstance(BioblendGalaxyInstance):
     """
-    Overlaod GalaxyInstance make_get_request method to use django cache
+    Override GalaxyInstance make_get_request method to use django cache
     """
-    pass
+
+    @get_request_cache
+    def make_get_request(self, url, **kwargs):
+        return super(GalaxyInstance, self).make_get_request(url, **kwargs)
 
 
 class GalaxyInstanceAnonymous(GalaxyInstance):
     """
-    Overriding of bioblend GalaxyClient methods to accept cookies on http requests
+    Overload bioblend GalaxyClient methods to accept cookies on http requests
     """
 
     def __init__(self, url, galaxysession):
