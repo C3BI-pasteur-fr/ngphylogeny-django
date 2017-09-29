@@ -26,9 +26,9 @@ urlpatterns = [
     url(r'^oneclick/$', WorkflowOneClickListView.as_view(), name="workflow_oneclick_list"),
     url(r'^oneclick/(?P<slug>[\w-]+)$', WorkflowOneClickFormView.as_view(), name="workflow_oneclick_form"),
     url(r'^advanced/$', WorkflowsAdvancedListView.as_view(), name="workflows_advanced"),
-    url(r'^advanced/(?P<slug>[\w-]+)/$', WorkflowsAdvancedRedirectView.as_view(), name="workflows_advanced_step"),
+    url(r'^advanced/(?P<slug>[\w-]+)$', WorkflowsAdvancedRedirectView.as_view(), name="workflows_advanced_step"),
 
     url(r'^alacarte$', workflows_alacarte_build, name="workflows_alacarte"),
-    url(r'^wkmake/(?P<id>[\w-]+)/$', WorkflowsMarkerRedirectView.as_view(), name="workflow_maker_form"),
+    url(r'^wkmake/(?P<id>[\w-]+)$', WorkflowsMarkerRedirectView.as_view(), name="workflow_maker_form"),
 
 ]
