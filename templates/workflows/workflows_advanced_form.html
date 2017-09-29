@@ -59,7 +59,7 @@
             $('[data-test]').each(function (index, elt) {
 
                 // search related test_param
-                var m_id = $(elt).attr("data-test");
+                var m_id = {{ wizard.steps.index }} +'-' + $(elt).attr("data-test");
                 var test_param = $('input[name="' + jq_conv_id(m_id) + '"], ' +
                     'select[name="' + jq_conv_id(m_id) + '"]'
                 );
