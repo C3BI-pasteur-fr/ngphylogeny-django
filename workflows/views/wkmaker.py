@@ -1,3 +1,6 @@
+import random
+import string
+
 from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.utils.decorators import method_decorator
@@ -31,12 +34,15 @@ def workflows_alacarte_build(request):
 
         tools = []
         for step in WORKFLOW_STATIC_STEPS:
-            tools.append(request.POST.get(step.get('category')))
+            select_tool_pk = request.POST.get(step.get('category'))
+
+            if select_tool_pk:
+                tools.append(select_tool_pk)
 
         dict_tools = Tool.objects.in_bulk(tools)
 
         # sort tool
-        list_tool = [dict_tools.get(int(t)) for t in tools if t]
+        list_tool = [dict_tools.get(int(t)) for t in tools]
 
         if list_tool:
             gi = request.galaxy
@@ -47,7 +53,6 @@ def workflows_alacarte_build(request):
             wkg.name = request.POST.get('wkname')
 
             if not wkg.name:
-                import random, string
                 wkg.name = "Workflow_generated_"
                 wkg.name += ''.join(random.sample(string.ascii_letters + string.digits, 8))
 
