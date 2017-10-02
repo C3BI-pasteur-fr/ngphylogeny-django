@@ -1,3 +1,5 @@
+import json
+
 from bioblend.galaxy.tools.inputs import inputs
 from django.core.files.storage import FileSystemStorage
 from django.core.urlresolvers import reverse_lazy
@@ -194,7 +196,9 @@ class WorkflowWizard(SessionWizardView, WorkflowMixin):
                 else:
                     # set the Galaxy parameter ( name, value)
                     params[str(idx)].set_param(tool_form.fields_ids_mapping.get(key), form)
-            params[str(idx)] = params[str(idx)].to_dict()
+
+            # convert dict to json
+            params[str(idx)] = json.dumps(params[str(idx)].to_dict())
 
         print dataset_map
 
