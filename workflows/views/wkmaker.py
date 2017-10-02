@@ -94,16 +94,30 @@ class WorkflowsMakerView(WorkflowsAdvancedFormView):
         return wk_obj
 
 
-class WorkflowMarkerWizardClass(WorkflowWizard, WorkflowsMakerView):
+class WorkflowMarkerWizardView(WorkflowWizard, WorkflowsMakerView):
+
     template_name = 'workflows/workflows_maker_form.html'
+
+    def done(self, *args, **kwargs):
+        render_wizard = super(WorkflowMarkerWizardView, self).done(*args, **kwargs)
+
+        if self.succes_url:
+            # delete the workflow when the workflow has been run
+            print self.request.galaxy.workflows.delete_workflow(workflow_id=self.kwargs['id'])
+        return render_wizard
+
 
 
 class WorkflowsMarkerRedirectView(WorkflowsMakerView, WorkflowsAdvancedRedirectView):
+    """
+        Redirect to WizardformView build with selected tools
+    """
+
     def get(self, request, *args, **kwargs):
         context = self.get_context_data()
         context['form_list'] = [UploadView.form_class] + context['form_list']
 
-        return WorkflowMarkerWizardClass.as_view(form_list=context['form_list'])(request, *args, **kwargs)
+        return WorkflowMarkerWizardView.as_view(form_list=context['form_list'])(request, *args, **kwargs)
 
     def post(self, request, *args, **kwargs):
         return self.get(request, *args, **kwargs)

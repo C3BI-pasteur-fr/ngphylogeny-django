@@ -1,5 +1,3 @@
-import json
-
 from bioblend.galaxy.tools.inputs import inputs
 from django.core.files.storage import FileSystemStorage
 from django.core.urlresolvers import reverse_lazy
@@ -168,18 +166,21 @@ class WorkflowWizard(SessionWizardView, WorkflowMixin):
     """
 
     """
-    template_name = 'workflows/include/workflows_wizardform.html'
+    template_name = 'workflows/workflows_wizard_form.html'
     file_storage = FileSystemStorage('/tmp')
+    succes_url = ""
 
     def done(self, form_list, **kwargs):
 
         history_id = create_history(self.request)
-        params = {}
 
         workflow = self.get_object(detail=True)
         i_input = workflow.json['inputs'].keys()[0]
+
         # input file
-        dataset_map = dict()
+        dataset_map = {}
+        # tool params
+        params = {}
 
         for idx, tool_form in enumerate(form_list):
             params[str(idx)] = inputs()
@@ -198,15 +199,20 @@ class WorkflowWizard(SessionWizardView, WorkflowMixin):
                     params[str(idx)].set_param(tool_form.fields_ids_mapping.get(key), form)
 
             # convert dict to json
-            params[str(idx)] = json.dumps(params[str(idx)].to_dict())
+            params[str(idx)] = params[str(idx)].to_dict()
 
-        print dataset_map
-
-        # run workflow
-        self.request.galaxy.workflows.run_workflow(workflow_id=workflow.id_galaxy,
+        try:
+            # run workflow
+            self.request.galaxy.workflows.run_workflow(workflow_id=workflow.id_galaxy,
                                                    history_id=history_id,
                                                    dataset_map=dataset_map,
                                                    # inputs=dataset_map
                                                    params=params)
 
-        return HttpResponseRedirect(reverse_lazy("history_detail", kwargs={'history_id': history_id}))
+            self.succes_url = reverse_lazy("history_detail", kwargs={'history_id': history_id})
+
+        except Exception, galaxy_exception:
+
+            raise galaxy_exception
+
+        return HttpResponseRedirect(self.succes_url)
