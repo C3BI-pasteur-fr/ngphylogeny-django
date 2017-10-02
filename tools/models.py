@@ -70,7 +70,7 @@ class Tool(models.Model):
 
                 t, created = Tool.objects.get_or_create(id_galaxy=id_tool, galaxy_server=galaxy_server)
 
-                if True:
+                if created:
                     tools_created.append(t)
 
                     # save tool informations
@@ -104,12 +104,11 @@ class Tool(models.Model):
                                                       )
                             input_obj.save()
 
-                        inputs_list.append(input_d.get('name'))
-                    try:
-                        inputs_list.remove('input')
-                    except:
-                        pass
+                        else:
+                            # remove input data from whitelist for workflows
+                            inputs_list.append(input_d.get('name'))
 
+                    # pre-compute whitelist for workflows
                     w = ToolFieldWhiteList(tool_id=t.id, context='w', _params=",".join(inputs_list))
                     w.save()
 

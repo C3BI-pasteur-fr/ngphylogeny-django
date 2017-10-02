@@ -48,6 +48,7 @@ def map_galaxy_tool_input(attr):
         opt = attr.get("options", "").get('hda')
         if opt:
             field_map['choices'] = []
+        # add dataset of history in a list
         for data in opt:
             field_map['choices'].append((data.get('id'), data.get('name')))
 
@@ -153,7 +154,6 @@ class ToolForm(forms.Form):
         self.helper = FormHelper(self)
         self.helper.form_class = 'blueForms'
         self.helper.form_tag = False
-
         self.formset = self.parse_galaxy_input_tool(self.tool_params, whitelist=self.visible_field)
         self.helper.layout = Layout(FormActions(Field(*self.formset),
                                                 Submit('submit', 'Submit', css_class="pull-right"),

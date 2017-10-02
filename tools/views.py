@@ -163,11 +163,17 @@ def tool_exec(request, tool_form, store_output=None):
 
 @connection_galaxy
 def get_tool_name(request):
+    """
+    Find the name of tool from an id_tool (used by AJAX)
+    """
     context = dict()
 
     if request.POST:
         gi = request.galaxy
         toolid = request.POST.get('tool_id')
-        tool = gi.tools.get_tools(tool_id=toolid )[0]
-        context.update({'tool_id':toolid, 'name':tool.get('name')})
+
+        if toolid:
+            tool = gi.tools.get_tools(tool_id=toolid)[0]
+            context.update({'tool_id': toolid, 'name': tool.get('name')})
+
     return  HttpResponse(json.dumps(context), content_type='application/json')
