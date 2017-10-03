@@ -106,6 +106,7 @@ class HistoryDetailView(WorkspaceHistoryObjectMixin, DetailView):
             return context
 
         gi = self.request.galaxy
+        gi.nocache = True
         context['history_info'] = gi.histories.show_history(history_id)
         history_content = gi.histories.show_history(history_id, contents=True)
 

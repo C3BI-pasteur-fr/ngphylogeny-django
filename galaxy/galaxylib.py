@@ -13,6 +13,9 @@ def get_request_cache(func):
     @wraps(func)
     def wrapper(self, url, **kwargs):
 
+        if hasattr(self, "nocache"):
+            return func(self, url, **kwargs)
+
         params = dict(kwargs.get('params') or {})
         params['key'] = self.key
         pre_req = Request('GET', url, params=params).prepare()
