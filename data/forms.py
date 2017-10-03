@@ -7,7 +7,7 @@ from django import forms
 
 
 class UploadForm(forms.Form):
-    input_file = forms.FileField(widget=forms.FileInput(attrs={'multiple': 'true'}))
+    input_file = forms.FileField(widget=forms.FileInput())
 
     def __init__(self, *args, **kwargs):
         super(UploadForm, self).__init__(*args, **kwargs)
