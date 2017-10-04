@@ -12,16 +12,19 @@ from models import WorkspaceHistory
 
 
 @connection_galaxy
-def create_history(request):
+def create_history(request, name=''):
     """
     Create a new galaxy history
+
     :param request:
-    :return: history_id
+    :param name: name of new history
+    :return: galaxy id history
     """
     gi = request.galaxy
     server = request.galaxy_server
-
-    history = gi.histories.create_history(name='NGPhylogeny analyse')
+    if name:
+        name = 'NGPhylogeny analyse'
+    history = gi.histories.create_history(name=name)
 
     if request.user.is_authenticated():
         current_user = request.user
@@ -48,21 +51,32 @@ def get_history(request):
     return request.session.get('last_history')
 
 
-def get_or_create_history(request):
+def get_or_create_history(request, name=''):
     """
     :param request:
+    :param name: name of new history
     :return: history_id
     """
     history_id = get_history(request)
     if not history_id:
         # Create a new galaxy history
-        history_id = create_history(request)
+        history_id = create_history(request, name)
 
     return history_id
 
 
-class WorkspaceHistoryObjectMixin(SingleObjectMixin):
+@connection_galaxy
+def delete_history(history_id):
+    """
+    Delete history
+    :param history_id:
+    :return:
+    """
 
+    WorkspaceHistory.objects.get(history=history_id).delete()
+
+
+class WorkspaceHistoryObjectMixin(SingleObjectMixin):
     model = WorkspaceHistory
     pk_url_kwarg = 'history_id'
 
@@ -80,8 +94,6 @@ class WorkspaceHistoryObjectMixin(SingleObjectMixin):
                             galaxy_server=server)
 
 
-
-
 @method_decorator(ensure_csrf_cookie, name="dispatch")
 @method_decorator(connection_galaxy, name="dispatch")
 class HistoryDetailView(WorkspaceHistoryObjectMixin, DetailView):
@@ -89,7 +101,6 @@ class HistoryDetailView(WorkspaceHistoryObjectMixin, DetailView):
         Display Galaxy like history information
     """
     template_name = 'workspace/history.html'
-
 
     def get_context_data(self, **kwargs):
         # Call the base implementation first to get a context
@@ -140,6 +151,7 @@ class GalaxyErrorView(RedirectView):
     """
     Redirect to Galaxy server error page
     """
+
     def get_redirect_url(self, *args, **kwargs):
         return "%s/dataset/errors?id=%s" % (self.request.galaxy_server.url, kwargs.get('id'))
 
@@ -154,11 +166,10 @@ class PreviousHistoryListView(ListView):
     context_object_name = 'histories'
 
     def get_queryset(self):
-        gi = self.request.galaxy
         self.queryset = WorkspaceHistory.objects.filter(history__in=self.request.session.get('histories', [])
-                                                        ).order_by("created_date")
+                                                        ).order_by("-created_date")
 
-        #update session history
+        # update session history
         self.request.session['histories'] = list(self.queryset.values_list('history', flat=True))
 
         return self.queryset
@@ -172,7 +183,6 @@ class WorkspaceDeleteView(WorkspaceHistoryObjectMixin, DeleteView):
     success_url = reverse_lazy('previous_analyses')
 
 
-
 @method_decorator(connection_galaxy, name="dispatch")
 class WorkspaceRenameView(HistoryDetailView, UpdateView):
     """
@@ -182,4 +192,4 @@ class WorkspaceRenameView(HistoryDetailView, UpdateView):
     template_name = 'workspace/history.html'
 
     def get_success_url(self):
-        return reverse_lazy('history_detail', args=(self.get_object().history, ))
+        return reverse_lazy('history_detail', args=(self.get_object().history,))
