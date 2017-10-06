@@ -48,7 +48,7 @@ def connection_galaxy(view_function):
 
                 """If the key api is not defined, prompts the user to define it"""
                 if gu.api_key:
-                    request.galaxy = gu.get_galaxy_instance()
+                    request.galaxy = gu.get_galaxy_instance
                 else:
                     return redirect('galaxy_account')
 
@@ -67,7 +67,7 @@ def connection_galaxy(view_function):
             """If user is not an authenticated, use the anonymous Galaxy user set"""
             try:
                 gu = GalaxyUser.objects.get(anonymous=True, galaxy_server=galaxy_server)
-                request.galaxy = gu.get_galaxy_instance()
+                request.galaxy = gu.get_galaxy_instance
 
             except GalaxyUser.DoesNotExist :
                 msg = "NGPhylogeny server is not properly configured, " \

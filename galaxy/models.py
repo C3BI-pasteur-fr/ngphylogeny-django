@@ -2,6 +2,7 @@ from __future__ import unicode_literals
 
 from django.contrib.auth.models import User
 from django.db import models
+from django.utils.functional import cached_property
 
 from .galaxylib import GalaxyInstance
 
@@ -45,6 +46,7 @@ class GalaxyUser(models.Model):
                                               "for NGPhylogeny Anonymous User"
                                     )
 
+    @cached_property
     def get_galaxy_instance(self):
         """
             :return bioblend Galaxy instance object

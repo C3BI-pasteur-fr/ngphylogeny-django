@@ -5,8 +5,8 @@ from django.utils.decorators import method_decorator
 from data.views import UploadView, ImportPastedContentView
 from galaxy.decorator import connection_galaxy
 from tools.models import Tool
-from workflows.models import Workflow
 from workflows.views.generic import WorkflowFormView, WorkflowListView
+from workflows.views.viewmixing import WorkflowDuplicateMixin
 
 
 @method_decorator(connection_galaxy, name="dispatch")
@@ -29,39 +29,31 @@ class WorkflowOneClickListView(WorkflowListView):
 
 
 @method_decorator(connection_galaxy, name="dispatch")
-class WorkflowOneClickFormView(WorkflowFormView):
+class WorkflowOneClickFormView(WorkflowDuplicateMixin, WorkflowFormView):
     """
     Workflow oneclick form with the list of tools and
     Launch oneclick workflow
     """
+    template_name = 'workflows/workflows_oneclick_form.html'
 
-    def get_workflow(self):
-        """create a work copy of workflow in user space, import workflow oneclick shared"""
-        wk = self.get_object()
-        gi = self.request.galaxy
+    def form_valid(self, form):
         try:
-            # import published shared workflow
-            wf_import = gi.workflows.import_shared_workflow(wk.id_galaxy)
-        except:
-            # make a working copy workflow
-            wk_cp = gi.workflows.export_workflow_dict(wk.id_galaxy)
-            wf_import = gi.workflows.import_workflow_dict(wk_cp)
+            render = super(WorkflowOneClickFormView, self).form_valid(form)
+        except Exception, galaxy_exception:
+            raise galaxy_exception
 
-        if wf_import:
-            # replace workflow with working copy of original workflow shared
-            wk.pk = None
-            wk.id_galaxy = wf_import.get('id')
-            return wk
-        return None
+        finally:
+            self.clean_copy()
+        return render
 
 
 @method_decorator(connection_galaxy, name="dispatch")
 class WorkflowStartedView(WorkflowOneClickFormView):
-    "redirect to workflows form class"
+    """
+        Return form View to run the first One Click Workflow
+    """
 
     def get_object(self, queryset=None, detail=None):
-        wk_obj = Workflow.objects.order_by('rank').first()
+        wk_obj = self.model.objects.order_by('rank').first()
         wk_obj.json = self.request.galaxy.workflows.show_workflow(workflow_id=wk_obj.id_galaxy)
         return wk_obj
-
-

@@ -22,7 +22,7 @@ def create_history(request, name=''):
     """
     gi = request.galaxy
     server = request.galaxy_server
-    if name:
+    if not name:
         name = 'NGPhylogeny analyse'
     history = gi.histories.create_history(name=name)
 

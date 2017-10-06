@@ -3,39 +3,41 @@ from django.core.files.storage import FileSystemStorage
 from django.core.urlresolvers import reverse_lazy
 from django.http import HttpResponseRedirect
 from django.utils.decorators import method_decorator
-from django.views.generic import ListView
-from django.views.generic.edit import SingleObjectMixin
+from django.utils.functional import cached_property
+from django.views.generic import ListView, DetailView
 from formtools.wizard.views import SessionWizardView
 
 from data.views import UploadView, ImportPastedContentView
 from galaxy.decorator import connection_galaxy
+from viewmixing import WorkflowDetailMixin
 from workflows.models import Workflow, WorkflowStepInformation
 from workspace.views import create_history
 
 
-class WorkflowMixin(SingleObjectMixin):
+@method_decorator(connection_galaxy, name="dispatch")
+class WorkflowListView(WorkflowDetailMixin, ListView):
     """
+    Generic class-based Listview
     """
     model = Workflow
-    object = Workflow
-    template_name = 'workflows/workflows_form.html'
+    context_object_name = "workflow_list"
+    template_name = 'workflows/workflows_list.html'
+    restrict_toolset = None
 
-    def get_object(self, queryset=None, detail=True):
-        """Get Workflow object"""
-        wk_obj = super(WorkflowMixin, self).get_object()
+    @cached_property
+    def workflow_list(self):
+        workflow_queryset = Workflow.objects.filter(galaxy_server__current=True).select_related()
 
-        # add more information load from Galaxy
-        if detail and wk_obj:
-            wk_obj.json = self.request.galaxy.workflows.show_workflow(workflow_id=wk_obj.id_galaxy)
+        for workflow in workflow_queryset:
+            self.fetch_workflow_detail(workflow)
+        return workflow_queryset
 
-        return wk_obj
-
-    def get_workflow(self):
-        return self.get_object(detail=True)
+    def get_queryset(self):
+        return self.workflow_list
 
 
 @method_decorator(connection_galaxy, name="dispatch")
-class WorkflowFormView(UploadView, ImportPastedContentView, WorkflowMixin):
+class WorkflowFormView(WorkflowDetailMixin, UploadView, ImportPastedContentView, DetailView):
     """
     Generic Workflow form view, upload one file and run workflow
     """
@@ -50,14 +52,14 @@ class WorkflowFormView(UploadView, ImportPastedContentView, WorkflowMixin):
         context = super(WorkflowFormView, self).get_context_data(**kwargs)
 
         # get workflows
-        wk = self.get_workflow()
+        wk = self.get_object()
+        self.fetch_workflow_detail(wk)
 
         context['form'] = UploadView.form_class()
         context['textarea_form'] = ImportPastedContentView.form_class()
 
         if hasattr(wk, 'json'):
             # parse galaxy workflow json information
-
             context["inputs"] = wk.json['inputs'].keys()
 
             # add workfow galaxy information
@@ -65,7 +67,6 @@ class WorkflowFormView(UploadView, ImportPastedContentView, WorkflowMixin):
 
         context["workflow"] = wk
         return context
-
 
     def post(self, request, *args, **kwargs):
         # determine which form is being submitted
@@ -92,13 +93,13 @@ class WorkflowFormView(UploadView, ImportPastedContentView, WorkflowMixin):
         else:
             return self.form_invalid(**{form_name: form})
 
-
     def form_valid(self, form):
 
         gi = self.request.galaxy
+        workflow = self.get_workflow()
 
         # create new history
-        history_id = create_history(self.request)
+        history_id = create_history(self.request, name="NGPhylogeny Analyse - " + workflow.name)
 
         # upload user file
         submitted_file = form.cleaned_data.get('input_file')
@@ -111,7 +112,7 @@ class WorkflowFormView(UploadView, ImportPastedContentView, WorkflowMixin):
 
         file_id = u_file.get('outputs')[0].get('id')
 
-        workflow = self.get_workflow()
+
 
         i_input = workflow.json['inputs'].keys()[0]
         # input file
@@ -121,50 +122,23 @@ class WorkflowFormView(UploadView, ImportPastedContentView, WorkflowMixin):
 
         try:
             # run workflow
-            gi.workflows.run_workflow(workflow_id=workflow.id_galaxy,
-                                         history_id=history_id,
-                                         dataset_map=dataset_map,
-                                         # inputs=dataset_map
-                                      )  # ,params=wk_galaxy.params)
+            self.outputs = gi.workflows.run_workflow(workflow_id=workflow.id_galaxy,
+                                                     history_id=history_id,
+                                                     dataset_map=dataset_map,
+                                                     # inputs=dataset_map
+                                                     )  # ,params=wk_galaxy.params)
 
         except Exception, galaxy_exception:
             raise galaxy_exception
-
-        finally:
-            # remove the working copy
-            print gi.workflows.delete_workflow(workflow.id_galaxy)
 
         self.success_url = reverse_lazy("history_detail", kwargs={'history_id': history_id}, )
 
         return HttpResponseRedirect(self.get_success_url())
 
 
-@method_decorator(connection_galaxy, name="dispatch")
-class WorkflowListView(ListView):
+class WorkflowWizard(SessionWizardView):
     """
-    Generic class-based view
-    """
-    model = Workflow
-    context_object_name = "workflow_list"
-    template_name = 'workflows/workflows_list.html'
-    restrict_toolset = None
-
-    def get_queryset(self):
-        self.queryset = Workflow.objects.filter(galaxy_server__current=True).select_related()
-
-        gi = self.request.galaxy
-        for workflow in self.queryset:
-            workflow_json = gi.workflows.show_workflow(workflow_id=workflow.id_galaxy)
-
-            # add galaxy workflows json information
-            workflow.detail = WorkflowStepInformation(workflow_json, tools=self.restrict_toolset).sorted_tool_list
-
-        return self.queryset
-
-
-class WorkflowWizard(SessionWizardView, WorkflowMixin):
-    """
-
+    Generic Form Wizard for Advanced and Alacarte mode
     """
     template_name = 'workflows/workflows_wizard_form.html'
     file_storage = FileSystemStorage('/tmp')
@@ -172,9 +146,9 @@ class WorkflowWizard(SessionWizardView, WorkflowMixin):
 
     def done(self, form_list, **kwargs):
 
-        history_id = create_history(self.request)
+        workflow = self.get_workflow()
+        history_id = create_history(self.request, name="NGPhylogeny Analyse - " + self.workflow.name)
 
-        workflow = self.get_object(detail=True)
         i_input = workflow.json['inputs'].keys()[0]
 
         # input file
@@ -204,10 +178,10 @@ class WorkflowWizard(SessionWizardView, WorkflowMixin):
         try:
             # run workflow
             self.request.galaxy.workflows.run_workflow(workflow_id=workflow.id_galaxy,
-                                                   history_id=history_id,
-                                                   dataset_map=dataset_map,
-                                                   # inputs=dataset_map
-                                                   params=params)
+                                                       history_id=history_id,
+                                                       dataset_map=dataset_map,
+                                                       # inputs=dataset_map
+                                                       params=params)
 
             self.succes_url = reverse_lazy("history_detail", kwargs={'history_id': history_id})
 

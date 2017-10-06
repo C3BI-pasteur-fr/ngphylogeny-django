@@ -4,13 +4,15 @@ import string
 from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.utils.decorators import method_decorator
+from django.views.generic import View
 
 from galaxy.decorator import connection_galaxy
 from tools.models import ToolFlag, Tool
 from workflows.models import Workflow
 from workflows.models import WorkflowGalaxyFactory
-from workflows.views.generic import WorkflowWizard, UploadView
-from workflows.views.wkadvanced import WorkflowsAdvancedFormView, WorkflowsAdvancedRedirectView
+from workflows.views.generic import WorkflowWizard, UploadView, DetailView
+from workflows.views.viewmixing import WorkflowDeleteWorkingCopyMixin
+from workflows.views.wkadvanced import WorkflowAdvancedFormView
 from workspace.views import create_history
 
 WORKFLOW_STATIC_STEPS = [{"step": 0, "category": 'algn', "group": ""},
@@ -18,6 +20,7 @@ WORKFLOW_STATIC_STEPS = [{"step": 0, "category": 'algn', "group": ""},
                          {"step": 2, "category": 'tree', "group": ""},
                          {"step": 3, "category": 'visu', "group": ""},
                         ]
+
 
 @connection_galaxy
 def workflows_alacarte_build(request):
@@ -70,7 +73,7 @@ def workflows_alacarte_build(request):
 
 
 @method_decorator(connection_galaxy, name="dispatch")
-class WorkflowsMakerView(WorkflowsAdvancedFormView):
+class WorkflowMakerView(WorkflowAdvancedFormView, DetailView):
     """
     Workflow form with the list of tools and launch workflow
     """
@@ -94,7 +97,10 @@ class WorkflowsMakerView(WorkflowsAdvancedFormView):
         return wk_obj
 
 
-class WorkflowMarkerWizardView(WorkflowWizard, WorkflowsMakerView):
+class WorkflowMarkerWizardView(WorkflowDeleteWorkingCopyMixin, WorkflowWizard, WorkflowMakerView):
+    """
+        Workflow maker Wizard Form
+    """
 
     template_name = 'workflows/workflows_maker_form.html'
 
@@ -103,12 +109,11 @@ class WorkflowMarkerWizardView(WorkflowWizard, WorkflowsMakerView):
 
         if self.succes_url:
             # delete the workflow when the workflow has been run
-            print self.request.galaxy.workflows.delete_workflow(workflow_id=self.kwargs['id'])
+            self.delete_workflow(self.get_object().id_galaxy)
         return render_wizard
 
 
-
-class WorkflowsMarkerRedirectView(WorkflowsMakerView, WorkflowsAdvancedRedirectView):
+class WorkflowsMarkerRedirectView(WorkflowMakerView, View):
     """
         Redirect to WizardformView build with selected tools
     """

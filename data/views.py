@@ -7,14 +7,14 @@ from django.http import StreamingHttpResponse
 from django.shortcuts import render, redirect
 from django.urls import reverse_lazy
 from django.utils.decorators import method_decorator
-from django.views.generic.edit import FormView, FormMixin
+from django.views.generic.edit import FormView
 
 from forms import UploadForm, PastedContentForm
 from galaxy.decorator import connection_galaxy
 from workspace.views import get_or_create_history
 
 
-class UploadMixin(FormMixin):
+class UploadMixin(object):
 
     def upload_content(self, content, history_id=None):
         """
@@ -49,7 +49,7 @@ class UploadMixin(FormMixin):
 
 
 @method_decorator(connection_galaxy, name="dispatch")
-class UploadView(FormView, UploadMixin ):
+class UploadView(UploadMixin, FormView):
     """
        Upload file into Galaxy Server
     """
@@ -68,7 +68,7 @@ class UploadView(FormView, UploadMixin ):
 
 
 @method_decorator(connection_galaxy, name="dispatch")
-class ImportPastedContentView(FormView, UploadMixin):
+class ImportPastedContentView(UploadMixin, FormView):
     """
        Import user pasted content into Galaxy Server
     """

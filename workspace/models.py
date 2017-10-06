@@ -26,14 +26,13 @@ class WorkspaceHistory(models.Model):
         """Rename history galaxy"""
         gu = self.get_galaxy_user()
         if gu:
-            gi = gu.get_galaxy_instance()
+            gi = gu.get_galaxy_instance
             gi.histories.update_history(history_id=self.history, name=self.name)
 
     def save(self, *args, **kwargs):
         if self.name:
             self.rename()
         super(WorkspaceHistory, self).save(*args, **kwargs)
-
 
     class Meta:
         verbose_name_plural = "Workspace histories"
@@ -45,7 +44,8 @@ def send_delete_galaxy_history(sender, instance, using, **kwargs):
 
     gu = instance.get_galaxy_user()
     if gu:
-        gi = gu.get_galaxy_instance()
+        gi = gu.get_galaxy_instance
         gi.histories.delete_history(instance.history, purge=True)
+
 
 pre_delete.connect(send_delete_galaxy_history, sender=WorkspaceHistory)
