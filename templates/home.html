@@ -2,34 +2,25 @@
 {% load static %}
 {% block nav-home %}class="active"{% endblock %}
 {% block jumbotron %}
-    <div class="jumbotron">
-        <img alt="[Logo]" src="{% static 'images/logo_phylogeny-fr.png' %}" class="center-block">
-
-        <div class="text-center"><h2>Phylogeny.fr</h2>
-            <h4>Robust Phylogenetic Analysis For The Non-Specialist</h4>
-        </div>
-        <div class="text-center">
-        <div>
-            <b>Phylogeny.fr</b> is a free, simple to use web service dedicated to
-            reconstructing and analysing phylogenetic relationships between
-            molecular sequences.
-            <br><b>Phylogeny.fr</b> runs and connects various bioinformatics programs to reconstruct a <b>robust
-            phylogenetic tree from a set of sequences</b>.
-
-            <br>If you use this site, please cite: <br>
-            <a target="_blank" href="http://nar.oxfordjournals.org/cgi/content/abstract/gkn180">
-                <img alt="doc" src="http://phylogeny.lirmm.fr/images/doc.png"> </a>&nbsp;
-            Dereeper A.*, Guignon V.*, Blanc G., Audic S., Buffet S., Chevenet F.,
-            Dufayard J.F., Guindon S., Lefort V., Lescot M., Claverie J.M.,
-            Gascuel O. <i>Phylogeny.fr: robust phylogenetic analysis for the non-specialist.</i>
-            Nucleic Acids Res. 2008 Jul 1;36(Web Server issue):W465-9. Epub 2008 Apr 19.
-            (<a target="_blank"
-                href="http://www.ncbi.nlm.nih.gov/pubmed/18424797?ordinalpos=1&amp;itool=EntrezSystem2.PEntrez.Pubmed.Pubmed_ResultsPanel.Pubmed_RVDocSum">PubMed</a>)
-            <span class="small">*: joint first authors</span>
-        </div>
-        </div>
-    </div>
+<div class="jumbotron">
+    <img alt="[Logo]" src="{% static 'images/logo_phylogeny-fr.png' %}" class="center-block">
+    <p class="text-center">
+        <span class="h2">NGPhylogeny.fr</span>
+        <span>Robust phylogenetic analysis for everyone. </span>
+    </p>
+    <p class="text-center"><span class="glyphicon glyphicon-chevron-right"></span>
+        Free, simple to use web service dedicated to
+        reconstructing and analysing phylogenetic relationships between
+        molecular sequences.
+    </p>
+    <p class="text-center">
+        <a href="{% url 'get_started_workflow' %}"  class="btn btn-success btn-lg">
+            Get started with OneClick Workflow
+        </a>
+    </p>
+</div>
 {% endblock %}
 {% block content %}
-    {% include "include/phylogeny_analysis_list.html" %}
+<hr>
+{% include "include/phylogeny_analysis_list.html" %}
 {% endblock %}

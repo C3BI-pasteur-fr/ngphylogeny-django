@@ -6,6 +6,7 @@ from django.http import Http404, HttpResponseGone
 from django.shortcuts import redirect
 
 from galaxy.models import Server, GalaxyUser
+
 logger = logging.getLogger(__name__)
 
 
@@ -17,7 +18,12 @@ def connection_galaxy(view_function):
         try:
             if hasattr(request, 'galaxy_server'):
                 galaxy_server = request.galaxy_server
+
+            elif request.session.get('galaxy_server'):
+                galaxy_server = Server.objects.get(id=request.session.get('galaxy_server'))
+
             else:
+                #by default use the current Galaxy server
                 galaxy_server = Server.objects.get(current=True)
 
         except Server.DoesNotExist :
@@ -31,6 +37,7 @@ def connection_galaxy(view_function):
             raise HttpResponseGone()
 
         request.galaxy_server = galaxy_server
+        request.session['galaxy_server'] = galaxy_server.id
 
         if request.user.is_authenticated():
             """Try to use related Galaxy user information"""
@@ -41,7 +48,7 @@ def connection_galaxy(view_function):
 
                 """If the key api is not defined, prompts the user to define it"""
                 if gu.api_key:
-                    request.galaxy = gu.get_galaxy_instance()
+                    request.galaxy = gu.get_galaxy_instance
                 else:
                     return redirect('galaxy_account')
 
@@ -60,7 +67,7 @@ def connection_galaxy(view_function):
             """If user is not an authenticated, use the anonymous Galaxy user set"""
             try:
                 gu = GalaxyUser.objects.get(anonymous=True, galaxy_server=galaxy_server)
-                request.galaxy = gu.get_galaxy_instance()
+                request.galaxy = gu.get_galaxy_instance
 
             except GalaxyUser.DoesNotExist :
                 msg = "NGPhylogeny server is not properly configured, " \
@@ -69,8 +76,8 @@ def connection_galaxy(view_function):
                 logger.exception("Anonymous user not set")
                 raise Http404(msg)
 
-            except:
-                logger.exception("Galaxy account Error")
+            except Exception as e:
+                logger.exception("Galaxy anonymous account Error: "+e)
                 return HttpResponseGone()
 
         return view_function(request, *args, **kwargs)

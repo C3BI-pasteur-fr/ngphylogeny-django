@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% load crispy_forms_tags %}
+{% load static %}
+{% block nav-analysis %}class="active"{% endblock %}
+{% block xl-content %}
+    <script>
+        $(function () {
+            $(".nav.nav-pills li").on("click", function () {
+                $(".nav.nav-pills li").removeClass("active");
+                $(this).addClass("active");
+                $('.miniworkflow').hide();
+                $($(this).find('a').attr('id')).show();
+                $('form').attr('action', $(this).find('a').attr('id').replace("#", ""));
+                $('#more_info').attr('href', $(this).find('a').attr('id').replace("#", ""));
+            });
+        });
+    </script>
+
+    <h2><span class="glyphicon glyphicon-chevron-right"></span>{% block workflow-type %}Workflows{% endblock %}</h2>
+    {% block workflow-name %}{% endblock %}
+    <br>
+    <div class="row row-eq-height">
+        {% block workflow-sidebar %}
+            <div class="col-md-3 sidenav">
+                <div class="text-center">
+                    <h4>-- Select your workflow --</h4>
+                    <hr>
+                </div>
+                <ul class="nav nav-pills nav-stacked">
+                    {% for workflow in workflow_list|dictsort:"rank" %}
+                        <li {% if forloop.first %}class="active" {% endif %}>
+                            <a id="#{{ workflow.slug }}">
+                                <span class="glyphicon glyphicon-cog"></span>
+                                {{ workflow.name }}
+                            </a>
+                        </li>
+                    {% endfor %}
+                </ul>
+                <br>
+            </div>
+        {% endblock %}
+        <div class="col-md-9">
+            <div class="row">
+                <div class="col-md-9">
+                    <h4>Workflow steps overview:</h4>
+                    {% with wizard.steps.current as steps_current %}
+                        {% for workflow in workflow_list|dictsort:"rank" %}
+                            {% include "workflows/include/workflow_overview.html" %}
+                        {% endfor %}
+                    {% endwith %}
+                    <a id='more_info' href="{{ workflow_list.0.slug }}"> <span
+                            class="glyphicon glyphicon-question-sign"></span> See more detail
+                    </a>
+                    <br>
+                </div>
+            </div>
+            <br>
+            {% block workflow-form %}
+            {% endblock %}
+        </div>
+    </div>
+{% endblock xl-content %}

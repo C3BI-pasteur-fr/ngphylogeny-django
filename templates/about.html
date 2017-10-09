@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% load static %}
+{% block stylesheet %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/biblio.css' %}"/>
+{% endblock %}
+{% block nav-about %}class="active"{% endblock %}>
+{% block content %}
+
+<div id="content" class="col-lg-12">
+
+    <h2>Contributors</h2>
+    <hr>
+    <p>Damien CORREIA<sup>1,3,4</sup>, Vincent LEFORT<sup>2</sup>, Olivia DOPPELT-AZEROUAL<sup>3</sup>, Fabien
+        MAREUIL<sup>3</sup>, Sarah COHEN-BOULAKIA<sup>4</sup> and OlivierGASCUEL<sup>2,3</sup>
+    </p>
+    <p>
+        <sup>1</sup> Institut Français de Bioinformatique, IFB-Core - UMS 3601, Gif-sur-Yvette, France
+        <br>
+        <sup>2</sup> Laboratoire d'Informatique, de Robotique et de Microélectronique de Montpellier, LIRMM - UMR 5506
+        CNRS
+        et Université de Montpellier, France
+        <br>
+        <sup>3</sup> Unité de Bioinformatique Evolutive et Hub Bioinformatique et Biostatistique, C3BI - USR 3756
+        Institut
+        Pasteur et CNRS, Paris, France
+        <br>
+        <sup>4</sup> Laboratoire de Recherche en Informatique, LRI - CNRS UMR 8623 et Université Paris-Saclay, Orsay,
+        France
+    </p>
+
+    <h2>References: </h2>
+    <hr>
+    <article id="publications" class="list">
+        <ul id="pub-container" class="pubs">
+            <li>
+                <a target="_blank" href="http://www.ncbi.nlm.nih.gov/pubmed/18424797">
+                    <div class="pub-date">
+                        2008
+                    </div>
+                    <div class="pub-content clear">
+                        <span class="pub-author-list">Dereeper A<sup>*</sup>, Guignon V<sup>*</sup>, Blanc G, Audic S, Buffet S, Chevenet F, Dufayard J.F, Guindon S, Lefort V, Lescot M, Claverie J.M, Gascuel O,</span>
+                        <span class="pub-title">Phylogeny.fr: robust phylogenetic analysis for the non-specialist.,</span>
+                        <span class="pub-journal-name"> Nucleic Acids Res. 2008 Jul 1;36(Web Server issue):W465-9. Epub 2008 Apr 19.</span>
+                        <span class="small">*: joint first authors</span>
+                    </div>
+                </a>
+            </li>
+
+        </ul>
+    </article>
+</div>
+{% endblock %}

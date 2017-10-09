@@ -7,13 +7,13 @@
         $.ajax({
         url: document.URL,
         success: function(data) {
-            $('#view').append("<pre>"+data+"</pre>");
+            $('#view').html("<pre>"+data+"</pre>");
         }});
         });
     </script>
 {% endblock %}
 {% block content %}
     <div id="view" class="row">
-
+        <h4><span class="glyphicon glyphicon-refresh spin"></span> Loading ...</h4>
     </div>
 {% endblock %}

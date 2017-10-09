@@ -11,11 +11,12 @@ class WorkspaceHistory(models.Model):
     """
     Galaxy history information
     """
-    history = models.CharField(max_length=20,unique=True)
-    name = models.CharField(max_length=100)
-    created_date = models.DateField(auto_now=True)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
+
+    history = models.CharField(max_length=20)
     galaxy_server = models.ForeignKey(Server, on_delete=models.CASCADE)
+    name = models.CharField(max_length=100)
+    created_date = models.DateTimeField(auto_now=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
 
     def get_galaxy_user(self):
         if self.user:
@@ -25,7 +26,7 @@ class WorkspaceHistory(models.Model):
         """Rename history galaxy"""
         gu = self.get_galaxy_user()
         if gu:
-            gi = gu.get_galaxy_instance()
+            gi = gu.get_galaxy_instance
             gi.histories.update_history(history_id=self.history, name=self.name)
 
     def save(self, *args, **kwargs):
@@ -33,18 +34,18 @@ class WorkspaceHistory(models.Model):
             self.rename()
         super(WorkspaceHistory, self).save(*args, **kwargs)
 
-
     class Meta:
         verbose_name_plural = "Workspace histories"
         unique_together = (("history", "galaxy_server"),)
 
 
 def send_delete_galaxy_history(sender, instance, using, **kwargs):
-    """remove history from db and from Galaxy serveur"""
+    """remove history from db and from Galaxy server"""
 
     gu = instance.get_galaxy_user()
     if gu:
-        gi = gu.get_galaxy_instance()
+        gi = gu.get_galaxy_instance
         gi.histories.delete_history(instance.history, purge=True)
+
 
 pre_delete.connect(send_delete_galaxy_history, sender=WorkspaceHistory)

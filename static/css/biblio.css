@@ -1,0 +1,97 @@
+#publications.list ul {
+ list-style-type: none;
+}
+
+#publications.list li {
+	margin: 10px 0 10px;
+	padding: 5px;
+}
+#publications.list a {
+	text-decoration:none;
+	color:#4d5260;
+}
+#publications.list .pub-date{
+  color: #777;
+  font-size: 13px;
+  float: left;
+  width: 45px;
+  height: 45px;
+  background: #FFF;
+  border: 1px solid #AAA;
+  -webkit-border-radius: 50%;
+  -moz-border-radius: 50%;
+  border-radius: 50%;
+  position: relative;
+  padding: 11px 0;
+  text-align: center;
+  font-family: 'Montserrat', sans-serif;
+}
+
+#publications.list li .pub-date:before{
+	content: '';
+	position: absolute;
+	left: 50%;
+	height: 20px;
+	width: 1px;
+	top: -20px;
+	border-left: 1px solid #AAA;
+	z-index: 0;
+}
+#publications.list li .pub-date:after{
+	content: '';
+	position: absolute;
+	left: 50%;
+	height: 110px;
+	width: 1px;
+	bottom: -110px;
+	border-left: 1px solid #AAA;
+	z-index: 0;
+}
+#publications.list li:last-child .pub-date:after{
+	height: 20px;
+	bottom: -20px;
+}
+#publications.list li .pub-content{
+	margin-left: 55px;
+	margin-right: 5px;
+	padding-top: 6px;
+    font-size: 15px;
+    max-height: 150px;
+    overflow: hidden;
+	-webkit-transition:all 400ms ease;
+	-moz-transition:all 400ms ease;
+	-o-transition:all 400ms ease;
+	transition:all 400ms ease;
+}
+.list-item .pub-title,
+#publications.list li .pub-title {
+    font-weight: bold;
+}
+
+#publications.list li .pub-title strong{
+	font-family: 'Montserrat', sans-serif;
+	text-decoration: none;
+}
+
+#publications.list li .pub-journal-name {
+
+}
+#publications.list li .pub-author-list {
+
+}
+
+#publications.list li a:hover{
+	color: rgb(53, 169, 245);
+}
+#publications.list li a:hover > .pub-date{
+	border-color: rgb(53, 169, 245);
+	color: rgb(53, 169, 245);
+}
+#publications.list li a:hover > .pub-content{
+	margin-left: 60px;
+	margin-right: 0;
+	-webkit-transition:all 400ms ease;
+	-moz-transition:all 400ms ease;
+	-o-transition:all 400ms ease;
+	transition:all 400ms ease;
+}

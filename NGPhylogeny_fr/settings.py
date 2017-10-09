@@ -27,6 +27,7 @@ SECRET_KEY = '_m(y$t1ukdw&!z-e_)ig5h!=*#y*3db3vh81il_i=n*y24ih9k'
 DEBUG = True
 
 ALLOWED_HOSTS = ["127.0.0.1",]
+INTERNAL_IPS = ["127.0.0.1",]
 
 CRISPY_TEMPLATE_PACK = "bootstrap4"
 
@@ -46,6 +47,7 @@ INSTALLED_APPS = [
     'galaxy',
     'data',
     'tools',
+    'surveys',
     'workflows',
     'workspace',
 ]
@@ -62,8 +64,8 @@ MIDDLEWARE_CLASSES = [
     'debug_toolbar.middleware.DebugToolbarMiddleware'
 ]
 
-SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
-SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_ENGINE = 'django.contrib.sessions.backends.cached_db'
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 
 ROOT_URLCONF = 'NGPhylogeny_fr.urls'
 
@@ -158,4 +160,10 @@ LOGGING = {
             'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO'),
         },
     },
+}
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+    }
 }

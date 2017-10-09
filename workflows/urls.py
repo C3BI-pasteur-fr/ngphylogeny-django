@@ -16,17 +16,19 @@ Including another URLconf
 
 from django.conf.urls import url
 
-from views import workflows_advanced_mode_build, workflows_alacarte_mode_build, workflow_form
-from views.oneclick import WorkflowOneClickListView, WorkflowOneClickView
+from views.oneclick import WorkflowStartedView, WorkflowOneClickListView, WorkflowOneClickFormView
+from views.wkadvanced import WorkflowAdvancedListView, WorkflowAdvancedRedirectView
+from views.wkmaker import WorkflowsMarkerRedirectView, workflows_alacarte_build
 
 urlpatterns = [
 
-    url(r'^oneclick_mode$', WorkflowOneClickListView.as_view(), name="workflow_oneclick_list"),
-    # url(r'^oneclick_mode$', workflows_oneclick_mode_build, name="workflows_oneclick"),
-    url(r'advanced_mode$', workflows_advanced_mode_build, name="workflows_advanced"),
-    url(r'^alacarte_mode$', workflows_alacarte_mode_build, name="workflows_alacarte"),
-    url(r'^advanced/(?P<slug_workflow>[\w-]+)$', workflow_form ,name="workflows_advanced_step" ),
-    url(r'^(?P<slug>[\w-]+)$', WorkflowOneClickView.as_view(), name="workflow_oneclick_form"),
-    # url(r'^(?P<slug>[\w-]+)/$', LaunchGalaxyWorkflowView.as_view(), name="workflows"),
-    # url(r'^$', workflow_form, name="workflow_form"),
+    url(r'^quickstart$', WorkflowStartedView.as_view(), name="get_started_workflow"),
+    url(r'^oneclick/$', WorkflowOneClickListView.as_view(), name="workflow_oneclick_list"),
+    url(r'^oneclick/(?P<slug>[\w-]+)$', WorkflowOneClickFormView.as_view(), name="workflow_oneclick_form"),
+    url(r'^advanced/$', WorkflowAdvancedListView.as_view(), name="workflows_advanced"),
+    url(r'^advanced/(?P<slug>[\w-]+)$', WorkflowAdvancedRedirectView.as_view(), name="workflows_advanced_step"),
+
+    url(r'^alacarte$', workflows_alacarte_build, name="workflows_alacarte"),
+    url(r'^wkmake/(?P<id>[\w-]+)$', WorkflowsMarkerRedirectView.as_view(), name="workflow_maker_form"),
+
 ]

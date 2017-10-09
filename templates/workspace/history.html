@@ -6,8 +6,7 @@
 {% block nav-workspace %}class="active"{% endblock %}
 {% block content %}
     <div class="row">
-        <div class="col-md-1"></div>
-        <div class="col-md-9">
+        <div class="col-md-12">
             {% if history_content %}
                 {# {% include "workspace/include/history_contents_provenance.html" %}#}
                 {% include "workspace/include/history_contents_provenance_ajax.html" %}
