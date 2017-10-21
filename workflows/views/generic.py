@@ -9,9 +9,9 @@ from formtools.wizard.views import SessionWizardView
 
 from data.views import UploadView, ImportPastedContentView
 from galaxy.decorator import connection_galaxy
-from viewmixing import WorkflowDetailMixin
 from workflows.models import Workflow, WorkflowStepInformation
 from workspace.views import create_history
+from .viewmixing import WorkflowDetailMixin
 
 
 @method_decorator(connection_galaxy, name="dispatch")
@@ -118,7 +118,7 @@ class WorkflowFormView(WorkflowDetailMixin, UploadView, ImportPastedContentView,
         # input file
         dataset_map = dict()
         dataset_map[i_input] = {'id': file_id, 'src': 'hda'}
-        print dataset_map
+        print (dataset_map)
 
         try:
             # run workflow
@@ -128,7 +128,7 @@ class WorkflowFormView(WorkflowDetailMixin, UploadView, ImportPastedContentView,
                                                      # inputs=dataset_map
                                                      )  # ,params=wk_galaxy.params)
 
-        except Exception, galaxy_exception:
+        except Exception as galaxy_exception:
             raise galaxy_exception
 
         self.success_url = reverse_lazy("history_detail", kwargs={'history_id': history_id}, )
@@ -147,7 +147,7 @@ class WorkflowWizard(SessionWizardView):
     def done(self, form_list, **kwargs):
 
         workflow = self.get_workflow()
-        history_id = create_history(self.request, name="NGPhylogeny Analyse - " + self.workflow.name)
+        history_id = create_history(self.request, name="NGPhylogeny Analyse - " + workflow.name)
 
         i_input = workflow.json['inputs'].keys()[0]
 
@@ -185,7 +185,7 @@ class WorkflowWizard(SessionWizardView):
 
             self.succes_url = reverse_lazy("history_detail", kwargs={'history_id': history_id})
 
-        except Exception, galaxy_exception:
+        except Exception as galaxy_exception:
 
             raise galaxy_exception
 
