@@ -43,87 +43,100 @@
 
 {% endblock %}
 {% block xl-content %}
-    <h2><span class="glyphicon glyphicon-chevron-right"></span>Workflows Maker</h2>
-    <h5>Select tools in a this predefine order to build your own workflow</h5>
-    <br>
+<h2><span class="glyphicon glyphicon-chevron-right"></span>Workflows Maker</h2>
+<h5>Select tools in a this predefine order to build your own workflow</h5>
+<br>
+<div class="row">
+    <div class="col-md-11 col-md-offset-1">
+        <h3><span class="glyphicon glyphicon-chevron-right small"></span>List of Tools</h3>
+    </div>
+</div>
+{% if messages %}
+<ul class="messages">
+    {% for message in messages %}
+    {% if "error" in message.tags %}
+    <div class="alert alert-danger alert-dismissable">
+        <a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a><strong>Warning!</strong>
+        {{ message }}
+    </div>
+    {% endif %}
+    {% endfor %}
+</ul>
+{% endif %}
+<div class="row">
+    <div class="col-md-10 col-md-offset-2">
+        {% for step in workflow|dictsort:"step" %}
+        <div class="col-md-2">
+            <h4 class="text-left">{{ forloop.counter }}. {{ step.flag.verbose_name }}</h4>
+            <div class="btn-group-vertical" role="group">
+                {% for tool in step.tools %}
+                <label class="btn btn-default" type="button" for="radio-{{ tool.pk }}">{{ tool.name }}
+                    <input type="radio"
+                           id="radio-{{ tool.pk }}"
+                           name="radio-{{ step.flag.name }}"
+                           data-panel="toolbox-{{ tool.pk }}"
+                           data-target="wk-display-{{ step.flag.name }}">
+                    {# tool panel #}
+                    <div id="toolbox-{{ tool.pk }}" class="alert" style="display:none;">
+                        <button type="button" class="close"
+                                aria-label="Close"
+                                onclick="remove_panel(this);">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                        <input name="{{ step.category }}" value="{{ tool.pk }}" hidden/>
+                        {% include 'tools/tool_panel.html' %}
+                    </div>
+                    {# end tool panel #}
+                </label>
+                {% endfor %}
+
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+<div style="background-color:#f6f6f6; margin-top: 20px;">
     <div class="row">
         <div class="col-md-11 col-md-offset-1">
-            <h3><span class="glyphicon glyphicon-chevron-right small"></span>List of Tools</h3>
-        </div>
+            <h3><span class="glyphicon glyphicon-chevron-right small"></span>
+                Workflow overview
+            </h3></div>
     </div>
-
     <div class="row">
-        <div class="col-md-10 col-md-offset-2">
-            {% for step in workflow|dictsort:"step" %}
-                <div class="col-md-2">
-                    <h4 class="text-left">{{ forloop.counter }}. {{ step.flag.verbose_name }}</h4>
-                    <div class="btn-group-vertical" role="group">
-                        {% for tool in step.tools %}
-                            <label class="btn btn-default" type="button" for="radio-{{ tool.pk }}">{{ tool.name }}
-                                <input type="radio"
-                                       id="radio-{{ tool.pk }}"
-                                       name="radio-{{ step.flag.name }}"
-                                       data-panel="toolbox-{{ tool.pk }}"
-                                       data-target="wk-display-{{ step.flag.name }}">
-                                {# tool panel #}
-                                <div id="toolbox-{{ tool.pk }}" style="display:none;">
-                                    <button type="button" class="close"
-                                            data-dismiss="alert" aria-label="Close"
-                                            onclick="remove_panel(this);">
-                                        <span aria-hidden="true">&times;</span>
-                                    </button>
-                                    <input name="{{ step.category }}" value="{{ tool.pk }}" hidden=true/>
-                                    {% include 'tools/tool_panel.html' %}
-                                </div>
-                                {# end tool panel #}
-                            </label>
-                        {% endfor %}
-
-                    </div>
-                </div>
-            {% endfor %}
-        </div>
-    </div>
-
-    <div style="background-color: #f1f1f1; margin-top: 20px;" >
-    <div class="row">
-    <div class="col-md-11 col-md-offset-1"><h3><span class="glyphicon glyphicon-chevron-right small"></span>Workflow overview</h3></div>
-    </div>
-        <div class="row">
         <div class="col-md-10 col-md-offset-1">
 
-        <form id="wkform" action="" method="post">
-            {% csrf_token %}
-            <input name=wkname type="hidden" value="">
-            <div id="mini-wk" class="row">
-                <div class="col-md-2">
-                    <div class="panel panel-info">
-                        <div class="panel-heading"></div>
-                        <div class="panel-body">Input</div>
-                        <div class="panel-footer">
+            <form id="wkform" action="" method="post">
+                {% csrf_token %}
+                <input name=wkname type="hidden" value="">
+                <div id="mini-wk" class="row">
+                    <div class="col-md-2">
+                        <div class="panel panel-info">
+                            <div class="panel-heading"></div>
+                            <div class="panel-body">Input</div>
+                            <div class="panel-footer">
+                            </div>
                         </div>
                     </div>
+                    {% for step in workflow|dictsort:"step" %}
+                    <div id='wk-display-{{ step.category }}' class="col-md-2" style="display:none"></div>
+                    {% endfor %}
                 </div>
-                {% for step in workflow|dictsort:"step" %}
-                    <div id=wk-display-{{ step.category }} class="col-md-2" style="display:none"></div>
-                {% endfor %}
-            </div>
-        </form>
+            </form>
         </div>
     </div>
+</div>
+<div class="row">
+    <div class="col-md-11 col-md-offset-1">
+        <h3 class="text-justify"><span class="glyphicon glyphicon-chevron-right small"></span>Workflow name</h3></div>
+</div>
+<div class="row">
+    <div class="col-md-6 col-md-offset-2">
+        <h5></h5>
+        <input id='wkname' class="form-control" placeholder="Workflow name.." type="text">
+        <hr>
+        <button id="submit1" type="submit" class="btn btn-primary" name="run" value="Build workflow">
+            <span class="glyphicon glyphicon-play-circle"></span> Create workflow
+        </button>
     </div>
-    <div class="row">
-        <div class="col-md-11 col-md-offset-1">
-            <h3 class="text-justify"><span class="glyphicon glyphicon-chevron-right small"></span>Workflow name</h3></div>
-    </div>
-    <div class="row">
-        <div class="col-md-6 col-md-offset-2">
-            <h5> </h5>
-            <input id='wkname' class="form-control" placeholder="Workflow name.." type="text">
-            <hr>
-            <button id="submit1" type="submit" class="btn btn-primary" name="run" value="Build workflow">
-                <span class="glyphicon glyphicon-play-circle"></span> Create workflow
-            </button>
-        </div>
-    </div>
+</div>
 {% endblock xl-content %}

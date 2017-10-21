@@ -1,6 +1,7 @@
 import random
 import string
 
+from django.contrib import messages
 from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.utils.decorators import method_decorator
@@ -36,36 +37,51 @@ def workflows_alacarte_build(request):
     if request.method == 'POST':
 
         tools = []
+        previous_tool = ""
+        form_is_valid = True
+
         for step in WORKFLOW_STATIC_STEPS:
-            select_tool_pk = request.POST.get(step.get('category'))
+
+            category = step.get('category')
+            select_tool_pk = request.POST.get(category, None)
+
+            # TODO use data input/output format to invalidate form
+            if category == "visu" and select_tool_pk and (not previous_tool or not tools):
+                form_is_valid = False
+                messages.add_message(request, messages.ERROR, "This combination of tools is not allowed")
+                break
 
             if select_tool_pk:
                 tools.append(select_tool_pk)
 
-        dict_tools = Tool.objects.in_bulk(tools)
+            previous_tool = select_tool_pk
 
-        # sort tool
-        list_tool = [dict_tools.get(int(t)) for t in tools]
+        if form_is_valid:
 
-        if list_tool:
-            gi = request.galaxy
-            history_id = create_history(request)
+            dict_tools = Tool.objects.in_bulk(tools)
 
-            # build workflow object
-            wkg = WorkflowGalaxyFactory(list_tool, gi, history_id)
-            wkg.name = request.POST.get('wkname')
+            # sort tool
+            list_tool = [dict_tools.get(int(t)) for t in tools]
 
-            if not wkg.name:
-                wkg.name = "Workflow_generated_"
-                wkg.name += ''.join(random.sample(string.ascii_letters + string.digits, 8))
+            if list_tool:
+                gi = request.galaxy
+                history_id = create_history(request)
 
-            # create the JSON of generated workflow
-            # create new entry into Galaxy
-            wkgi = gi.workflows.import_workflow_json(wkg.to_json())
-            wk_id = wkgi.get('id')
+                # build workflow object
+                wkg = WorkflowGalaxyFactory(list_tool, gi, history_id)
+                wkg.name = request.POST.get('wkname')
 
-            return redirect(reverse("workflow_maker_form", args=[wk_id]))
-            # return HttpResponse(json.dumps(wkg.to_json()), content_type='application/json')
+                if not wkg.name:
+                    wkg.name = "Workflow_generated_"
+                    wkg.name += ''.join(random.sample(string.ascii_letters + string.digits, 8))
+
+                # create the JSON of generated workflow
+                # create new entry into Galaxy
+                wkgi = gi.workflows.import_workflow_json(wkg.to_json())
+                wk_id = wkgi.get('id')
+
+                return redirect(reverse("workflow_maker_form", args=[wk_id]))
+                # return HttpResponse(json.dumps(wkg.to_json()), content_type='application/json')
 
     context = {"workflow": WORKFLOW_STATIC_STEPS}
 
