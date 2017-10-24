@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% load static %}
+{% block stylesheet %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/biblio.css' %}"/>
+<script src="{% static 'biojs/msa.min.gz.js' %}"></script>
+{% endblock %}
+{% block nav-workspace %}class="active"{% endblock %}
+{% block content %}
+<script>
+        $(document).ready(function () {
+            $.ajax({
+                url: document.URL,
+                success: function (data) {
+                    var seqs = msa.io.fasta.parse(data);
+                    var opts = {
+                        el: document.getElementById("content-main"),
+                        vis: {
+                            seqlogo: true,
+                            conserv: true,
+                            overviewbox: true,
+                            leftHeader: true,
+                        },
+                        // smaller menu for JSBin
+                        menu: "small",
+                        bootstrapMenu: true,
+                        seqs: seqs,
+                        zoomer: {
+                            // general
+                            alignmentWidth: "auto",
+                            alignmentHeight: 225,
+                            columnWidth: 15,
+                            rowHeight: 15,
+
+                            // overview box
+                            overviewboxPaddingTop: "20px",
+
+                        }
+                    };
+                    var m = new msa.msa(opts);
+                    m.render();
+                }
+            });
+        });
+
+</script>
+<div class="h3">Multiple Sequence Alignment Viewer - the MSAViewer - a BioJS component.</div>
+<br>
+<div class="row">
+    <div id="content-main"><span class="glyphicon glyphicon-refresh spin"></span>"Run with JS"</div>
+</div>
+<br>
+<div class="row">
+    <hr>
+    <article id="publications" class="list">
+        <ul id="pub-container" class="pubs">
+            <li>
+                <a target="_blank" href="http://dx.doi.org/10.1093/bioinformatics/btw474">
+                    <div class="pub-date">
+                        2016
+                    </div>
+                    <div class="pub-content clear">
+                        <span class="pub-author-list">Guy Yachdav, Sebastian Wilzbach, Benedikt Rauscher, Robert Sheridan, Ian Sillitoe, James Procter, Suzanna Lewis, Burkhard Rost, Tatyana Goldberg</span>
+                        <span class="pub-title">MSAViewer: interactive JavaScript visualization of multiple sequence alignments. </span>
+                        <span class="pub-journal-name"> Bioinformatics, Volume 32, Issue 22, 15 November 2016, Pages 3501–3503.</span>
+                    </div>
+                </a>
+            </li>
+
+        </ul>
+    </article>
+</div>
+{% endblock %}
+
