@@ -4,7 +4,7 @@ from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Submit, Layout, Field, Div
 from django import forms
 
-from models import ToolFieldWhiteList
+from .models import ToolFieldWhiteList
 
 
 def tool_form_factory(tool, galaxy_server):
@@ -17,14 +17,15 @@ def tool_form_factory(tool, galaxy_server):
     tool_url = '%s/%s/%s/%s/' % (galaxy_server.url, 'api', 'tools', tool.id_galaxy)
     tool_info_request = requests.get(tool_url, params={'io_details': "true"})
     tool_inputs_details = tool_info_request.json()
-    tool_field_witeList = ToolFieldWhiteList.objects.get(tool=tool, context="w")
+
+    tool_field_white_list, created = ToolFieldWhiteList.objects.get_or_create(tool=tool, context="w")
 
     return type(str(tool.name) + 'Form', (ToolForm,),
                 {'tool_params': tool_inputs_details.get('inputs'),
                  'tool_id': tool.id_galaxy,
-                 'visible_field': tool_field_witeList.saved_params,
+                 'visible_field': tool_field_white_list.saved_params,
                  'fields_ids_mapping': {},
-                  'n' : 0,
+                 'n': 0,
                  }
                 )
 

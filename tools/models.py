@@ -47,10 +47,9 @@ class Tool(models.Model):
     @property
     def get_params_detail(self):
 
-        tool_url = '%s/%s/%s/%s' % ( self.galaxy_server.url,'api', 'tools', self.id_galaxy)
+        tool_url = '%s/%s/%s/%s' % (self.galaxy_server.url, 'api', 'tools', self.id_galaxy)
         tool_info_request = requests.get(tool_url, params={'io_details': "true"})
         return tool_info_request.json().get('inputs')
-
 
     @classmethod
     def import_tools(cls, galaxy_server, query="phylogeny"):
@@ -233,21 +232,23 @@ class ToolFieldWhiteList(models.Model):
     Models use to filter Galaxy render form
     """
     CONTEXT_CHOICES = (('w', 'Workflows'),
-               ('aw', 'Advanced Workflows'),
-               ('t', 'Tool Forms'),
-               ('at', 'Advanced Tool Forms'),
-               )
+                       ('aw', 'Advanced Workflows'),
+                       ('t', 'Tool Forms'),
+                       ('at', 'Advanced Tool Forms'),
+                       )
 
     DICT_CONTEXT_CHOICES = dict(CONTEXT_CHOICES)
 
     tool = models.ForeignKey(Tool, on_delete=models.CASCADE)
     context = models.CharField(max_length=2, choices=CONTEXT_CHOICES, help_text='In which context use the whitelist')
-    _params = models.TextField(max_length=1000, blank=True)
-
+    _params = models.TextField(max_length=1000, blank=True, default="")
 
     @property
     def saved_params(self):
-        return self._params.split(',')
+        if self._params:
+            return self._params.split(',')
+        else:
+            return []
 
     @property
     def get_params(self):
@@ -265,5 +266,7 @@ class ToolFieldWhiteList(models.Model):
         return self.tool.get_params_detail
 
     def __unicode__(self):
-        return "%s ,%s" %(self.tool.name, self.DICT_CONTEXT_CHOICES.get(self.context))
+        return "%s ,%s" % (self.tool.name, self.DICT_CONTEXT_CHOICES.get(self.context))
 
+    class Meta:
+        unique_together = ('tool', 'context')

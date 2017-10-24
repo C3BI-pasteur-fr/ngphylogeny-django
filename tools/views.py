@@ -10,7 +10,7 @@ from django.views.generic import DetailView, ListView
 from galaxy.decorator import connection_galaxy
 from workspace.views import create_history, delete_history
 from .forms import ToolForm
-from .models import Tool
+from .models import Tool, ToolFieldWhiteList
 
 
 class ToolListView(ListView):
@@ -35,9 +35,11 @@ def tool_exec_view(request, pk, store_output=None):
 
     tool_obj = get_object_or_404(Tool, pk=pk)
 
-    tool_visiblefield = []  # tool_obj.toolfieldwhitelist_set.filter(context='t').first().saved_params
+    toolfield, created = ToolFieldWhiteList.objects.get_or_create(tool=tool_obj, context='t')
+    tool_visible_field = toolfield.saved_params
+
     tool_inputs_details = gi.tools.show_tool(tool_id=tool_obj.id_galaxy, io_details='true')
-    tool_form = ToolForm(tool_params=tool_inputs_details['inputs'], tool_id=pk, whitelist=tool_visiblefield,
+    tool_form = ToolForm(tool_params=tool_inputs_details['inputs'], tool_id=pk, whitelist=tool_visible_field,
                          data=request.POST or None)
 
     if request.method == 'POST':
