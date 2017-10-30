@@ -224,7 +224,7 @@ class ToolFlag(models.Model):
         return self.verbose_name
 
     class Meta:
-        ordering = ['verbose_name']
+        ordering = ['rank', 'verbose_name']
 
 
 class ToolFieldWhiteList(models.Model):
