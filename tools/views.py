@@ -10,11 +10,19 @@ from django.views.generic import DetailView, ListView
 from galaxy.decorator import connection_galaxy
 from workspace.views import create_history, delete_history
 from .forms import ToolForm
-from .models import Tool, ToolFieldWhiteList
+from .models import Tool, ToolFieldWhiteList, ToolFlag
 
 
 class ToolListView(ListView):
-    queryset = Tool.objects.filter(galaxy_server__current=True, visible=True)
+    CATEGORY = ['algn',
+                'clean',
+                'tree',
+                'visu',
+                ]
+
+    CATEGORY = ToolFlag.objects.filter(rank=0).values_list('name', flat=True) or CATEGORY
+
+    queryset = Tool.objects.filter(galaxy_server__current=True, visible=True).filter(toolflag__name__in=CATEGORY)
 
 
 class ToolDetailView(DetailView):
