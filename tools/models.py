@@ -223,6 +223,9 @@ class ToolFlag(models.Model):
     def __unicode__(self):
         return self.verbose_name
 
+    class Meta:
+        ordering = ['verbose_name']
+
 
 class ToolFieldWhiteList(models.Model):
     """
