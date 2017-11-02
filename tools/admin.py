@@ -44,7 +44,7 @@ class ToolAdmin(admin.ModelAdmin):
 
     list_display = ['name', 'galaxy_server', 'toolshed', 'version', 'visible', 'toolflags']
     list_filter = ['galaxy_server', 'toolshed']
-    fields = ('name', 'version', 'oneclick' 'galaxy_server', 'toolshed', 'id_galaxy',)
+    fields = ('name', 'version', 'oneclick', 'galaxy_server', 'toolshed', 'id_galaxy',)
     inlines = [
         ToolInputDataInline,
         ToolOutputDataInline,
