@@ -99,10 +99,13 @@ def tool_exec_view(request, pk, store_output=None):
 
                 message = ast.literal_eval(e.body)
                 reverse_dict_field = {v: k for k, v in tool_form.fields_ids_mapping.items()}
-                delete_history(request, history_id)
+
                 for field, err_msg in message.get('err_data').items():
                     tool_form.add_error(reverse_dict_field.get(field),
                                         ValidationError(err_msg, code='invalid'))
+
+                delete_history(request, history_id)
+
 
     context = {"toolform": tool_form,
                "tool": tool_obj,

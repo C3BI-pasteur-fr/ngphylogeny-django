@@ -27,6 +27,7 @@ class Tool(models.Model):
     description = models.CharField(max_length=250)
     toolshed_revision = models.CharField(max_length=250, blank=True)
     visible = models.BooleanField(default=True, help_text="display this tool on the user web interface")
+    oneclick = models.BooleanField(default=False)
 
     @property
     def toolflags(self):
