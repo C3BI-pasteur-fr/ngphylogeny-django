@@ -14,15 +14,17 @@ from .models import Tool, ToolFieldWhiteList, ToolFlag
 
 
 class ToolListView(ListView):
+
     CATEGORY = ['algn',
                 'clean',
                 'tree',
                 'visu',
                 ]
 
-    CATEGORY = ToolFlag.objects.filter(rank=0).values_list('name', flat=True) or CATEGORY
+    def get_queryset(self):
+        CATEGORY = ToolFlag.objects.filter(rank=0).values_list('name', flat=True) or self.CATEGORY
+        return Tool.objects.filter(galaxy_server__current=True, visible=True).filter(toolflag__name__in=CATEGORY)
 
-    queryset = Tool.objects.filter(galaxy_server__current=True, visible=True).filter(toolflag__name__in=CATEGORY)
 
 
 class ToolDetailView(DetailView):
