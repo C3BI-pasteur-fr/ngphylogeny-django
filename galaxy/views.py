@@ -2,7 +2,7 @@ from django.contrib.messages.views import SuccessMessageMixin
 from django.shortcuts import render
 from django.views.generic import UpdateView, TemplateView
 
-from models import GalaxyUser, Server
+from .models import GalaxyUser, Server
 
 
 # Create your views here.
