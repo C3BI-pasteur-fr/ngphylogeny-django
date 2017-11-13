@@ -16,23 +16,33 @@ from workflows.views.viewmixing import WorkflowDeleteWorkingCopyMixin
 from workflows.views.wkadvanced import WorkflowAdvancedFormView
 from workspace.views import create_history
 
-WORKFLOW_STATIC_STEPS = [{"step": 0, "category": 'algn', "group": ""},
-                         {"step": 1, "category": 'clean', "group": ""},
-                         {"step": 2, "category": 'tree', "group": ""},
-                         {"step": 3, "category": 'visu', "group": ""},
-                        ]
-
 
 @connection_galaxy
 def workflows_alacarte_build(request):
     """
         Workflow maker display
+         - GET: Display a list of tools regroup by category
+         - POST:
+            o Retrieve selected tools
+            o Created Galaxy json Workflow file
+            o Import into Galaxy
+            :return wizard_form_wiew
     """
+    WORKFLOW_STATIC_STEPS = [{"step": 0, "category": ['algn', ], "group": []},
+                             {"step": 1, "category": ['clean', ], "group": []},
+                             {"step": 2, "category": ['tree', 'model'], "group": []},
+                             {"step": 3, "category": ['visu', ], "group": []},
+                             ]
+
     for step in WORKFLOW_STATIC_STEPS:
-        step['flag'] = ToolFlag.objects.get(name=step.get('category'))
-        step['tools'] = Tool.objects.filter(galaxy_server=request.galaxy_server,
-                                            toolflag=step['flag'],
-                                            visible=True)
+
+        flags = ToolFlag.objects.filter(name__in=step.get('category'))
+        for flag in flags:
+            step['group'].append({'flag': flag,
+                                  'tools': Tool.objects.filter(galaxy_server=request.galaxy_server,
+                                                               toolflag=flag,
+                                                               visible=True).filter(toolflag__name='wmake')
+                                  })
 
     if request.method == 'POST':
 
@@ -43,10 +53,16 @@ def workflows_alacarte_build(request):
         for step in WORKFLOW_STATIC_STEPS:
 
             category = step.get('category')
-            select_tool_pk = request.POST.get(category, None)
+
+            for cat in category:
+                select_tool_pk = request.POST.get(cat, None)
+                if select_tool_pk:
+                    break
+            else:
+                select_tool_pk = None
 
             # TODO use data input/output format to invalidate form
-            if category == "visu" and select_tool_pk and (not previous_tool or not tools):
+            if ("visu" in category) and select_tool_pk and (not previous_tool or not tools):
                 form_is_valid = False
                 messages.add_message(request, messages.ERROR, "This combination of tools is not allowed")
                 break
@@ -93,7 +109,7 @@ class WorkflowMakerView(WorkflowAdvancedFormView, DetailView):
     """
     Workflow form with the list of tools and launch workflow
     """
-    restrict_toolset = None  # Tool.objects.filter(toolflag__name='wmake')
+    restrict_toolset = Tool.objects.filter(toolflag__name='wmake')
 
     def get_object(self, queryset=None, detail=True):
         # load workflow
