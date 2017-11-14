@@ -17,7 +17,7 @@ from .viewmixing import WorkflowDetailMixin
 @method_decorator(connection_galaxy, name="dispatch")
 class WorkflowListView(WorkflowDetailMixin, ListView):
     """
-    Generic class-based Listview
+    Generic class-based ListView
     """
     model = Workflow
     context_object_name = "workflow_list"
@@ -81,7 +81,7 @@ class WorkflowFormView(WorkflowDetailMixin, UploadView, ImportPastedContentView,
 
             # get the secondary form (textaera)
             form_class = self.form2_class
-            form_name = 'form2'
+            form_name = 'textarea_form'
 
         # get the form
         form = self.get_form(form_class)
@@ -111,8 +111,6 @@ class WorkflowFormView(WorkflowDetailMixin, UploadView, ImportPastedContentView,
             u_file = self.upload_content(form.cleaned_data['pasted_text'])
 
         file_id = u_file.get('outputs')[0].get('id')
-
-
 
         i_input = workflow.json['inputs'].keys()[0]
         # input file
@@ -150,38 +148,56 @@ class WorkflowWizard(SessionWizardView):
         history_id = create_history(self.request, name="NGPhylogeny Analyse - " + workflow.name)
 
         i_input = workflow.json['inputs'].keys()[0]
+        steps = workflow.json['steps']
 
         # input file
         dataset_map = {}
+
         # tool params
         params = {}
 
-        for idx, tool_form in enumerate(form_list):
-            params[str(idx)] = inputs()
+        for tool_form in form_list:
+            step_id = u'0'
+
+            # get from which step the tools are used
+            for i, step in steps.items():
+                if getattr(tool_form, 'tool_id', 'null') == step.get('tool_id'):
+                    step_id = i
+                    break
+
+            params[step_id] = inputs()
 
             for key, form in tool_form.cleaned_data.items():
+
                 if "file" in key:
 
-                    output = self.request.galaxy.tools.upload_file(path=str(form.file), file_name=str(form.name),
-                                                                   history_id=history_id)
+                    output = self.request.galaxy.tools.upload_file(path=str(form.file),
+                                                                   file_name=str(form.name),
+                                                                   history_id=history_id
+                                                                   )
                     galaxy_file = output.get('outputs')[0]
-                    self.file_storage.delete(form)
                     dataset_map[i_input] = {'id': galaxy_file.get('id'), 'src': 'hda'}
+
+                    # delete temp file
+                    self.file_storage.delete(form)
 
                 else:
                     # set the Galaxy parameter ( name, value)
-                    params[str(idx)].set_param(tool_form.fields_ids_mapping.get(key), form)
+                    params[step_id].set_param(tool_form.fields_ids_mapping.get(key), form)
 
-            # convert dict to json
-            params[str(idx)] = params[str(idx)].to_dict()
+            # convert inputs to dict
+            params[step_id] = params[step_id].to_dict()
+
+            if not params[step_id]:
+                del params[step_id]
 
         try:
-            # run workflow
-            self.request.galaxy.workflows.run_workflow(workflow_id=workflow.id_galaxy,
-                                                       history_id=history_id,
-                                                       dataset_map=dataset_map,
-                                                       # inputs=dataset_map
-                                                       params=params)
+            output = self.request.galaxy.workflows.invoke_workflow(workflow_id=workflow.id_galaxy,
+                                                                   history_id=history_id,
+                                                                   inputs=dataset_map,
+                                                                   params=params,
+                                                                   allow_tool_state_corrections=True,
+                                                                   )
 
             self.succes_url = reverse_lazy("history_detail", kwargs={'history_id': history_id})
 

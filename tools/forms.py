@@ -150,7 +150,7 @@ class ToolForm(forms.Form):
 
         self.tool_params = tool_params or self.tool_params
         self.visible_field = whitelist or self.visible_field
-        self.tool_id = tool_id
+        self.tool_id = tool_id or self.tool_id
         self.input_file_ids = []
         self.helper = FormHelper(self)
         self.helper.form_class = 'blueForms'

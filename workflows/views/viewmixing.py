@@ -49,7 +49,7 @@ class WorkflowDeleteWorkingCopyMixin(object):
         # Verify workflow doesnt exist in db
         if not wk:
             msg = self.request.galaxy.workflows.delete_workflow(workflow_id=workflow_id)
-        print msg
+        print (msg)
         return msg
 
 
