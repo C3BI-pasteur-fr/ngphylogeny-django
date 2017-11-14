@@ -82,14 +82,12 @@ def workflows_alacarte_build(request):
                 gi = request.galaxy
 
                 # create temp history to build workflow
-                history_id = gi.histories.create_history(name="temp")
+                history_id = gi.histories.create_history(name="temp").get("id")
 
                 # build workflow object
                 wkg = WorkflowGalaxyFactory(list_tool, gi, history_id)
                 wkg.name = request.POST.get('wkname')
 
-                # remove temp history
-                gi.histories.delete_history(history_id, purge=True)
 
                 if not wkg.name:
                     wkg.name = "Workflow_generated_"
@@ -99,6 +97,9 @@ def workflows_alacarte_build(request):
                 # create new entry into Galaxy
                 wkgi = gi.workflows.import_workflow_json(wkg.to_json())
                 wk_id = wkgi.get('id')
+
+                # remove temp history
+                gi.histories.delete_history(history_id, purge=True)
 
                 return redirect(reverse("workflow_maker_form", args=[wk_id]))
                 # return HttpResponse(json.dumps(wkg.to_json()), content_type='application/json')
