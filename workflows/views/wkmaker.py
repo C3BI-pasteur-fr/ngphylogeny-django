@@ -14,7 +14,6 @@ from workflows.models import WorkflowGalaxyFactory
 from workflows.views.generic import WorkflowWizard, UploadView, DetailView
 from workflows.views.viewmixing import WorkflowDeleteWorkingCopyMixin
 from workflows.views.wkadvanced import WorkflowAdvancedFormView
-from workspace.views import create_history
 
 
 @connection_galaxy
@@ -81,11 +80,16 @@ def workflows_alacarte_build(request):
 
             if list_tool:
                 gi = request.galaxy
-                history_id = create_history(request)
+
+                # create temp history to build workflow
+                history_id = gi.histories.create_history(name="temp")
 
                 # build workflow object
                 wkg = WorkflowGalaxyFactory(list_tool, gi, history_id)
                 wkg.name = request.POST.get('wkname')
+
+                # remove temp history
+                gi.histories.delete_history(history_id, purge=True)
 
                 if not wkg.name:
                     wkg.name = "Workflow_generated_"
