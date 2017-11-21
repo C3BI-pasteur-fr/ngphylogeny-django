@@ -15,7 +15,7 @@ Including another URLconf
 """
 from django.conf.urls import url
 
-from views import HistoryDetailView, PreviousHistoryListView, get_dataset_toolprovenance, GalaxyErrorView, \
+from .views import HistoryDetailView, PreviousHistoryListView, get_dataset_toolprovenance, GalaxyErrorView, \
     WorkspaceDeleteView, WorkspaceRenameView
 
 urlpatterns = [

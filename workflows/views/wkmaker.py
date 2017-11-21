@@ -1,6 +1,7 @@
 import random
 import string
 
+from django.contrib import messages
 from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.utils.decorators import method_decorator
@@ -13,59 +14,95 @@ from workflows.models import WorkflowGalaxyFactory
 from workflows.views.generic import WorkflowWizard, UploadView, DetailView
 from workflows.views.viewmixing import WorkflowDeleteWorkingCopyMixin
 from workflows.views.wkadvanced import WorkflowAdvancedFormView
-from workspace.views import create_history
-
-WORKFLOW_STATIC_STEPS = [{"step": 0, "category": 'algn', "group": ""},
-                         {"step": 1, "category": 'clean', "group": ""},
-                         {"step": 2, "category": 'tree', "group": ""},
-                         {"step": 3, "category": 'visu', "group": ""},
-                        ]
 
 
 @connection_galaxy
 def workflows_alacarte_build(request):
     """
         Workflow maker display
+         - GET: Display a list of tools regroup by category
+         - POST:
+            o Retrieve selected tools
+            o Created Galaxy json Workflow file
+            o Import into Galaxy
+            :return wizard_form_wiew
     """
+    WORKFLOW_STATIC_STEPS = [{"step": 0, "category": ['algn', ], "group": []},
+                             {"step": 1, "category": ['clean', ], "group": []},
+                             {"step": 2, "category": ['tree', 'model'], "group": []},
+                             {"step": 3, "category": ['visu', ], "group": []},
+                             ]
+
     for step in WORKFLOW_STATIC_STEPS:
-        step['flag'] = ToolFlag.objects.get(name=step.get('category'))
-        step['tools'] = Tool.objects.filter(galaxy_server=request.galaxy_server,
-                                            toolflag=step['flag'],
-                                            visible=True)
+
+        flags = ToolFlag.objects.filter(name__in=step.get('category'))
+        for flag in flags:
+            step['group'].append({'flag': flag,
+                                  'tools': Tool.objects.filter(galaxy_server=request.galaxy_server,
+                                                               toolflag=flag,
+                                                               visible=True).filter(toolflag__name='wmake')
+                                  })
 
     if request.method == 'POST':
 
         tools = []
+        previous_tool = ""
+        form_is_valid = True
+
         for step in WORKFLOW_STATIC_STEPS:
-            select_tool_pk = request.POST.get(step.get('category'))
+
+            category = step.get('category')
+
+            for cat in category:
+                select_tool_pk = request.POST.get(cat, None)
+                if select_tool_pk:
+                    break
+            else:
+                select_tool_pk = None
+
+            # TODO use data input/output format to invalidate form
+            if ("visu" in category) and select_tool_pk and (not previous_tool or not tools):
+                form_is_valid = False
+                messages.add_message(request, messages.ERROR, "This combination of tools is not allowed")
+                break
 
             if select_tool_pk:
                 tools.append(select_tool_pk)
 
-        dict_tools = Tool.objects.in_bulk(tools)
+            previous_tool = select_tool_pk
 
-        # sort tool
-        list_tool = [dict_tools.get(int(t)) for t in tools]
+        if form_is_valid:
 
-        if list_tool:
-            gi = request.galaxy
-            history_id = create_history(request)
+            dict_tools = Tool.objects.in_bulk(tools)
 
-            # build workflow object
-            wkg = WorkflowGalaxyFactory(list_tool, gi, history_id)
-            wkg.name = request.POST.get('wkname')
+            # sort tool
+            list_tool = [dict_tools.get(int(t)) for t in tools]
 
-            if not wkg.name:
-                wkg.name = "Workflow_generated_"
-                wkg.name += ''.join(random.sample(string.ascii_letters + string.digits, 8))
+            if list_tool:
+                gi = request.galaxy
 
-            # create the JSON of generated workflow
-            # create new entry into Galaxy
-            wkgi = gi.workflows.import_workflow_json(wkg.to_json())
-            wk_id = wkgi.get('id')
+                # create temp history to build workflow
+                history_id = gi.histories.create_history(name="temp").get("id")
 
-            return redirect(reverse("workflow_maker_form", args=[wk_id]))
-            # return HttpResponse(json.dumps(wkg.to_json()), content_type='application/json')
+                # build workflow object
+                wkg = WorkflowGalaxyFactory(list_tool, gi, history_id)
+                wkg.name = request.POST.get('wkname')
+
+
+                if not wkg.name:
+                    wkg.name = "Workflow_generated_"
+                    wkg.name += ''.join(random.sample(string.ascii_letters + string.digits, 8))
+
+                # create the JSON of generated workflow
+                # create new entry into Galaxy
+                wkgi = gi.workflows.import_workflow_json(wkg.to_json())
+                wk_id = wkgi.get('id')
+
+                # remove temp history
+                gi.histories.delete_history(history_id, purge=True)
+
+                return redirect(reverse("workflow_maker_form", args=[wk_id]))
+                # return HttpResponse(json.dumps(wkg.to_json()), content_type='application/json')
 
     context = {"workflow": WORKFLOW_STATIC_STEPS}
 
@@ -77,7 +114,7 @@ class WorkflowMakerView(WorkflowAdvancedFormView, DetailView):
     """
     Workflow form with the list of tools and launch workflow
     """
-    restrict_toolset = None  # Tool.objects.filter(toolflag__name='wmake')
+    restrict_toolset = Tool.objects.filter(toolflag__name='wmake')
 
     def get_object(self, queryset=None, detail=True):
         # load workflow

@@ -72,7 +72,7 @@ class WorkflowAdvWizardClass(WorkflowDuplicateMixin, WorkflowAdvancedFormView, W
 
         if self.succes_url:
             # delete the workflow when the workflow has been run
-            print self.clean_copy()
+            print (self.clean_copy())
 
         return render_wizard
 

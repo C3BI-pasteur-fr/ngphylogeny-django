@@ -27,6 +27,7 @@ class Tool(models.Model):
     description = models.CharField(max_length=250)
     toolshed_revision = models.CharField(max_length=250, blank=True)
     visible = models.BooleanField(default=True, help_text="display this tool on the user web interface")
+    oneclick = models.BooleanField(default=False)
 
     @property
     def toolflags(self):
@@ -47,82 +48,85 @@ class Tool(models.Model):
     @property
     def get_params_detail(self):
 
-        tool_url = '%s/%s/%s/%s' % ( self.galaxy_server.url,'api', 'tools', self.id_galaxy)
+        tool_url = '%s/%s/%s/%s' % (self.galaxy_server.url, 'api', 'tools', self.id_galaxy)
         tool_info_request = requests.get(tool_url, params={'io_details': "true"})
         return tool_info_request.json().get('inputs')
 
-
     @classmethod
-    def import_tools(cls, galaxy_server, query="phylogeny"):
+    def import_tools(cls, galaxy_server, tools=None, query="phylogeny"):
 
-        tools_url = '%s/%s/%s/' % (galaxy_server.url, 'api', 'tools')
-        connection = requests.get(tools_url, params={'q': query})
-        tools_ids = []
+        tools_ids = tools or []
         tools_created = []
-        if connection.status_code == 200:
-            tools_ids = connection.json()
 
-            for id_tool in tools_ids:
+        if not tools:
+            # fetch tool list
+            tools_url = '%s/%s/%s/' % (galaxy_server.url, 'api', 'tools')
+            connection = requests.get(tools_url, params={'q': query})
+            if connection.status_code == 200:
+                tools_ids = connection.json() or []
 
-                tool_url = '%s/%s/%s/%s/' % (galaxy_server.url, 'api', 'tools', id_tool,)
-                tool_info_request = requests.get(tool_url, params={'io_details': "true"})
-                tool_info = tool_info_request.json()
+        for id_tool in tools_ids:
 
-                t, created = Tool.objects.get_or_create(id_galaxy=id_tool, galaxy_server=galaxy_server)
+            tool_url = '%s/%s/%s/%s/' % (galaxy_server.url, 'api', 'tools', id_tool,)
+            tool_info_request = requests.get(tool_url, params={'io_details': "true"})
+            tool_info = tool_info_request.json()
 
-                if created:
-                    tools_created.append(t)
+            t, created = Tool.objects.get_or_create(id_galaxy=id_tool, galaxy_server=galaxy_server)
+            print t.id, created
 
-                    # save tool informations
-                    t.name = tool_info.get('name')
-                    t.description = tool_info.get('description')
-                    t.version = tool_info.get('version')
+            if created:
+                tools_created.append(t)
 
-                    toolshed = tool_info.get('tool_shed_repository')
-                    if toolshed:
-                        t.toolshed = toolshed.get('tool_shed')
-                        t.toolshed_revision = toolshed.get('changeset_revision')
+                # save tool informations
+                t.name = tool_info.get('name')
+                t.description = tool_info.get('description')
+                t.version = tool_info.get('version')
 
-                    t.save()
+                toolshed = tool_info.get('tool_shed_repository')
+                if toolshed:
+                    t.toolshed = toolshed.get('tool_shed')
+                    t.toolshed_revision = toolshed.get('changeset_revision')
 
-                    # save inputs
-                    inputs_tools = tool_info.get('inputs')
-                    inputs_list = []
-                    for input_d in inputs_tools:
+                t.save()
 
-                        if input_d.get('type') == 'data':
+                # save inputs
+                inputs_tools = tool_info.get('inputs')
+                inputs_list = []
+                for input_d in inputs_tools:
 
-                            edam = input_d.get('edam')
-                            ed_format = ""
-                            if edam:
-                                ed_format = edam.get('edam_formats')
+                    if input_d.get('type') == 'data':
 
-                            input_obj = ToolInputData(name=input_d.get('name'),
-                                                      edam_formats=ed_format,
-                                                      extensions=input_d.get('extensions'),
-                                                      tool=t
-                                                      )
-                            input_obj.save()
+                        edam = input_d.get('edam')
+                        ed_format = ""
+                        if edam:
+                            ed_format = edam.get('edam_formats')
 
-                        else:
-                            # remove input data from whitelist for workflows
-                            inputs_list.append(input_d.get('name'))
+                        input_obj = ToolInputData(name=input_d.get('name'),
+                                                  edam_formats=ed_format,
+                                                  extensions=input_d.get('extensions'),
+                                                  tool=t
+                                                  )
+                        input_obj.save()
 
-                    # pre-compute whitelist for workflows
-                    w = ToolFieldWhiteList(tool_id=t.id, context='w', _params=",".join(inputs_list))
-                    w.save()
+                    else:
+                        # remove input data from whitelist for workflows
+                        inputs_list.append(input_d.get('name'))
 
-                    # save outputs
-                    outputs_tools = tool_info.get('outputs')
-                    for output_d in outputs_tools:
-                        output_obj = ToolOutputData(name=output_d.get('name'),
-                                                    edam_format=output_d.get('edam_format'),
-                                                    extension=output_d.get('format'),
-                                                    tool=t
-                                                    )
-                        output_obj.save()
+                # pre-compute whitelist for workflows
+                w = ToolFieldWhiteList(tool_id=t.id, context='w', _params=",".join(inputs_list))
+                w.save()
 
-            return tools_created
+                # save outputs
+                outputs_tools = tool_info.get('outputs')
+                for output_d in outputs_tools:
+                    output_obj = ToolOutputData(name=output_d.get('name'),
+                                                edam_format=output_d.get('edam_format'),
+                                                extension=output_d.get('format'),
+                                                tool=t
+                                                )
+                    output_obj.save()
+
+        return tools_created
 
     @property
     def compatible_tool(self):
@@ -225,7 +229,7 @@ class ToolFlag(models.Model):
         return self.verbose_name
 
     class Meta:
-        ordering = ["rank", ]
+        ordering = ['rank', 'verbose_name']
 
 
 class ToolFieldWhiteList(models.Model):
@@ -233,21 +237,23 @@ class ToolFieldWhiteList(models.Model):
     Models use to filter Galaxy render form
     """
     CONTEXT_CHOICES = (('w', 'Workflows'),
-               ('aw', 'Advanced Workflows'),
-               ('t', 'Tool Forms'),
-               ('at', 'Advanced Tool Forms'),
-               )
+                       ('aw', 'Advanced Workflows'),
+                       ('t', 'Tool Forms'),
+                       ('at', 'Advanced Tool Forms'),
+                       )
 
     DICT_CONTEXT_CHOICES = dict(CONTEXT_CHOICES)
 
     tool = models.ForeignKey(Tool, on_delete=models.CASCADE)
     context = models.CharField(max_length=2, choices=CONTEXT_CHOICES, help_text='In which context use the whitelist')
-    _params = models.TextField(max_length=1000, blank=True)
-
+    _params = models.TextField(max_length=1000, blank=True, default="")
 
     @property
     def saved_params(self):
-        return self._params.split(',')
+        if self._params:
+            return self._params.split(',')
+        else:
+            return []
 
     @property
     def get_params(self):
@@ -265,5 +271,7 @@ class ToolFieldWhiteList(models.Model):
         return self.tool.get_params_detail
 
     def __unicode__(self):
-        return "%s ,%s" %(self.tool.name, self.DICT_CONTEXT_CHOICES.get(self.context))
+        return "%s ,%s" % (self.tool.name, self.DICT_CONTEXT_CHOICES.get(self.context))
 
+    class Meta:
+        unique_together = ('tool', 'context')

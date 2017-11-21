@@ -1,8 +1,8 @@
 from django.contrib import admin
 from django.contrib import messages
 
-from forms import ToolFieldWhiteListForm
-from forms import ToolForm
+from .forms import ToolFieldWhiteListForm
+from .forms import ToolForm
 from .models import Tool, ToolInputData, ToolOutputData, ToolFlag, ToolFieldWhiteList
 
 
@@ -44,7 +44,7 @@ class ToolAdmin(admin.ModelAdmin):
 
     list_display = ['name', 'galaxy_server', 'toolshed', 'version', 'visible', 'toolflags']
     list_filter = ['galaxy_server', 'toolshed']
-    fields = ('galaxy_server', 'toolshed', 'name', 'version', 'id_galaxy',)
+    fields = ('name', 'version', 'oneclick', 'galaxy_server', 'toolshed', 'id_galaxy',)
     inlines = [
         ToolInputDataInline,
         ToolOutputDataInline,
@@ -106,7 +106,7 @@ class ToolFieldWhiteListAdmin(admin.ModelAdmin):
     Custom admin add view to previous tool form fields according to whitelist
     """
     change_form_template = "tools/admin/custom_change_form.html"
-    list_display = ['tool', 'get_context_display']
+    list_display = ['tool', 'context']
     form = ToolFieldWhiteListForm
     fields = ['tool', 'context', '_params', ]
 
@@ -119,11 +119,14 @@ class ToolFieldWhiteListAdmin(admin.ModelAdmin):
                                                                 extra_context=extra_context, )
 
     def get_form(self, request, obj=None, **kwargs):
+        params_choices = [('', '--All--')]
         if obj:
             obj._params = obj.saved_params
+            params_choices += list(zip(obj.get_params, obj.get_params))
 
         form = super(ToolFieldWhiteListAdmin, self).get_form(request, obj, **kwargs)
-        form.base_fields['_params'].choices = [('', '--All--')] + list(zip(obj.get_params, obj.get_params))
+        form.base_fields['_params'].choices = params_choices
+
         return form
 
 

@@ -16,9 +16,9 @@ Including another URLconf
 
 from django.conf.urls import url
 
-from views.oneclick import WorkflowStartedView, WorkflowOneClickListView, WorkflowOneClickFormView
-from views.wkadvanced import WorkflowAdvancedListView, WorkflowAdvancedRedirectView
-from views.wkmaker import WorkflowsMarkerRedirectView, workflows_alacarte_build
+from .views.oneclick import WorkflowStartedView, WorkflowOneClickListView, WorkflowOneClickFormView
+from .views.wkadvanced import WorkflowAdvancedListView, WorkflowAdvancedRedirectView
+from .views.wkmaker import WorkflowsMarkerRedirectView, workflows_alacarte_build
 
 urlpatterns = [
 

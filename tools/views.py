@@ -10,11 +10,21 @@ from django.views.generic import DetailView, ListView
 from galaxy.decorator import connection_galaxy
 from workspace.views import create_history, delete_history
 from .forms import ToolForm
-from .models import Tool
+from .models import Tool, ToolFieldWhiteList, ToolFlag
 
 
 class ToolListView(ListView):
-    queryset = Tool.objects.filter(galaxy_server__current=True, visible=True)
+
+    CATEGORY = ['algn',
+                'clean',
+                'tree',
+                'visu',
+                ]
+
+    def get_queryset(self):
+        CATEGORY = ToolFlag.objects.filter(rank=0).values_list('name', flat=True) or self.CATEGORY
+        return Tool.objects.filter(galaxy_server__current=True, visible=True).filter(toolflag__name__in=CATEGORY)
+
 
 
 class ToolDetailView(DetailView):
@@ -35,9 +45,11 @@ def tool_exec_view(request, pk, store_output=None):
 
     tool_obj = get_object_or_404(Tool, pk=pk)
 
-    tool_visiblefield = []  # tool_obj.toolfieldwhitelist_set.filter(context='t').first().saved_params
+    toolfield, created = ToolFieldWhiteList.objects.get_or_create(tool=tool_obj, context='t')
+    tool_visible_field = toolfield.saved_params
+
     tool_inputs_details = gi.tools.show_tool(tool_id=tool_obj.id_galaxy, io_details='true')
-    tool_form = ToolForm(tool_params=tool_inputs_details['inputs'], tool_id=pk, whitelist=tool_visiblefield,
+    tool_form = ToolForm(tool_params=tool_inputs_details['inputs'], tool_id=pk, whitelist=tool_visible_field,
                          data=request.POST or None)
 
     if request.method == 'POST':
@@ -89,10 +101,13 @@ def tool_exec_view(request, pk, store_output=None):
 
                 message = ast.literal_eval(e.body)
                 reverse_dict_field = {v: k for k, v in tool_form.fields_ids_mapping.items()}
-                delete_history(request, history_id)
+
                 for field, err_msg in message.get('err_data').items():
                     tool_form.add_error(reverse_dict_field.get(field),
                                         ValidationError(err_msg, code='invalid'))
+
+                delete_history(request, history_id)
+
 
     context = {"toolform": tool_form,
                "tool": tool_obj,

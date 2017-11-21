@@ -39,7 +39,8 @@ class WorkflowOneClickFormView(WorkflowDuplicateMixin, WorkflowFormView):
     def form_valid(self, form):
         try:
             render = super(WorkflowOneClickFormView, self).form_valid(form)
-        except Exception, galaxy_exception:
+
+        except Exception as galaxy_exception:
             raise galaxy_exception
 
         finally:

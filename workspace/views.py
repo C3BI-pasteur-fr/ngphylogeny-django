@@ -8,7 +8,7 @@ from django.views.generic import RedirectView, ListView, DeleteView, UpdateView,
 from django.views.generic.edit import SingleObjectMixin
 
 from galaxy.decorator import connection_galaxy
-from models import WorkspaceHistory
+from .models import WorkspaceHistory
 
 
 @connection_galaxy
@@ -66,12 +66,23 @@ def get_or_create_history(request, name=''):
 
 
 @connection_galaxy
-def delete_history(history_id):
+def delete_history(request, history_id=None):
     """
-    Delete history
+    Delete history, update session
+    :param request:
     :param history_id:
     :return:
     """
+
+    last_history = get_history(request)
+
+    if history_id == last_history:
+        if history_id in request.session['histories']:
+            request.session['histories'].remove(history_id)
+            request.session.modified = True
+
+        request.session['last_history'] = request.session['histories'][-1]
+
 
     WorkspaceHistory.objects.get(history=history_id).delete()
 

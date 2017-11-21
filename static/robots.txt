@@ -1,0 +1,6 @@
+User-agent: *
+
+Disallow: /account
+Disallow: /admin
+Disallow: /data
+Disallow: /workspace/history

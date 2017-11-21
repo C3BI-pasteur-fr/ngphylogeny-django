@@ -1,7 +1,14 @@
-import tempfile
 import urllib
-import urlparse
 
+try:
+    # Python 3:
+    from urllib.parse import urlparse
+
+except ImportError:
+    # Python 2:
+    import urlparse
+
+import tempfile
 import requests
 from django.http import StreamingHttpResponse
 from django.shortcuts import render, redirect
@@ -9,7 +16,7 @@ from django.urls import reverse_lazy
 from django.utils.decorators import method_decorator
 from django.views.generic.edit import FormView
 
-from forms import UploadForm, PastedContentForm
+from .forms import UploadForm, PastedContentForm
 from galaxy.decorator import connection_galaxy
 from workspace.views import get_or_create_history
 
@@ -85,7 +92,6 @@ class ImportPastedContentView(UploadMixin, FormView):
         return super(ImportPastedContentView, self).form_valid()
 
 
-
 @connection_galaxy
 def download_file(request, file_id):
 
@@ -102,15 +108,30 @@ def download_file(request, file_id):
     return stream_response
 
 
-#@connection_galaxy
+@connection_galaxy
+def display_raw(request, file_id):
+    """Display file content to the web browser """
+    stream_response = download_file(request, file_id)
+    del stream_response['Content-Disposition']
+    return stream_response
+
+
+@connection_galaxy
 def display_file(request, file_id):
     """Display file content to the web browser """
     if request.is_ajax():
-        stream_response = download_file(request, file_id)
-        del stream_response['Content-Disposition']
-        return stream_response
+        return display_raw(request, file_id)
     else:
         return render(request, 'display.html')
+
+
+@connection_galaxy
+def display_msa(request, file_id):
+    """Display multiple alignment file content to the web browser """
+    if request.is_ajax():
+        return display_raw(request, file_id)
+    else:
+        return render(request, 'msaviz/msa.html')
 
 
 @connection_galaxy
@@ -122,6 +143,7 @@ def tree_visualization(request, file_id):
     response = urllib.urlopen(url)
 
     return render(request, template_name='treeviz/tree.html', context={'newick_tree':response.read()})
+
 
 @connection_galaxy
 def export_to_itol(request, file_id):
@@ -142,7 +164,6 @@ def export_to_itol(request, file_id):
     r = requests.post(url_itol, files=payload)
 
     return redirect(r.url)
-
 
 
 @connection_galaxy

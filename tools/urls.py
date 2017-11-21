@@ -1,6 +1,6 @@
 from django.conf.urls import url
 
-from views import *
+from .views import ToolListView, tool_exec_view, ToolDetailView, get_tool_name
 
 urlpatterns = [
     url(r'^$', ToolListView.as_view(), name='tools'),
