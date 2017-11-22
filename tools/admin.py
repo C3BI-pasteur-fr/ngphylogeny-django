@@ -33,6 +33,7 @@ class ToolInputDataInline(admin.TabularInline):
 
 
 class ToolFlagInline(admin.TabularInline):
+
     model = ToolFlag.tool.through
     extra = 0
 
@@ -129,6 +130,9 @@ class ToolFieldWhiteListAdmin(admin.ModelAdmin):
 
         return form
 
+
+ToolOutputData.compatible_inputs.through._meta.verbose_name = "Tool Output -> Tool Input"
+ToolOutputData.compatible_inputs.through._meta.verbose_name_plural = "Tool Outputs -> Tool Inputs"
 
 admin.site.register(Tool, ToolAdmin)
 admin.site.register(ToolInputData)
