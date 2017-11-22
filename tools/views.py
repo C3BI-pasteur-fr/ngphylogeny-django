@@ -14,7 +14,9 @@ from .models import Tool, ToolFieldWhiteList, ToolFlag
 
 
 class ToolListView(ListView):
+    """
 
+    """
     CATEGORY = ['algn',
                 'clean',
                 'tree',
@@ -24,7 +26,6 @@ class ToolListView(ListView):
     def get_queryset(self):
         CATEGORY = ToolFlag.objects.filter(rank=0).values_list('name', flat=True) or self.CATEGORY
         return Tool.objects.filter(galaxy_server__current=True, visible=True).filter(toolflag__name__in=CATEGORY)
-
 
 
 class ToolDetailView(DetailView):
@@ -107,7 +108,6 @@ def tool_exec_view(request, pk, store_output=None):
                                         ValidationError(err_msg, code='invalid'))
 
                 delete_history(request, history_id)
-
 
     context = {"toolform": tool_form,
                "tool": tool_obj,

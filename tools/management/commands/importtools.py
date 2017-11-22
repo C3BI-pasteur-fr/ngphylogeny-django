@@ -14,13 +14,13 @@ class Command(BaseCommand):
         parser.add_argument('--galaxyurl')
         parser.add_argument('-q', '--query', help="Find tools according to query by default 'phylogeny' ")
         parser.add_argument('--id', help="Find tool according to galaxy tool id")
+        parser.add_argument('--force', action='store_true', help="force re-import tools")
 
     def handle(self, *args, **options):
 
         galaxy_url = options.get('galaxyurl')
         query = options.get('query')
         tool_id = options.get('id')
-        tools_list = []
 
         if galaxy_url:
             galaxy_server, created = Server.objects.get_or_create(url=galaxy_url)
@@ -32,11 +32,8 @@ class Command(BaseCommand):
                 raise CommandError('Server Galaxy does not exist, please use --galaxyurl')
 
         tools_url = '%s/%s/%s/' % (galaxy_server.url, 'api', 'tools')
+        connection = requests.get(tools_url, params={'q': query or "phylogeny"})
 
-        if query:
-            connection = requests.get(tools_url, params={'q': query})
-        else:
-            connection = requests.get(tools_url, params={'q': "phylogeny"})
 
         if tool_id:
             tools_url_id = '%s/%s' % (tools_url, tool_id)
@@ -60,8 +57,15 @@ class Command(BaseCommand):
                 response = raw_input('Do you want (re)import this tool(s)? [y/N]: ')
 
                 if response.lower() == 'y':
-                    tools_imported = Tool.import_tools(galaxy_server, tools=tools_list)
-                    self.stdout.write(self.style.SUCCESS("%s successfully imported new tools." % (len(tools_imported))))
+
+                    tools_imported = Tool.import_tools(galaxy_server, tools=tools_list, force=options.get('force'))
+
+                    if tools_imported:
+                        self.stdout.write(
+                            self.style.SUCCESS("%s successfully imported new tools." % (len(tools_imported))))
+
+                    else:
+                        self.stdout.write(self.style.WARNING("No new tool has been imported"))
 
             else:
                 self.stdout.write("No result was found for query  %s" % (options.get('query')))
