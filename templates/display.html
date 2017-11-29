@@ -2,7 +2,7 @@
 {% load static %}
 {% block nav-workspace %}class="active"{% endblock %}
 {% block javascripts %}
-    <script>
+<script>
         $(document).ready(function(){
         $.ajax({
         url: document.URL,
@@ -10,10 +10,33 @@
             $('#view').html("<pre>"+data+"</pre>");
         }});
         });
-    </script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</script>
+{% endblock %}
+{% block goback %}
+<div class="row">
+    <a href="{% url 'history_detail' history_id %}" class="btn btn-default">
+        <span class="glyphicon glyphicon-arrow-left"></span> Go back</a>
+</div>
+<br>
 {% endblock %}
 {% block content %}
-    <div id="view" class="row">
-        <h4><span class="glyphicon glyphicon-refresh spin"></span> Loading ...</h4>
-    </div>
+<div id="view" class="row">
+    <h4><span class="glyphicon glyphicon-refresh spin"></span> Loading ...</h4>
+</div>
 {% endblock %}

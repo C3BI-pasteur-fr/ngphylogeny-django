@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "display.html" %}
 {% load static %}
 {% block stylesheet %}
     <script src="{% static 'presto/d3.v3.min.js' %} "></script>
@@ -6,8 +6,6 @@
     <script src="{% static 'presto/phylotree.js' %} "></script>
     <link rel="stylesheet" type="text/css" href="{% static 'presto/css/font-awesome.css' %}"/>
     <link rel="stylesheet" type="text/css" href="{% static 'presto/phylotree.css' %}"/>
-
-
 {% endblock %}
 {% block nav-workspace %}class="active"{% endblock %}
 {% block content %}
