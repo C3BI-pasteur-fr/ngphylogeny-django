@@ -1,5 +1,12 @@
 {% load static %}
 <script>
+$(document).ready(function(){
+    $('[data-toggle="tooltip"]').tooltip();
+});
+
+
+</script>
+<script>
     $(function () {
         var deferreds = [];
         // Loop using .each
@@ -46,8 +53,8 @@
             });
         });
     });
-
 </script>
+
 <script>
     function refresh() {
         $.get('{% url 'history_detail' history_info.id %}',
@@ -73,8 +80,13 @@
                 }
             );
         }
-
 </script>
+
+<div class="alert alert-info alert-dismissable fade in">
+    <a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
+    <strong>Info !</strong> This page page is refreshed every 5sec.
+</div>
+
 <p class="pull-right">
     <a onclick="refresh()" class="btn btn-primary">
         <span class="glyphicon glyphicon-refresh"></span> Refresh
@@ -82,14 +94,17 @@
 </p>
 <div class="row">
     <div class="col-md-8">
-        <div class="input-group">
+        <div class="input-group" onclick="$('#rename_history').focus();">
             <div class="input-group-addon">
                 Title
             </div>
-            <input class="form-control input-lg" onblur="renameHistory(this);"
+            <input id="rename_history" class="form-control input-lg" onblur="renameHistory(this);"
                    value="{{ history_info.name }}​"></span>
             <span class="input-group-addon">
-        <span class="glyphicon glyphicon-pencil"></span>
+       <span class="glyphicon glyphicon-pencil"
+             title="Rename your analyse"
+             data-toggle="tooltip" data-placement="right">
+        </span>
     </span>
         </div>
     </div>
@@ -111,8 +126,8 @@
                 <script>
                         var autorefresh = setInterval(refresh, 5000);
                         {% if 'ok' in file.state %}
-                            clearInterval(autorefresh); {% endif %}
-
+                            clearInterval(autorefresh);
+                        {% endif %}
                 </script>
                 {% endif %}
                 <td id="{{ file.id }}" data=''></td>
@@ -120,14 +135,25 @@
                 <td>{{ file.name }}</td>
                 <td id="state_{{ file.id }}">
                     {% if 'ok' in file.state %}
-
-                    <span class="glyphicon glyphicon-ok  text-success"></span>
+                    <span class="glyphicon glyphicon-ok  text-success"
+                          data-toggle="tooltip" data-placement="right"
+                          title="Success!">
+                    </span>
                     {% elif 'queued' in file.state or 'new' in file.state %}
-                    <span class="glyphicon glyphicon-time text-info"></span>
+                    <span class="glyphicon glyphicon-time spin text-info"
+                          data-toggle="tooltip" data-placement="right"
+                          title="Waiting to be launch">
+                    </span>
                     {% elif "running" in file.state %}
-                    <span class="glyphicon glyphicon-refresh spin"></span>
+                    <span class="glyphicon glyphicon-refresh spin"
+                          data-toggle="tooltip" data-placement="right"
+                          title="Your job is running">
+                    </span>
                     {% else %}
-                    <span class="glyphicon glyphicon-remove text-danger"></span>
+                    <span class="glyphicon glyphicon-remove text-danger"
+                          data-toggle="tooltip" data-placement="right"
+                          title="Your job fail">
+                    </span>
                     {% endif %}
                 </td>
                 <td id="action_{{ file.id }}">
@@ -136,31 +162,41 @@
                           {# href="{% url 'export_file' file.id %}"> #}
                     {# <span class="glyphicon glyphicon-export text-primary" aria-hidden="true"></span></a>#}
                     <a class="btn btn-default" title="Dowload the file"
+                       data-toggle="tooltip" data-placement="right"
                        href="{% url 'download_file' file.id %}">
                         <span class="glyphicon glyphicon-download-alt text-primary"></span></a>
-                    <a class="btn btn-default" title="Display the content file"
-                       href="{% url 'display_file' file.id %}">
+                    <a class="btn btn-default"
+                       href="{% url 'display_file' file.id %}"
+                       data-toggle="tooltip" data-placement="right"
+                       title="Display this file in your web browser">
                         {% if file.extension in "svg" %}
                         <span class="glyphicon glyphicon-picture"></span> .SVG</a>
                     {% else %}
-                    <span class="glyphicon glyphicon-eye-open text-primary"></span> .{{ file.extension }}</a>
+                    <span class="glyphicon glyphicon-eye-open text-primary">
+                        </span> .{{ file.extension }}</a>
                     {% endif %}
                     {% if file.extension in "nhx,nwk" %}
-                    <a class="btn btn-success" title="Interactive Tree visualisation"
-                       href="{% url 'display_tree' file.id %}">
-                            <span class="glyphicon text-success" aria-hidden="true"><img
-                                    src="{% static 'images/ptree.svg' %}"> </span>
+                    <a class="btn btn-success" title="Open Interactive Tree visualisation"
+                       href="{% url 'display_tree' file.id %}"
+                       data-toggle="tooltip" data-placement="right">
+                        <span class="glyphicon text-success" aria-hidden="true">
+                            <img src="{% static 'images/ptree.svg' %}">
+                        </span>
                         Interactive tree
                     </a>
                     <a class="btn btn-warning" title="Export tree to iTOL: Interactive Tree Of Life"
-                       href="{% url 'export_to_itol' file.id %}"><span class="glyphicon glyphicon-export"
-                                                                       aria-hidden="true"> </span>
+                       href="{% url 'export_to_itol' file.id %}" target="_blank"
+                       data-toggle="tooltip" data-placement="right"
+                       title="Export your newick tree into iTol, external tree viewer">
+                        <span class="glyphicon glyphicon-export" aria-hidden="true"> </span>
                         Export to iTol
                     </a>
                     {% endif %}
                     {% if file.extension in "fasta,fsa,msa,fna" %}
                     <a class="btn btn-info" title="MSAViewer"
-                       href="{% url 'display_msa' file.id %}">
+                       href="{% url 'display_msa' file.id %}"
+                       data-toggle="tooltip" data-placement="right"
+                       title="Multipe sequences viewer">
                         <span class="glyphicon glyphicon-align-justify" aria-hidden="true"></span>
                         MSAViewer
                     </a>
