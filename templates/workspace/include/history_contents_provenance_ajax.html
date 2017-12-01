@@ -1,10 +1,12 @@
 {% load static %}
+{% block stylesheet %}
+<script src="https://cdn.rawgit.com/zenorocha/clipboard.js/v1.7.1/dist/clipboard.min.js"></script>
+
+{% endblock %}
 <script>
 $(document).ready(function(){
     $('[data-toggle="tooltip"]').tooltip();
 });
-
-
 </script>
 <script>
     $(function () {
@@ -69,6 +71,7 @@ $(document).ready(function(){
                 $(html).find('[id^=action_]').each(function (index, el) {
                     $('#' + $(el).attr('id')).replaceWith($(el));
                 });
+                $('[data-toggle="tooltip"]').tooltip();
             }
         );
     }
@@ -80,11 +83,31 @@ $(document).ready(function(){
                 }
             );
         }
+
+
+</script>
+<script>
+    new Clipboard('#clip');
+    function copied() {
+        $("#success-copy").fadeIn();
+        setTimeout(function(){ $("#success-copy").fadeOut("slow"); }, 2000);
+    }
+    function blinker() {
+        $('.blink_me').fadeOut(1250);
+        $('.blink_me').fadeIn(1250);
+    }
+
+    setInterval(blinker, 2500);
+
 </script>
 
 <div class="alert alert-info alert-dismissable fade in">
     <a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
     <strong>Info !</strong> This page page is refreshed every 5sec.
+</div>
+<div id="success-copy" class="alert alert-success" style="display:none;">
+    <a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
+    <strong>Success !</strong> The link is copied in you Clipboard!
 </div>
 
 <p class="pull-right">
@@ -93,24 +116,54 @@ $(document).ready(function(){
     </a>
 </p>
 <div class="row">
-    <div class="col-md-8">
-        <div class="input-group" onclick="$('#rename_history').focus();">
+    <div class="col-md-3">
+        <div class="input-group">
             <div class="input-group-addon">
-                Title
+                ID
             </div>
-            <input id="rename_history" class="form-control input-lg" onblur="renameHistory(this);"
-                   value="{{ history_info.name }}​"></span>
-            <span class="input-group-addon">
-       <span class="glyphicon glyphicon-pencil"
-             title="Rename your analyse"
-             data-toggle="tooltip" data-placement="right">
-        </span>
-    </span>
+            <span class="form-control " readonly>
+                  {{history_info.id}}
+            </span>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="input-group">
+            <div class="input-group-addon">
+                URL
+            </div>
+            <span class="form-control" readonly
+                  value="{{ request.META.HTTP_HOST }}{% url 'history_detail' history_info.id  %}​">
+                    {{ request.META.HTTP_HOST }}{% url 'history_detail' history_info.id  %}​
+            </span>
+            <a id='clip' class="btn btn-default input-group-addon"
+               data-clipboard-text="{{ request.META.HTTP_HOST }}{% url 'history_detail' history_info.id  %}"
+               title="copy the url of analyse"
+               data-toggle="tooltip" data-placement="right"
+               onclick="copied()">
+                <span class="glyphicon glyphicon-copy text-primary"> Copy</span>
+            </a>
         </div>
     </div>
 </div>
 <br>
 <br>
+<div class="row">
+    <div class="col-md-8 col-md-offset-2">
+        <div class="input-group" onclick="$('#rename_history').focus();">
+            <div class="input-group-addon">
+                TITLE
+            </div>
+            <input id="rename_history" class="form-control input-lg" onblur="renameHistory(this);"
+                   value="{{ history_info.name }}​"></span>
+            <a class="btn input-group-addon"
+               title="Rename your analyse"
+               data-toggle="tooltip" data-placement="right">
+                <span class="glyphicon glyphicon-pencil"> </span>
+            </a>
+        </div>
+    </div>
+</div>
+<hr>
 <div class="row">
     <div class="col-md-12">
         <table class="table table-striped ">
@@ -128,6 +181,8 @@ $(document).ready(function(){
                         {% if 'ok' in file.state %}
                             clearInterval(autorefresh);
                         {% endif %}
+
+
                 </script>
                 {% endif %}
                 <td id="{{ file.id }}" data=''></td>
@@ -140,7 +195,7 @@ $(document).ready(function(){
                           title="Success!">
                     </span>
                     {% elif 'queued' in file.state or 'new' in file.state %}
-                    <span class="glyphicon glyphicon-time spin text-info"
+                    <span class="glyphicon glyphicon-time blink_me text-info"
                           data-toggle="tooltip" data-placement="right"
                           title="Waiting to be launch">
                     </span>
