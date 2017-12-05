@@ -80,6 +80,7 @@ class ToolForm(forms.Form):
             else:
 
                 self.fields[field_id] = forms.FileField(**map_galaxy_tool_input(attrfield))
+                self.fields[field_id].widget.attrs = ({'data-ext': attrfield.get('extensions')})
 
         elif fieldtype == "select":
             if attrfield.get("display", "") == 'radio':

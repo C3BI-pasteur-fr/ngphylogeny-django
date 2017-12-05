@@ -79,11 +79,21 @@ def tool_exec_view(request, pk, store_output=None):
                     tool_inputs.set_dataset_param(tool_form.fields_ids_mapping.get(input_file_id.strip('[]')), file_id)
 
             else:
-                for input_file_id in tool_form.input_file_ids:
+                # else paste content
+                for input_file_id in set(tool_form.input_file_ids):
+
                     if input_file_id in request.POST.keys():
-                        tool_inputs.set_dataset_param(
-                            tool_form.fields_ids_mapping.get(input_file_id.strip('[]')),
-                            request.POST.get(input_file_id))
+                        content = request.POST.get(input_file_id)
+                        tmp_file = tempfile.NamedTemporaryFile()
+                        tmp_file.write(content)
+                        tmp_file.flush()
+
+                        # send file to galaxy
+                        outputs = gi.tools.upload_file(path=tmp_file.name, file_name="pasted_sequence",
+                                                       history_id=history_id)
+                        file_id = outputs.get('outputs')[0].get('id')
+                        tool_inputs.set_dataset_param(tool_form.fields_ids_mapping.get(input_file_id.strip('[]')),
+                                                      file_id)
 
             try:
 
