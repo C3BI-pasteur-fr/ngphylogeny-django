@@ -9,5 +9,5 @@ class ExampleFile(models.Model):
     name = models.CharField(max_length=32)
     ext = models.CharField(max_length=8)
     type = models.CharField(max_length=12)
-    upload = models.FileField(upload_to='example/')
+    upload = models.FileField(upload_to='examples')
     comment = models.TextField(max_length=200, null=True, blank=True)
