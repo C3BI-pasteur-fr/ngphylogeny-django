@@ -19,6 +19,7 @@ from .models import ExampleFile
 from .forms import UploadForm, PastedContentForm
 from galaxy.decorator import connection_galaxy
 from workspace.views import get_or_create_history
+import ast
 
 
 class UploadMixin(object):
@@ -177,10 +178,10 @@ def export_file(request):
 def get_example(request, ext_file=""):
     """return example file according to ext_file found """
 
-    ext_file = ext_file.split(',')
     if request.POST:
-        ext_file = request.POST.get('ext_file', [])
+        ext_file = ast.literal_eval((request.POST.get('ext_file', [])))
 
+    ext_file = [str(ext).strip() for ext in ext_file]
     example_file = ExampleFile.objects.filter(ext__in=ext_file).first()
 
     if example_file:
