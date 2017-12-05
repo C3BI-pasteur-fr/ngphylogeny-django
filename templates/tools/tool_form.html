@@ -49,8 +49,8 @@
                                  )
                          .append("<button id='getExample' type='button' class='btn btn btn-info'><span class='glyphicon glyphicon-question-sign'> </span> Example</button>")
                          .append("<button id='cleanTextarea' type='button' class='btn btn-default'><span class='glyphicon glyphicon-trash'></span></button>");
-            fileInput.attr('required', false);
 
+            fileInput.attr('required', false);
             //read file
             fileInput.change(function (evt) {
 
@@ -82,11 +82,14 @@
                     });
             });
 
-            $('#cleanTextarea').click(function () {
-                parentFileDiv.find('textarea').val("");
+            $('#cleanTextarea').click(this, function () {
+                parentFileDiv.find('textarea').html("");
                 fileInput.val('');
             });
 
+            parentFileDiv.find('textarea').change(function() {
+                fileInput.val('');
+            });
 
         }
     </script>
