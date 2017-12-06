@@ -3,6 +3,7 @@ import ast
 import requests
 from django.db import models
 
+from data.models import ExampleFile
 from galaxy.models import Server
 
 TOOL_TAGS = (
@@ -187,6 +188,7 @@ class ToolInputData(ToolData):
     """
     edam_formats = models.CharField(max_length=250, null=True, blank=True)
     extensions = models.CharField(max_length=100)
+    examplefile = models.ForeignKey(ExampleFile, null=True, blank=True)
 
     tool = models.ForeignKey(Tool, on_delete=models.CASCADE)
 
