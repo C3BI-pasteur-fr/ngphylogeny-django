@@ -30,6 +30,8 @@ class ExampleFileAdmin(admin.ModelAdmin):
 
     def save_model(self, request, obj, form, change):
 
+        obj.save()
+        obj.toolinputdata_set.clear()
         tools = form.cleaned_data.get('tool')
         for t in tools:
             t.examplefile = obj
