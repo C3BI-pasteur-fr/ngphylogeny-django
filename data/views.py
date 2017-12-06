@@ -182,7 +182,7 @@ def get_example(request, ext_file=""):
         # ext_file = ast.literal_eval((request.POST.get('ext_file', [])))
         tool = request.POST.get('tool_id', '')
     if tool:
-        example_file = ExampleFile.objects.filter(toolinputdata__tool_id=tool)
+        example_file = ExampleFile.objects.filter(toolinputdata__tool_id=tool).first()
     else:
         ext_file = [str(ext).strip() for ext in ext_file]
         example_file = ExampleFile.objects.filter(ext__in=ext_file).first()
