@@ -8,6 +8,9 @@
         </div>
     </div>
     <div class="jumbotron alert-warning text-center">
-            <h4>"We're sorry, but the requested page {{ request_path }} could not be found." {{ exception }} </h4>
+        <h4>"We're sorry, but the requested page {{ request_path }} could not be found or we are still working on
+            it"</h4>
+        <h4>Please try again later or contact <a href="{% url 'feedback' %}">support</a></h4>
+        <h3> {{ exception }} </h3>
     </div>
 {% endblock %}
