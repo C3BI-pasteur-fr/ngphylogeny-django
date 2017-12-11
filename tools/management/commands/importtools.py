@@ -36,8 +36,9 @@ class Command(BaseCommand):
 
 
         if tool_id:
-            tools_url_id = '%s/%s' % (tools_url, tool_id)
+            tools_url_id = '%s/%s/' % (tools_url, tool_id)
             connection = requests.get(tools_url_id)
+            print connection.json().get('traceback')
 
         if connection.status_code == 200:
             tools_ids = connection.json()
@@ -63,6 +64,11 @@ class Command(BaseCommand):
                     if tools_imported:
                         self.stdout.write(
                             self.style.SUCCESS("%s successfully imported new tools." % (len(tools_imported))))
+
+                        for ti in tools_imported:
+                            self.stdout.write(
+                                self.style.SUCCESS("%s %s successfully imported" % (ti.name, ti.version))
+                            )
 
                     else:
                         self.stdout.write(self.style.WARNING("No new tool has been imported"))
