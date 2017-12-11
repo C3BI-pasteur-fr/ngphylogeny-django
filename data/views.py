@@ -177,12 +177,15 @@ def export_file(request):
 def get_example(request, ext_file=""):
     """return example file according to ext_file found """
 
-    tool = ''
+    tool_id = ''
     if request.POST:
         # ext_file = ast.literal_eval((request.POST.get('ext_file', [])))
-        tool = request.POST.get('tool_id', '')
-    if tool:
-        example_file = ExampleFile.objects.filter(toolinputdata__tool_id=tool).first()
+        tool_id = request.POST.get('tool_id', '')
+        tool_input = request.POST.get('input_name', '')
+    if tool_id and tool_input:
+        example_file = ExampleFile.objects.filter(toolinputdata__tool_id=tool_id,
+                                                  toolinputdata__name=tool_input).first()
+
     else:
         ext_file = [str(ext).strip() for ext in ext_file]
         example_file = ExampleFile.objects.filter(ext__in=ext_file).first()

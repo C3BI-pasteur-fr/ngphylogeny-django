@@ -37,17 +37,21 @@
 <script type="text/javascript">
         function init_input_file() {
 
-            var fileInput = $(':file').first();
+            //var fileInput = $(':file').first();
+            $(':file').each(function(){
+            var fileInput = $(this);
             var parentFileDiv = fileInput.parent().parent();
             var ext = fileInput.data('ext');
+            var input_name = fileInput.data('name');
 
             // read input file
             parentFileDiv.append("<textarea id='filecontent_" + fileInput.attr('name') + "'"
                                  + "class='textarea form-control' rows='10' cols='40' name='"
-                                 + fileInput.attr('name') + "' required=true ></textarea>"
-                                 )
+                                 + fileInput.attr('name') + "'  ></textarea>"
+                                 );
 
-            fileInput.attr('required', false);
+
+            //fileInput.attr('required', false);
             //read file
             fileInput.change(function (evt) {
 
@@ -70,8 +74,8 @@
                 fileInput.val('');
             });
 
-            parentFileDiv.append("<button id='cleanTextarea' type='button' class='btn btn-default'><span class='glyphicon glyphicon-trash'></span></button>");
-            $('#cleanTextarea').click(this, function () {
+            parentFileDiv.append("<button id='cleanTextarea"+ fileInput.attr('name')+"' type='button' class='btn btn-default'><span class='glyphicon glyphicon-trash'></span></button>");
+            $("#cleanTextarea"+fileInput.attr('name')).click(this, function () {
                 parentFileDiv.find('textarea').val("");
                 fileInput.val('');
             });
@@ -81,21 +85,23 @@
                 "{% url 'get_example'%}",
                 {
                     ext_file: ext,
+                    input_name: input_name,
                     tool_id : {{ tool.id }},
                     'csrfmiddlewaretoken': '{{ csrf_token }}'
                 },
                 function (response) {
                     if ($.trim(response)){
                     parentFileDiv.find('textarea').data('example', response);
-                    parentFileDiv.append("<button id='getExample' type='button' class='btn btn btn-info'><span class='glyphicon glyphicon-question-sign'> </span> Example</button>");
-                    $('#getExample').click(function () {
+                    parentFileDiv.append("<button id='getExample"+ fileInput.attr('name')+"' type='button' class='btn btn btn-info'><span class='glyphicon glyphicon-question-sign'> </span> Example</button>");
+
+                    $('#getExample'+ fileInput.attr('name')).click(function () {
 
                         parentFileDiv.find('textarea').val(parentFileDiv.find('textarea').data('example'));
                         fileInput.val('');
                     });
                 }
             });
-
+            });
         }
     </script>
     <script type="text/javascript">
@@ -159,7 +165,6 @@
 {% endblock %}
 {% block content %}
     <div class="row">
-
         <div class="col-md-4 col-md-offset-1">
             <h3>{{ tool.name }} <span class="badge">{{ tool.version }}</span></h3>
         </div>

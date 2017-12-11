@@ -123,3 +123,7 @@ footer {
 textarea {
   font-family: Courier New, Consolas,Monaco,Lucida Console, monospace;
 }
+
+[id*='error'] {
+    color : red;
+}
