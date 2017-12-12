@@ -27,7 +27,8 @@ class ToolListView(ListView):
 
     def get_queryset(self):
         CATEGORY = ToolFlag.objects.filter(rank=0).values_list('name', flat=True) or self.CATEGORY
-        return Tool.objects.filter(galaxy_server__current=True, visible=True).filter(toolflag__name__in=CATEGORY)
+        return Tool.objects.filter(galaxy_server__current=True, visible=True).filter(
+            toolflag__name__in=CATEGORY).distinct()
 
 
 class ToolDetailView(DetailView):
