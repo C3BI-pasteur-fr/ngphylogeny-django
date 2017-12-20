@@ -99,7 +99,7 @@ class WorkflowFormView(WorkflowDetailMixin, UploadView, ImportPastedContentView,
         workflow = self.get_workflow()
 
         # create new history
-        history_id = create_history(self.request, name="NGPhylogeny Analyse - " + workflow.name)
+        history_id = create_history(self.request, name="NGPhylogeny Analyse")
 
         # upload user file
         submitted_file = form.cleaned_data.get('input_file')
