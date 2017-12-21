@@ -201,9 +201,10 @@ class ToolInputData(ToolData):
         :param ignore : list of ignored extension
         :return: list of <ToolOutputData>
         """
+        ignore = ignore or []
 
         l_ext = self.get_extensions()
-        l_ext_filtered = [ext for ext in l_ext if ext not in ([] or ignore)]
+        l_ext_filtered = [ext for ext in l_ext if ext not in ignore]
         print l_ext_filtered
         galaxy_server = self.tool.galaxy_server
         return ToolOutputData.objects.filter(extension__in=l_ext_filtered,
