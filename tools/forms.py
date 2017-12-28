@@ -1,7 +1,7 @@
 import requests
 from crispy_forms.bootstrap import FormActions
 from crispy_forms.helper import FormHelper
-from crispy_forms.layout import Submit, Layout, Field, Div
+from crispy_forms.layout import Layout, Field, Div, Fieldset
 from django import forms
 
 from .models import ToolFieldWhiteList
@@ -119,7 +119,11 @@ class ToolForm(forms.Form):
 
         for input_tool in list_inputs:
 
-            if input_tool.get('name') in whitelist or not whitelist:
+            if input_tool.get('type') == 'section':
+                fields_created.append(Fieldset(input_tool.get('title'),
+                                               *self.parse_galaxy_input_tool(input_tool.get('inputs'))))
+
+            elif input_tool.get('name') in whitelist or not whitelist:
 
                 cond_input = input_tool.get('test_param')
                 if cond_input:
@@ -134,8 +138,10 @@ class ToolForm(forms.Form):
                         case_inputs = case.get('inputs')
                         if case_inputs:
                             case_value = case.get('value')
-                            nested_field.append(Div(data_test=conditional_field, data_case=case_value, css_class="well",
-                                                    *self.parse_galaxy_input_tool(case_inputs, cond_name)))
+                            if case_value:
+                                nested_field.append(
+                                    Div(data_test=conditional_field, data_case=case_value, css_class="well",
+                                        *self.parse_galaxy_input_tool(case_inputs, cond_name)))
 
                     fields_created.append(Div(conditional_field, *nested_field))
                     cond_name = ''
@@ -159,17 +165,15 @@ class ToolForm(forms.Form):
         self.helper.form_tag = False
         self.formset = self.parse_galaxy_input_tool(self.tool_params, whitelist=self.visible_field)
         self.helper.layout = Layout(FormActions(Field(*self.formset),
-                                                Submit('submit', 'Submit', css_class="pull-right"),
                                                 )
                                     )
 
 
 class ToolFieldWhiteListForm(forms.ModelForm):
-
     _params = forms.MultipleChoiceField(label='Params')
 
     model = ToolFieldWhiteList
-    fields = ['tool', 'context', '_params',]
+    fields = ['tool', 'context', '_params', ]
 
     def clean(self):
         cleaned_data = super(ToolFieldWhiteListForm, self).clean()

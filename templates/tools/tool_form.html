@@ -169,12 +169,15 @@
             <h3>{{ tool.name }} <span class="badge">{{ tool.version }}</span></h3>
         </div>
     </div>
+<hr>
     <div class="row">
         <div class="col-md-6 col-md-offset-2">
             <form action="" method="post" enctype="multipart/form-data">
                 <fieldset>
                     {% crispy toolform %}
                 </fieldset>
+                <hr>
+                <input name="submit" value="Submit" class="btn btn-primary pull-right" id="submit" type="submit">
             </form>
         </div>
     </div>
