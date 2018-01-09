@@ -100,7 +100,7 @@ class ToolInputOutputLinkAdmin(admin.ModelAdmin):
 
 class ToolFlagAdmin(admin.ModelAdmin):
     filter_horizontal = ('tool',)
-
+    list_display = ('verbose_name', 'rank')
 
 class ToolFieldWhiteListAdmin(admin.ModelAdmin):
     """

@@ -21,8 +21,8 @@
                 </th>
             </tr>
             </thead>
-            {% regroup tool_list by toolflag_set.first as tool_groups %}
-            {% for flag in tool_groups|dictsort:"grouper.verbose_name" %}
+            {% regroup tool_list|dictsort:"toolflag_set.first.verbose_name" by toolflag_set.first as tool_groups %}
+            {% for flag in tool_groups %}
             <tr>
                 <td class="list-inline active" colspan="4"><span class="h5">{{flag.grouper}}</span></td>
             </tr>

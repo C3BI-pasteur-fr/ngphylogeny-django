@@ -17,7 +17,7 @@ from .models import Tool, ToolFieldWhiteList, ToolFlag
 
 class ToolListView(ListView):
     """
-
+        Display the list of executable tool
     """
     CATEGORY = ['algn',
                 'clean',
@@ -27,8 +27,11 @@ class ToolListView(ListView):
 
     def get_queryset(self):
         CATEGORY = ToolFlag.objects.filter(rank=0).values_list('name', flat=True) or self.CATEGORY
-        return Tool.objects.filter(galaxy_server__current=True, visible=True).filter(
-            toolflag__name__in=CATEGORY).distinct()
+        tool_list = Tool.objects.filter(galaxy_server__current=True,
+                                        visible=True,
+                                        toolflag__name__in=CATEGORY).prefetch_related('toolflag_set')
+
+        return tool_list
 
 
 class ToolDetailView(DetailView):
