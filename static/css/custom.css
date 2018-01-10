@@ -39,7 +39,8 @@ header.jumbotron {
     background-size: 100%;
     color: #fff;
     font-family: 'Hallo sans', sans-serif;
-    margin-bottom: 0px;
+    padding:0px;
+    margin: 0px;
     width: 100%;
 }
 
@@ -56,30 +57,10 @@ header.jumbotron {
 
 }
 
-.table > tbody > tr > td {
+.table tbody td {
     vertical-align: middle;
 }
 
-.phylo-analysis > .col-md-4 > div {
-    padding: 10px 0;
-    margin-top: 30px;
-    height: 90%;
-    width: 90%;
-    border-bottom-color: #1f77b4;
-    border-bottom-style: solid;
-    border-top-color: white;
-    border-top-style: solid;
-    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.0), rgba(255, 255, 255, 0.95), rgba(242, 242, 242, 0.95));
-}
-
-.phylo-analysis > .col-md-4 > div:hover {
-    border-top-color: #1f77b4;
-    border-top-style: solid;
-}
-
-.phylo-analysis a:hover {
-    text-decoration: none;
-}
 
 .miniworkflow .panel {
     top: 0px;

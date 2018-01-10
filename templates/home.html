@@ -1,26 +1,28 @@
 {% extends "base.html" %}
 {% load static %}
 {% block nav-home %}class="active"{% endblock %}
+{% block stylesheet %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/home.css' %}"/>
+{% endblock %}
 {% block jumbotron %}
 <div class="jumbotron">
     <img alt="[Logo]" src="{% static 'images/logo_phylogeny-fr.png' %}" class="center-block">
     <p class="text-center">
-        <span class="h2">NGPhylogeny.fr</span>
-        <span>Robust phylogenetic analysis for everyone. </span>
+        <strong><em>Robust phylogenetic analysis for everyone. </em></strong>
     </p>
     <p class="text-center"><span class="glyphicon glyphicon-chevron-right"></span>
         Free, simple to use web service dedicated to
         reconstructing and analysing phylogenetic relationships between
         molecular sequences.
     </p>
+    <br>
     <p class="text-center">
-        <a href="{% url 'get_started_workflow' %}"  class="btn btn-success btn-lg">
-            Get started with OneClick Workflow
+        <a href="{% url 'get_started_workflow' %}" class="btn btn-success">
+            <span class="glyphicon glyphicon-play"></span> <strong>Let's GO !</strong> with One Click Workflow
         </a>
     </p>
 </div>
 {% endblock %}
 {% block content %}
-<hr>
 {% include "include/phylogeny_analysis_list.html" %}
 {% endblock %}
