@@ -1,4 +1,5 @@
 @import 'https://fonts.googleapis.com/css?family=Bungee+Inline|Francois+One';
+
 /*font-family: 'Francois One', sans-serif;
 font-family: 'Fascinate Inline', cursive;
 font-family: 'Bungee Inline', cursive;*/
@@ -21,13 +22,14 @@ font-family: 'Bungee Inline', cursive;*/
 table.center {
     float: none;
     margin: 0 auto;
-    text-align:center;
+    text-align: center;
 }
 
 .nomargin {
     margin: 0 auto;
     width: inherit;
 }
+
 header.jumbotron {
 
     background-image: url("/static/images/banner.png");
@@ -116,14 +118,53 @@ footer {
 .logo_contrib {
     max-width: 100%;
     max-height: 50px;
-    height:  auto;
+    height: auto;
     width: auto;
 }
 
 textarea {
-  font-family: Courier New, Consolas,Monaco,Lucida Console, monospace;
+    font-family: Courier New, Consolas, Monaco, Lucida Console, monospace;
 }
 
 [id*='error'] {
-    color : red;
+    color: red;
+}
+
+/* Icon when the collapsible content is shown */
+.btn-collapse:after {
+    width: 100%;
+    content: '\2796';
+    float: right;
+    font-size: 13px;
+    color: #777;
+    margin-top: -10px;
+    margin-left: 15px;
+
+}
+
+#mini-wk .col-md-2:first-child {
+    padding-top: 6%;
+}
+
+div[id*='wk-display'] {
+    padding: 0;
+}
+
+div[id*='wk-display']:before {
+    content: '\2192';
+    float: left;
+    font-size: 28px;
+    color: #555;
+    margin-top: 50%;
+    margin-left: -15px;
+}
+
+table .panel-body {
+    padding: 5px;
+    text-align: center;
+}
+
+table .panel-heading {
+    padding: 5px 15px;
+    text-align: center;
 }
