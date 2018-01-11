@@ -4,13 +4,13 @@
 <head>
     <meta http-equiv="Content-type" content="text/html;charset=UTF-8"/>
     <title>NGPhylogeny.fr{% block title-block %}{% endblock %}</title>
-    <script type="text/javascript" src="{% static 'js/jquery-2.1.4.min.js' %}"></script>
+    <script src="{% static 'js/jquery-2.1.4.min.js' %}"></script>
 
     <!-- Bootstrap -->
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
 
     <!-- Bootstrap Material Design -->
-    <link rel="stylesheet" type="text/css" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+    <link rel="stylesheet" type="text/css" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
 
     {% block stylesheet %} {% endblock %}
     <link rel="stylesheet" type="text/css" href="{% static 'css/custom.css' %}"/>
@@ -18,11 +18,6 @@
     {% block javascripts %} {% endblock %}
 </head>
 <body>
-<div class="alert alert-warning" role="alert" style="margin-bottom:0px">
-    <span class="glyphicon glyphicon-warning-sign"> </span>
-    <b>WARNING</b> This BETA version may be unstable, Please to contribute by submitting your bug report at <a
-        href="{% url 'feedback' %}">Contact</a>
-</div>
 <header class="jumbotron">
     <div class="container text-center">
         <div class="title-bg">
@@ -117,24 +112,24 @@
     <div class="container">
         <div class="row">
             <a href="https://c3bi.pasteur.fr/">
-                <div class="col-md-3"><img class="center-block logo_contrib"
+                <div class="col-md-3"><img class="center-block logo_contrib" alt="C3BI"
                                            src="{% static 'images/logo_ip_cnrs_c3bi.png' %}"></div>
             </a>
             <a href="http://www.lirmm.fr/">
-                <div class="col-md-2"><img class="center-block logo_contrib"
+                <div class="col-md-2"><img class="center-block logo_contrib" alt="Lirmm"
                                            src="{% static 'images/logo_lirmm.png' %}"></div>
             </a>
             <a href="https://www.lri.fr/">
-                <div class="col-md-2"><img class="center-block logo_contrib"
+                <div class="col-md-2"><img class="center-block logo_contrib" alt="LRI"
                                            src="{% static 'images/logo_lri.png' %}"></div>
             </a>
             <a href="https://www.france-bioinformatique.fr/">
-                <div class="col-md-2"><img class="center-block logo_contrib"
+                <div class="col-md-2"><img class="center-block logo_contrib" alt="IFB"
                                            src="{% static 'images/logo_ifb.png' %}"></div>
             </a>
             <a href="https://www.igs.cnrs-mrs.fr/">
                 <div class="col-md-3">
-                    <img class="center-block logo_contrib"
+                    <img class="center-block logo_contrib" alt="IGS"
                          src="{% static 'images/logo_igs.jpg' %}"></div>
             </a>
         </div>
