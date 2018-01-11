@@ -7,7 +7,7 @@ font-family: 'Bungee Inline', cursive;*/
 .title-bg {
     #background-color: rgb(0, 0, 0);
     #background-color: rgba(0, 0, 0, 0.6);
-    padding: 10px;
+    padding: 20px;
 }
 
 .title-cap {
@@ -61,6 +61,14 @@ header.jumbotron {
     vertical-align: middle;
 }
 
+.dropdown:hover .dropdown-menu {
+    display: block;
+    margin-top: 0;
+ }
+
+.dropdown-menu {
+    min-width:185px;
+}
 
 .miniworkflow .panel {
     top: 0px;
@@ -148,4 +156,17 @@ table .panel-body {
 table .panel-heading {
     padding: 5px 15px;
     text-align: center;
+}
+
+.histories-nav li {
+ padding: 0px 0px;
+}
+
+.histories-nav li a{
+ padding: 15px 5px;
+}
+
+.histories-nav li a div{
+ padding-left: 10px;
+ padding-right:10px;
 }

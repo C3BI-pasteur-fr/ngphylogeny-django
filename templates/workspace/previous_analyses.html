@@ -6,29 +6,30 @@
 {% block nav-workspace %}class="active"{% endblock %}
 {% block content %}
     <div class="row">
-        <h3>Previous analyses</h3>
-        <br>
-        <div class="col-md-1"></div>
-        <div class="col-md-10">
-            <ul class="nav ">
+        <span class="h2"><span class="glyphicon glyphicon-chevron-right"></span>Previous analyses</span>
+        <hr>
+        <div class="col-md-offset-1">
+            <ul class="nav histories-nav nav-pills">
                 {% for history in histories %}
                     <li class="col-md-9" style="background-color:{% cycle '#f5f9fb' '#fcfcfc' %}">
                         <a href="{% url 'history_detail' history.history %}">
-                            <span class="badge">{{ forloop.counter }}</span>
-                            <span class="label label-default">{{ history.created_date }}</span>
-                            <span class="label label-info">{{ history.history|truncatechars:9 }}</span>
-                            <span class="glyphicon glyphicon-cog"></span>
+                            <div class="pull-left">
+                                <span class="badge">{{ forloop.counter }}</span>
+                            </div>
                             {{ history.name }}
+                            <div class="pull-right">
+                                <span class="label label-info">{{ history.history|truncatechars:9 }}</span>
+                            </div>
+                            <div class="pull-right">
+                                <span class="text-muted">{{ history.created_date }}</span>
+                            </div>
                         </a>
                     </li>
-                    <li class="col-md-1" style="background-color:{% cycle '#f5f9fb' '#fcfcfc' %}">
-                        <a href="{% url 'history_delete' history.history %}">
+                <li style="background-color:{% cycle '#f5f9fb' '#fcfcfc' %}">
+                    <a href="{% url 'history_delete' history.history %}" class="text-center">
                             <span class='glyphicon glyphicon-trash text-default'></span>
                         </a>
                     </li>
-
-
-
                 {% empty %}
                     <div class="jumbotron">
                         You haven't any recent analyses in progress
