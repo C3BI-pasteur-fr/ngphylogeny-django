@@ -1,3 +1,4 @@
+import requests
 from django.core.management.base import BaseCommand
 
 from galaxy.models import Server
@@ -12,12 +13,18 @@ class Command(BaseCommand):
         parser.add_argument('--url')
         parser.add_argument('--name', help="Server Name")
         parser.add_argument('--activate', action='store_true', help="force re-import tools")
+        parser.add_argument('--interactive', action='store_true')
 
     def handle(self, *args, **options):
 
         galaxy_url = options.get('galaxyurl')
         galaxy_name = options.get('name')
         current = bool(options.get('activate'))
+        interactive = bool(options.get('interactive'))
+
+        if interactive:
+            new_url = raw_input('Enter the URL of the Galaxy server you want to add: ')
+            galaxy_url = requests.get(new_url).url
 
         if galaxy_url:
             galaxy_server, created = Server.objects.get_or_create(url=galaxy_url)
