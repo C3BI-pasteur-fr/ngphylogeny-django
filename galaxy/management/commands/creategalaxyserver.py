@@ -12,8 +12,8 @@ class Command(BaseCommand):
         # Named (optional) arguments
         parser.add_argument('--url')
         parser.add_argument('--name', help="Server Name")
-        parser.add_argument('--activate', action='store_true', help="force re-import tools")
-        parser.add_argument('--interactive', action='store_true')
+        parser.add_argument('--activate', action='store_true', help="Use this server by default")
+        parser.add_argument('--interactive', action='store_true', help="Prompt URL Galaxy server")
 
     def handle(self, *args, **options):
 
