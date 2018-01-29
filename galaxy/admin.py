@@ -31,8 +31,14 @@ class GalaxyServerAdmin(admin.ModelAdmin):
         Import tools description from Galaxy server
         """
         for galaxy_server in queryset:
-            tools_list = Tool.import_tools(galaxy_server)
-            self.message_user(request, "%s successfully imported new tools." % (len(tools_list)))
+            tool_import_report = Tool.import_tools(galaxy_server)
+
+            if tool_import_report['new']:
+                self.message_user(request, "%s successfully imported new tools." % (len(tool_import_report['new'])))
+            else:
+                self.message_user(request, "No new tools imported.",
+                                  level=messages.WARNING
+                                  )
 
     def activate_configuration(self, request, queryset):
         """
@@ -45,7 +51,7 @@ class GalaxyServerAdmin(admin.ModelAdmin):
             galaxy_server = queryset[0]
             galaxy_server.current = True
             galaxy_server.save()
-            # TODO reset history session
+
             self.message_user(request,
                               "%s configuration is now activated and usable by the application" % (galaxy_server.name),
                               level=messages.SUCCESS)

@@ -1,7 +1,10 @@
 import ast
 
 import requests
+from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils.functional import cached_property
+from django.utils.translation import ugettext as _
 
 from data.models import ExampleFile
 from galaxy.models import Server
@@ -35,7 +38,22 @@ class Tool(models.Model):
 
     @property
     def get_params_detail(self):
-        return self.fetch_tool_json().get('inputs')
+        return self.tool_json.get('inputs')
+
+    def clean(self):
+
+        if 'err_code' in self.tool_json.keys():
+            raise ValidationError({
+                'id_galaxy': ValidationError(_("%(err_msg)s"), code=self.tool_json.get('err_code'),
+                                             params={'err_msg': self.tool_json.get('err_msg'), })})
+        else:
+            self.import_tool(self.tool_json)
+
+    def save(self, *args, **kwargs):
+        """fetch and created tool io information"""
+        self.clean()
+
+        super(Tool, self).save(*args, **kwargs)
 
     class Meta:
         unique_together = (('galaxy_server', 'id_galaxy'),)
@@ -49,30 +67,59 @@ class Tool(models.Model):
                             "Please ensure that the Galaxy server is correctly set up")
         return cls.import_tools(galaxy_server, query)
 
+    @cached_property
+    def tool_json(self):
+        return self.fetch_tool_json()
+
+    def search_tools_json(self, galaxy_server='', query="phylogeny"):
+        """fetch and return list of id tool from galaxy"""
+
+        galaxy_server = galaxy_server or self.galaxy_server.url
+
+        tools_url = '%s/%s/%s/%s' % (galaxy_server, 'api', 'tools', self.id_galaxy)
+
+        tool_panels = requests.get(tools_url).json()
+
+        for panel in tool_panels:
+            if query in panel.get('name').lower():
+                return [t.get("id") for t in panel.get('elems')]
+        return []
+
+
     def fetch_tool_json(self):
+        """fetch and store tool information"""
+
         tool_url = '%s/%s/%s/%s' % (self.galaxy_server.url, 'api', 'tools', self.id_galaxy)
         tool_info_request = requests.get(tool_url, params={'io_details': "true"})
+
         return tool_info_request.json()
 
-    def import_tool(self):
+    def import_tool(self, tool_info):
         """
-        Extract tool information from Galaxy server
+        Extract tool information from Galaxy API
+        :param dict tool_info: json galaxy tool information
         """
-        tool_info = self.fetch_tool_json()
+        # tool_info = self.fetch_tool_json()
 
-        # save tool information
-        self.name = tool_info.get('name')
-        self.description = tool_info.get('description')
-        self.version = tool_info.get('version')
+        self.name = self.name or tool_info.get('name')
+        self.description = self.description or tool_info.get('description')
+        self.version = self.version or tool_info.get('version')
 
         toolshed = tool_info.get('tool_shed_repository')
+
         if toolshed:
-            self.toolshed = toolshed.get('tool_shed')
-            self.toolshed_revision = toolshed.get('changeset_revision')
+            self.toolshed = self.toolshed or toolshed.get('tool_shed')
+            self.toolshed_revision = self.toolshed_revision or toolshed.get('changeset_revision')
 
-        self.save()
+        return self
 
-        # save inputs
+    def import_tool_io(self, tool_info):
+        """
+        Extract tool input/output information from Galaxy API
+        :param dict tool_info: json galaxy tool information
+        """
+
+        # Inputs
         inputs_tools = tool_info.get('inputs')
         inputs_list = []
         for input_d in inputs_tools:
@@ -93,10 +140,17 @@ class Tool(models.Model):
                     input_obj.save()
 
             else:
-                # remove input data from whitelist for workflows
+                # remove input data from whitelist field for workflow context
+                # (ie: without data input because on workflow data input come from previous steps)
                 inputs_list.append(input_d.get('name'))
 
-        # save outputs
+        # create whitelist field for workflows
+        w, created_w = ToolFieldWhiteList.objects.get_or_create(tool_id=self.id, context='w')
+        if created_w:
+            w._params = ",".join(inputs_list)
+            w.save()
+
+        # Outputs
         outputs_tools = tool_info.get('outputs')
         for output_d in outputs_tools:
             output_obj, created_output = ToolOutputData.objects.get_or_create(name=output_d.get('name'),
@@ -108,38 +162,59 @@ class Tool(models.Model):
                 output_obj.extension = output_d.get('format')
                 output_obj.save()
 
-        # pre-compute whitelist for workflows
-        w, created_w = ToolFieldWhiteList.objects.get_or_create(tool_id=self.id, context='w')
-        if created_w:
-            w._params = ",".join(inputs_list)
-            w.save()
 
     @classmethod
     def import_tools(cls, galaxy_server, tools=None, query="phylogeny", force=False):
+        """
+        Import a list of tool
+        :param galaxy_server: GalaxyServer instance
+        :param tools: list of tool id form Galaxy
+        :param query: keyword to find specific tools
+        :param force: force update
+        :return type: dict =                      {
+                                                'new':[],           #list of tool
+                                                'already_exist':[]  #list of tool
+                                                'error': [],        #list of id_tool not valid
+                                            }
 
+        """
+        query = query.lower()
         tools_ids = tools or []
-        tools_created = []
+        tools_import_report = {
+            'new': [],
+            'already_exist': [],
+            'error': []
+        }
 
-        if not tools:
+        if not tools_ids:
             # fetch tools list
             tools_url = '%s/%s/%s/' % (galaxy_server.url, 'api', 'tools')
-            connection = requests.get(tools_url, params={'q': query})
-            if connection.status_code == 200:
-                tools_ids = connection.json() or []
+            connection = requests.get(tools_url, params={'in_panel': "false"})
+            tools_list = connection.json()
+            for tool in tools_list:
+                _m = [
+                    tool.get('id').lower(),
+                    tool.get('name').lower(),
+                    str(tool.get('panel_section_name')).lower()
+                ]
+                if query in _m:
+                    tools_ids.append(tool.get('id'))
 
-        for id_tool in tools_ids:
+        while tools_ids:
 
-            t, created = Tool.objects.get_or_create(id_galaxy=id_tool, galaxy_server=galaxy_server)
+            id_tool = tools_ids.pop()
+            try:
+                t, created = Tool.objects.get_or_create(id_galaxy=id_tool, galaxy_server=galaxy_server)
+                if created or force:
+                    tools_import_report['new'].append(t)
+                    t.import_tool_io(t.tool_json)
+                else:
+                    tools_import_report['already_exist'].append(t)
 
-            if created:
-                t.import_tool()
-                tools_created.append(t)
+            except (ValueError, ValidationError) as e:
+                tools_import_report['error'].append(id_tool)
 
-            elif force:
-                t.import_tool()
-                tools_created.append(t)
-
-        return tools_created
+        return tools_import_report
 
     @property
     def compatible_tool(self):

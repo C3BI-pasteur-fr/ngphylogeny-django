@@ -34,7 +34,7 @@ def connection_galaxy(view_function):
 
         except Exception as e:
             logger.exception(e)
-            raise HttpResponseGone()
+            return HttpResponseGone()
 
         request.galaxy_server = galaxy_server
         request.session['galaxy_server'] = galaxy_server.id
