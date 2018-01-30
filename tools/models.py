@@ -50,10 +50,15 @@ class Tool(models.Model):
             self.import_tool(self.tool_json)
 
     def save(self, *args, **kwargs):
-        """fetch and created tool io information"""
-        self.clean()
 
+        self.clean()
+        new = self._state.adding  # _state change after save()
         super(Tool, self).save(*args, **kwargs)
+
+        if new:
+            """fetch and created tool io information"""
+            self.import_tool_io(self.tool_json)
+
 
     class Meta:
         unique_together = (('galaxy_server', 'id_galaxy'),)
@@ -171,12 +176,11 @@ class Tool(models.Model):
         :param tools: list of tool id form Galaxy
         :param query: keyword to find specific tools
         :param force: force update
-        :return type: dict =                      {
-                                                'new':[],           #list of tool
-                                                'already_exist':[]  #list of tool
-                                                'error': [],        #list of id_tool not valid
-                                            }
-
+        :return type: dict =   {
+                                  'new':[],           #list of tool
+                                  'already_exist':[]  #list of tool
+                                  'error': [],        #list of id_tool not valid
+                                }
         """
         query = query.lower()
         tools_ids = tools or []
@@ -205,9 +209,11 @@ class Tool(models.Model):
             id_tool = tools_ids.pop()
             try:
                 t, created = Tool.objects.get_or_create(id_galaxy=id_tool, galaxy_server=galaxy_server)
+
+                if force:
+                    t.import_tool_io(t.tool_json)
                 if created or force:
                     tools_import_report['new'].append(t)
-                    t.import_tool_io(t.tool_json)
                 else:
                     tools_import_report['already_exist'].append(t)
 
