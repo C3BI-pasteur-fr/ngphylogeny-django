@@ -15,7 +15,7 @@ Including another URLconf
 """
 from django.conf.urls import url
 
-from views import FeedbackCreateView, FeedbackSuccessView
+from .views import FeedbackCreateView, FeedbackSuccessView
 
 urlpatterns = [
     url(r'feedback$', FeedbackCreateView.as_view(), name="feedback"),
