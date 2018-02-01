@@ -169,12 +169,7 @@ def export_to_itol(request, file_id):
     return redirect(r.url)
 
 
-@connection_galaxy
-def export_file(request):
-    pass
-
-
-def get_example(request, ext_file=""):
+def get_example(request):
     """return example file according to ext_file found """
 
     tool_id = ''
@@ -187,8 +182,8 @@ def get_example(request, ext_file=""):
                                                   toolinputdata__name=tool_input).first()
 
     else:
-        ext_file = [str(ext).strip() for ext in ext_file]
-        example_file = ExampleFile.objects.filter(ext__in=ext_file).first()
+        ext_file = request.GET.get('ext_file')
+        example_file = ExampleFile.objects.filter(ext=ext_file).first()
 
     if example_file:
         stream_response = StreamingHttpResponse(open(example_file.upload.path).read())
