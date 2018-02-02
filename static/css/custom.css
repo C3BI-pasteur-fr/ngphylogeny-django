@@ -117,9 +117,10 @@ footer {
 
 .logo_contrib {
     max-width: 100%;
-    max-height: 50px;
+    max-height: 42px;
     height: auto;
     width: auto;
+    margin: 3.5%;
 }
 
 textarea {
