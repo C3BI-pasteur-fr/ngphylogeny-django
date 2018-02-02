@@ -1,13 +1,9 @@
 {% extends "base.html" %}
 {% load static %}
-{% block nav-doc %}class="active"{% endblock %}>
+{% block title %}Documentation{% endblock %}
 {% block content %}
-    {% comment %} import from html source code on documentation of phylogeny.fr
-
+    {% comment %} import from html source code on documentation of phylogeny.fr {% endcomment %}
     <div id="page_content">
-        <h1>Documentation</h1>
-        <br/>
-        <hr/>
         <a name="toc"></a>
         <h2>Table of Content</h2>
         <ol>
@@ -95,13 +91,6 @@
             <a href="one_task?task_type=treedyn">TreeDyn</a> for tree drawing) to reconstruct a robust
             phylogenetic tree from a set of sequences.
         </p>
-        <br/>
-        <div>
-            <img class="doc_image" src="http://phylogeny.lirmm.fr/images/capture_oneclick_input.png"
-                 alt="one click input screenshot"/>
-            <img class="doc_image" src="http://phylogeny.lirmm.fr/images/capture_oneclick_output.png"
-                 alt="one click output screenshot"/>
-        </div>
         <br/>
         <p>
             What users have to do is just to copy and paste their set of sequences in the
@@ -720,5 +709,4 @@ END;
         <hr class="separator"/>
         <br/>
     </div>
-{% endcomment %}
 {% endblock %}

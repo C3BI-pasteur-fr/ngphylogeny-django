@@ -1,6 +1,6 @@
 {% load static %}
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta http-equiv="Content-type" content="text/html;charset=UTF-8"/>
     <title>NGPhylogeny.fr{% block title-block %}{% endblock %}</title>
@@ -26,10 +26,11 @@
         </div>
     </div>
 </header>
-<nav class="navbar-default" style="padding-left: 7%">
-    <div id="topnavbar" class="container-fluid">
+<nav class="navbar-default">
+    <div id="topnavbar" class="container-fluid col-md-offset-1">
         <ul class="nav nav-tabs">
-            <li {% block nav-home %}{% endblock %}><a href="{% url 'home' %}">
+            {% block nav-home %}
+                <li><a href="{% url 'home' %}">
                 <span class="glyphicon glyphicon-home"></span> Home</a></li>
             <li class="dropdown {% block nav-analysis %}{% endblock %}">
                 <a class="dropdown-toggle" href="{% url 'analysis_list' %}">
@@ -42,10 +43,15 @@
                     <li><a href="{% url 'workflows_alacarte' %}">Workflows maker</a></li>
                 </ul>
             </li>
-            <li {% block nav-tools %}{% endblock %}>
+            {% endblock %}
+            {% block nav-tools %}
+                <li>
                 <a href="{% url 'tools' %}"><span class="glyphicon glyphicon-briefcase"></span> Tools</a>
+
             </li>
-            <li {% block nav-workspace %}{% endblock %}>
+            {% endblock %}
+            {% block nav-workspace %}
+                <li>
                 <a {% if request.session.histories|length > 1 %}
                     href="{% url 'previous_analyses' %}"
                     {% elif request.session.histories|length is 1%}
@@ -54,16 +60,18 @@
                     class="text-muted"
                     {% endif %}
                     >
-                    <span class="glyphicon glyphicon-list-alt"></span> Workspace
+                    <span class="glyphicon glyphicon-th-list"></span> Workspace
                     <span class="badge">{{ request.session.histories|length }}</span>
                 </a>
-            </li>
 
-            <li {% block nav-doc %}{% endblock %}><a href="{% url 'documentation' %}">
+            </li>
+            {% endblock %}
+            {% block nav-doc %}
+                <li><a href="{% url 'documentation' %}">
                 <span class="glyphicon glyphicon-book"></span> Documentation</a>
             </li>
             <li class="dropdown {% block nav-about %}{% endblock %}">
-                <a class="dropdown-toggle" data-toggle="dropdown" href="#">
+                <a class="dropdown-toggle" data-toggle="dropdown" href="{% url 'about' %}">
                     <span class="glyphicon glyphicon-question-sign"></span> About
                     <span class="caret"></span>
                 </a>
@@ -72,6 +80,7 @@
                     <li><a href="{% url 'feedback' %}">Contact</a></li>
                 </ul>
             </li>
+            {% endblock %}
             <li class="user navbar-right">
                 {%if user.is_authenticated %}
                 <a href="{% url 'logout' %}">
@@ -100,6 +109,8 @@
     </div>
 </nav>
 <br>
+{% block section-title %}
+{% endblock %}
 <div class="container">
     {% block jumbotron %}{% endblock %}
     {% block goback %} {% endblock %}
@@ -135,5 +146,14 @@
         </div>
     </div>
 </footer>
+<script>
+    var str = location.href;
+    $("#topnavbar > ul > li > a ").each(function () {
+        console.log(this.href, str);
+        if (this.href == str) {
+            $(this).parent().addClass("active");
+        }
+    });
+</script>
 </body>
 </html>

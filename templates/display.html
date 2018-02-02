@@ -1,6 +1,18 @@
 {% extends "base.html" %}
 {% load static %}
-{% block nav-workspace %}class="active"{% endblock %}
+{% block nav-workspace %}
+    {{ block.super }}
+    <li>
+        <a href="{% url 'history_detail' history_id %}">
+            <span class="glyphicon glyphicon-list-alt"></span> {{ history_id |truncatechars:9 }}
+        </a>
+    </li>
+    <li class="active">
+        <a>
+            <span class="glyphicon glyphicon-eye-open"></span> Display
+        </a>
+    </li>
+{% endblock %}
 {% block javascripts %}
 <script>
         $(document).ready(function(){
@@ -10,22 +22,6 @@
             $('#view').html("<pre>"+data+"</pre>");
         }});
         });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 </script>
 {% endblock %}
 {% block goback %}

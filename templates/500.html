@@ -1,16 +1,11 @@
-{% extends "base.html" %}
+{% extends "error.html" %}
 {% load static %}
-{% block nav-home %}class="active"{% endblock %}
-{% block jumbotron %}
-    <div class="jumbotron">
-        <div class="text-center"><h2>Phylogeny.fr</h2>
-            <h4>Robust Phylogenetic Analysis For The Non-Specialist</h4>
-        </div>
-    </div>
-    <div class="jumbotron alert-warning text-center">
-
-        <h4>Sorry, an unexpected error has occurred. Please try again later or contact <a href="{% url 'feedback' %}">support</a>
-        </h4>
-        <h3>code error (500)</h3>
-    </div>
+{% block code-error %}
+    <h1>500</h1>
 {% endblock %}
+{% block message-error %}
+    <h4>Sorry, an unexpected error has occurred.</h4>
+    <p>Please try again later or contact :(</p>
+{% endblock %}
+
+

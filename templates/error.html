@@ -1,13 +1,33 @@
 {% extends "base.html" %}
 {% load static %}
-{% block nav-home %}class="active"{% endblock %}
+{% load i18n %}
+{% block stylesheet %}
+    <link rel="stylesheet" type="text/css" href="{% static 'css/error.css' %}"/>
+{% endblock %}
 {% block jumbotron %}
-    <div class="jumbotron">
-        <div class="text-center"><h2>Phylogeny.fr</h2>
-            <h4>Robust Phylogenetic Analysis For The Non-Specialist</h4>
+    <div class="jumbotron text-center">
+        <div class="error-page-wrapper background">
+            <div class="content-container">
+                {% block code-error %}
+                    <h1>...</h1>
+                {% endblock %}
+                {% block message-error %}
+                    <h4>...</h4>
+                    <p>...</p>
+                {% endblock %}
+                {% block redirect-error %}
+                    <div class="buttons-container">
+                        <a class="btn" href="{% url 'home' %}">
+                            <span class="glyphicon glyphicon-home"></span>
+                            Go to homepage
+                        </a>
+                        <a class="btn" href="{% url 'feedback' %}">
+                            <span class="glyphicon glyphicon-warning-sign"></span>
+                            Report a problem
+                        </a>
+                    </div>
+                {% endblock %}
+            </div>
         </div>
-    </div>
-    <div class="jumbotron alert-warning text-center">
-            <h4>Error: {{ error.message }}</h4>
     </div>
 {% endblock %}

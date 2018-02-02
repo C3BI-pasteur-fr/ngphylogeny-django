@@ -14,9 +14,20 @@ font-family: 'Bungee Inline', cursive;*/
     font-family: 'Bungee Inline', cursive;
 }
 
-.nav {
+.title-page:before {
+    font-family: 'Glyphicons Halflings';
+    content: "\e080";
+    margin: 10px;
+}
+
+nav.navbar-default {
     font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
     font-size: 14px;
+    padding-top: 5px;
+}
+
+.nav .badge {
+    display: inline;
 }
 
 table.center {
@@ -39,7 +50,7 @@ header.jumbotron {
     background-size: 100%;
     color: #fff;
     font-family: 'Hallo sans', sans-serif;
-    padding:0px;
+    padding: 0px;
     margin: 0px;
     width: 100%;
 }
@@ -57,17 +68,17 @@ header.jumbotron {
 
 }
 
-.table tbody td {
+.table tbody tr td {
     vertical-align: middle;
 }
 
 .dropdown:hover .dropdown-menu {
     display: block;
     margin-top: 0;
- }
+}
 
 .dropdown-menu {
-    min-width:185px;
+    min-width: 185px;
 }
 
 .miniworkflow .panel {
@@ -119,6 +130,14 @@ textarea {
     color: red;
 }
 
+.btn.playbtn {
+    color: #fff;
+    background-color: #21bd8d;
+    margin: 20px;
+    border-radius: 99px;
+    text-align: center;
+
+}
 /* Icon when the collapsible content is shown */
 .btn-collapse:after {
     width: 100%;
@@ -159,14 +178,38 @@ table .panel-heading {
 }
 
 .histories-nav li {
- padding: 0px 0px;
+    padding: 0px 0px;
 }
 
-.histories-nav li a{
- padding: 15px 5px;
+.histories-nav li a {
+    padding: 15px 5px;
 }
 
-.histories-nav li a div{
- padding-left: 10px;
- padding-right:10px;
+.histories-nav li a div {
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+@keyframes blink {
+    50% {
+        color: transparent
+    }
+}
+
+.loader-dot {
+    animation: 2.5s blink infinite;
+}
+
+.loader-dot:nth-child(2) {
+    animation-delay: 250ms;
+}
+
+.loader-dot:nth-child(3) {
+    animation-delay: 500ms;
+}
+
+a.btn.btn-toolbar {
+
+    width: 100%;
+    text-align: left;
 }

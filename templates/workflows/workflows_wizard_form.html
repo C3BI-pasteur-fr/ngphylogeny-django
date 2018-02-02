@@ -96,17 +96,17 @@
                 });
             });
 
-            if ('{{ wizard.steps.index }}' != '{{ wizard.steps.last }}') {
-                $("input[name='submit']").hide()
-            } else {
-                $('#lastnext').hide();
-            }
         });
     </script>
 {% endblock %}
 {% block workflow-type %}Workflows Wizard Forms{% endblock %}
 {% block workflow-name %}{% endblock %}
 {% block workflow-sidebar %}{% endblock %}
+{% block workflow-overview %}
+    {% with wizard.steps.current as steps_current %}
+        {{ block.super }}
+    {% endwith %}
+{% endblock %}
 {% block workflow-form %}
     <div class="col-md-7">
         {% include "workflows/include/workflow_wizardform.html" %}

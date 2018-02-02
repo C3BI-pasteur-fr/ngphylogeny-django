@@ -1,7 +1,9 @@
 {% load static %}
 {% block stylesheet %}
 <script src="https://cdn.rawgit.com/zenorocha/clipboard.js/v1.7.1/dist/clipboard.min.js"></script>
-
+    <script src="https://cdn.datatables.net/1.10.16/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.10.16/js/dataTables.bootstrap.min.js"></script>
+    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.16/css/dataTables.bootstrap.min.css">
 {% endblock %}
 <script>
 $(document).ready(function(){
@@ -27,7 +29,7 @@ $(document).ready(function(){
         });
         // Use .apply onto array from deferreds
         $.when.apply($, deferreds).then(function () {
-            // groupe dataset by tool
+            // group dataset by tool
             var id_tool = '';
             var first_dataset = '';
             var cmpt = 1;
@@ -54,6 +56,7 @@ $(document).ready(function(){
                 $('#' + first_dataset).attr('rowspan', cmpt);
             });
         });
+
     });
 </script>
 
@@ -62,7 +65,7 @@ $(document).ready(function(){
         $.get('{% url 'history_detail' history_info.id %}',
             function (data) {
                 var html = $.parseHTML(data);
-                var nbstate = $(html).find('[id^=state_]').length
+                var nbstate = $(html).find('[id^=state_]').length;
                 if ($('[id^=state_]').length != nbstate )
                 { location.reload();}
                 $(html).find('[id^=state_]').each(function (index, el) {
@@ -92,18 +95,11 @@ $(document).ready(function(){
         $("#success-copy").fadeIn();
         setTimeout(function(){ $("#success-copy").fadeOut("slow"); }, 2000);
     }
-    function blinker() {
-        $('.blink_me').fadeOut(1250);
-        $('.blink_me').fadeIn(1250);
-    }
-
-    setInterval(blinker, 2500);
-
 </script>
 
-<div class="alert alert-info alert-dismissable fade in">
+<div id="info-refresh" class="alert alert-info alert-dismissable fade in">
     <a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
-    <strong>Info !</strong> This page page is refreshed every 5sec.
+    <strong>Info !</strong> This page is will be refreshed in <span id="countdown_span">5</span> sec.
 </div>
 <div id="success-copy" class="alert alert-success" style="display:none;">
     <a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
@@ -166,24 +162,39 @@ $(document).ready(function(){
 <hr>
 <div class="row">
     <div class="col-md-12">
-        <table class="table table-striped ">
+        <table id="myTable" class="table table-striped ">
             <thead>
             <th>Tool</th>
             <th>Step</th>
             <th>File Name</th>
             <th>Status</th>
+            <th></th>
             </thead>
+            <tbody>
+            <tr></tr>
             {% for file in history_content|dictsortreversed:"hid" %}
             <tr {% if not file.visible %}class='hidden' {% endif %}>
                 {% if forloop.first %}
-                <script>
-                        var autorefresh = setInterval(refresh, 5000);
+                    <script>
+                        var interval = 5000;
+                        var autorefresh = setInterval(refresh, interval);
+                        var elt = $('#countdown_span');
+                        elt.html(interval / 1000);
+
+                        function countdown() {
+                            elt.html(elt.html() - 1);
+                            if (elt.html() < 0) {
+                                elt.html(interval / 1000);
+
+                            }
+                        }
+
+                        setInterval(countdown, 1000);
                         {% if 'ok' in file.state %}
+                            $('#info-refresh').hide();
                             clearInterval(autorefresh);
                         {% endif %}
-
-
-                </script>
+                    </script>
                 {% endif %}
                 <td id="{{ file.id }}" data=''></td>
                 <td>{{ file.hid }}.</td>
@@ -195,9 +206,12 @@ $(document).ready(function(){
                           title="Success!">
                     </span>
                     {% elif 'queued' in file.state or 'new' in file.state %}
-                    <span class="glyphicon glyphicon-time blink_me text-info"
-                          data-toggle="tooltip" data-placement="right"
-                          title="Waiting to be launch">
+                        <span class="loading-dot"
+                              data-toggle="tooltip" data-placement="right"
+                              title="Waiting to be launch">
+                        <span class="h2 loader-dot">.</span>
+                        <span class="h2 loader-dot">.</span>
+                        <span class="h2 loader-dot">.</span>
                     </span>
                     {% elif "running" in file.state %}
                     <span class="glyphicon glyphicon-refresh spin"
@@ -265,6 +279,7 @@ $(document).ready(function(){
                 </td>
             </tr>
             {% endfor %}
+            </tbody>
         </table>
     </div>
 </div>

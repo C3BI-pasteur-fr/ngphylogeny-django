@@ -1,0 +1,71 @@
+/* Style the buttons that are used to open and close the accordion panel */
+.accordion {
+    background-color: #eee;
+    color: #444;
+    margin: 0 0 5px;
+    cursor: pointer;
+    padding: 18px;
+    width: 100%;
+    text-align: left;
+    border: none;
+    outline: none;
+    transition: 0.4s;
+}
+
+/* Add a background color to the button if it is clicked on (add the .active class with JS), and when you move the mouse over it (hover) */
+.active, .accordion:hover {
+    background-color: #ccc;
+}
+
+/* Style the accordion panel. Note: hidden by default */
+.formtool {
+    padding: 0 18px;
+    margin-top: 0px;
+    box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.16), 0 2px 10px 0 rgba(0, 0, 0, 0.12) !important;
+    background-color: white;
+    display: none;
+}
+
+.accordion:after {
+    content: '\02795'; /* Unicode character for "plus" sign (+) */
+    font-size: 13px;
+    color: #777;
+    float: right;
+    margin-left: 5px;
+}
+
+.accordion.active:after {
+    content: '\2796'; /* Unicode character for "minus" sign (-) */
+}
+
+.row {
+    margin-top: 10px;
+    margin-left: 0px;
+    margin-right: 0px;
+}
+
+#navbar-tool {
+    padding-top: 15px;
+}
+
+/* Icon when the collapsible content is shown */
+.btn-collapse:after {
+    width: 100%;
+    content: '\2796';
+    float: right;
+    font-size: 13px;
+    color: #777;
+    margin-top: -10px;
+    margin-left: 15px;
+
+}
+
+/* Icon when the collapsible content is hidden */
+.btn-collapse.collapsed:after {
+    content: '\02795';
+}
+
+.affix {
+    top: 20px;
+    z-index: 9999 !important;
+}

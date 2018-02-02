@@ -1,16 +1,13 @@
-{% extends "base.html" %}
+{% extends "error.html" %}
 {% load static %}
-{% block nav-home %}class="active"{% endblock %}
-{% block jumbotron %}
-    <div class="jumbotron">
-        <div class="text-center"><h2>Phylogeny.fr</h2>
-            <h4>Robust Phylogenetic Analysis For The Non-Specialist</h4>
-        </div>
-    </div>
-    <div class="jumbotron alert-warning text-center">
-        <h4>"We're sorry, but the requested page {{ request_path }} could not be found or we are still working on
-            it"</h4>
-        <h4>Please try again later or contact <a href="{% url 'feedback' %}">support</a></h4>
-        <h3> {{ exception }} </h3>
-    </div>
+{% block code-error %}
+    <h1>404</h1>
 {% endblock %}
+{% block message-error %}
+    <h4>Sorry - Page not found!</h4>
+    <p>The page you are looking for was moved, removed, renamed or might never existed. <br>
+        You stumbled upon a broken link :(</p>
+{% endblock %}
+
+
+
