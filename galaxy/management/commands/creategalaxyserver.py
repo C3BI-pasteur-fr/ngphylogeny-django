@@ -17,7 +17,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
 
-        galaxy_url = options.get('galaxyurl')
+        galaxy_url = options.get('url')
         galaxy_name = options.get('name')
         current = bool(options.get('activate'))
         interactive = bool(options.get('interactive'))
