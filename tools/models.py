@@ -92,8 +92,9 @@ class Tool(models.Model):
 
 
     def fetch_tool_json(self):
-        """fetch and store tool information"""
-
+        """
+            fetch and store tool information
+        """
         tool_url = '%s/%s/%s/%s' % (self.galaxy_server.url, 'api', 'tools', self.id_galaxy)
         tool_info_request = requests.get(tool_url, params={'io_details': "true"})
 
@@ -161,10 +162,20 @@ class Tool(models.Model):
             output_obj, created_output = ToolOutputData.objects.get_or_create(name=output_d.get('name'),
                                                                               tool=self
                                                                               )
-
+            # TODO issue Galaxy
             if created_output:
                 output_obj.edam_format = output_d.get('edam_format')
-                output_obj.extension = output_d.get('format')
+
+                if not output_d.get('format'):
+
+                    output_obj.extension = output_d.get('format')
+
+                elif output_d.get('model_class') == "ToolOutputCollection":
+
+                    output_obj.extension = "DataCollection"
+                else:
+                    raise NotImplementedError
+
                 output_obj.save()
 
 
