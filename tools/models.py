@@ -166,7 +166,7 @@ class Tool(models.Model):
             if created_output:
                 output_obj.edam_format = output_d.get('edam_format')
 
-                if not output_d.get('format'):
+                if output_d.get('format'):
 
                     output_obj.extension = output_d.get('format')
 
