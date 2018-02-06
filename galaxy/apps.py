@@ -7,4 +7,4 @@ class GalaxyConfig(AppConfig):
     name = 'galaxy'
 
     def ready(self):
-        pass
+        import signals
