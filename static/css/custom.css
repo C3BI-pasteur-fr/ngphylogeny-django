@@ -121,6 +121,7 @@ footer {
     height: auto;
     width: auto;
     margin: 3.5%;
+    float: left;
 }
 
 textarea {
