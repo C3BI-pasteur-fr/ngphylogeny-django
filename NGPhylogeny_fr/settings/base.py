@@ -29,7 +29,7 @@ DEBUG = False
 ALLOWED_HOSTS = ["127.0.0.1",]
 INTERNAL_IPS = ["127.0.0.1",]
 
-CRISPY_TEMPLATE_PACK = "bootstrap4"
+CRISPY_TEMPLATE_PACK = "bootstrap3"
 
 # Application definition
 
@@ -129,9 +129,7 @@ STATICFILES_DIRS = (
     # Always use forward slashes, even on Windows.
     # Don't forget to use absolute paths, not relative paths.
     os.path.join(BASE_DIR, 'static'),
-
 )
-
 
 LOGGING = {
     'version': 1,
