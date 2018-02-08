@@ -44,11 +44,13 @@ class WorkflowStepInformation(object):
         return self.tool_queryset.filter(id_galaxy__in=self.toolset).prefetch_related('toolflag_set')
 
     def update_dict_tools(self):
+
+        _tools = self.get_tools()
+
         # remove unknown tools
         for nbstep, step in self.steps_tooldict.items():
-
-            for tool in self.get_tools():
-                if step.get('tool_idgalaxy') == tool.id_galaxy:
+            for tool in _tools:
+                if tool.id_galaxy in step.get('tool_idgalaxy'):
                     step['tool'] = tool
                     break
             else:
@@ -57,7 +59,7 @@ class WorkflowStepInformation(object):
     def __init__(self, workflow_json, tools=None):
         """
         :param workflow_json: Galaxy workflow json
-        :param tools <queryset>: limits the list of available tools
+        :param tools <queryset>: limit the list of available tools
         """
         if isinstance(tools, type(self.tool_queryset)) and tools:
             self.tool_queryset = tools
@@ -71,10 +73,11 @@ class WorkflowStepInformation(object):
         for step_id, step in self.workflow_json.get('steps').items():
             if step.get('tool_id'):
                 self.toolset.update([step.get('tool_id')])
-                self.steps_tooldict[step_id] = {'tool': None,
-                                                'tool_idgalaxy': step.get('tool_id'),
-                                                'annotation': step.get('annotation'),
-                                                'params': step.get('tool_inputs')
+                self.steps_tooldict[step_id] = {
+                    'tool': None,
+                    'tool_idgalaxy': step.get('tool_id'),
+                    'annotation': step.get('annotation'),
+                    'params': step.get('tool_inputs')
                                                 }
 
         # update dict with known tool and remove steps with unknown tools

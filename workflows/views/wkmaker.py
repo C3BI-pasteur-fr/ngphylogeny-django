@@ -13,8 +13,9 @@ from workflows.models import Workflow
 from workflows.models import WorkflowGalaxyFactory
 from workflows.views.generic import WorkflowWizard, UploadView, DetailView
 from workflows.views.viewmixing import WorkflowDeleteWorkingCopyMixin
-from workflows.views.wkadvanced import WorkflowAdvancedFormView
+from workflows.views.wkadvanced import WorkflowAdvancedFormView, WorkflowAdvancedSinglePageView
 
+WORKFLOW_MAKER_FLAG = 'wmake'
 
 @connection_galaxy
 def workflows_alacarte_build(request):
@@ -40,7 +41,7 @@ def workflows_alacarte_build(request):
             step['group'].append({'flag': flag,
                                   'tools': Tool.objects.filter(galaxy_server=request.galaxy_server,
                                                                toolflag=flag,
-                                                               visible=True).filter(toolflag__name='wmake')
+                                                               visible=True).filter(toolflag__name=WORKFLOW_MAKER_FLAG)
                                   })
 
     if request.method == 'POST':
@@ -110,11 +111,11 @@ def workflows_alacarte_build(request):
 
 
 @method_decorator(connection_galaxy, name="dispatch")
-class WorkflowMakerView(WorkflowAdvancedFormView, DetailView):
+class WorkflowMakerView(WorkflowAdvancedSinglePageView):
     """
     Workflow form with the list of tools and launch workflow
     """
-    restrict_toolset = Tool.objects.filter(toolflag__name='wmake')
+    restricted_toolset = Tool.objects.filter(toolflag__name=WORKFLOW_MAKER_FLAG)
 
     def get_object(self, queryset=None, detail=True):
         # load workflow
@@ -132,34 +133,3 @@ class WorkflowMakerView(WorkflowAdvancedFormView, DetailView):
         # add galaxy json information
         wk_obj.json = wk_json
         return wk_obj
-
-
-class WorkflowMarkerWizardView(WorkflowDeleteWorkingCopyMixin, WorkflowWizard, WorkflowMakerView):
-    """
-        Workflow maker Wizard Form
-    """
-
-    template_name = 'workflows/workflows_maker_form.html'
-
-    def done(self, *args, **kwargs):
-        render_wizard = super(WorkflowMarkerWizardView, self).done(*args, **kwargs)
-
-        if self.succes_url:
-            # delete the workflow when the workflow has been run
-            self.delete_workflow(self.get_object().id_galaxy)
-        return render_wizard
-
-
-class WorkflowsMarkerRedirectView(WorkflowMakerView, View):
-    """
-        Redirect to WizardformView build with selected tools
-    """
-
-    def get(self, request, *args, **kwargs):
-        context = self.get_context_data()
-        context['form_list'] = [UploadView.form_class] + context['form_list']
-
-        return WorkflowMarkerWizardView.as_view(form_list=context['form_list'])(request, *args, **kwargs)
-
-    def post(self, request, *args, **kwargs):
-        return self.get(request, *args, **kwargs)

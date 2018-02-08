@@ -7,14 +7,15 @@ class WorkflowDetailMixin(object):
     """
     model = Workflow
     object = None
+    restricted_toolset = None
 
     def fetch_workflow_detail(self, workflow):
 
-        # add galaxy workflows json information
+        # add galaxy json workflow information
         workflow.json = self.request.galaxy.workflows.show_workflow(workflow_id=workflow.id_galaxy)
 
         # add workflow sorted tool list information
-        workflow.detail = WorkflowStepInformation(workflow.json, tools=self.restrict_toolset).sorted_tool_list
+        workflow.detail = WorkflowStepInformation(workflow.json, tools=self.restricted_toolset).sorted_tool_list
         return workflow
 
     def get_workflow_detail(self):

@@ -11,17 +11,12 @@ logger = logging.getLogger(__name__)
 
 
 @receiver(post_save, sender=Server)
-def update_active_server_in_session(sender, instance, dispatch_uid='teet', **kwargs):
+def update_active_server_in_session(sender, instance, dispatch_uid='', **kwargs):
+    "Force to update session server storage"
     sessions = Session.objects.all()
-    # sessions.delele()
-    # logger.info("Sessions clear")
-
-    logged_in = [s.session_key for s in sessions if s.get_decoded().get('galaxy_server')]
-
-    for session_key in logged_in:
-        s = SessionStore(session_key=session_key)
-        s['galaxy_server'] = instance.id
-        print s
+    for s in sessions:
+        data = SessionStore(session_key=s.session_key).decode(s.session_data)
+        data['server_change'] = True
+        s.session_data = SessionStore(session_key=s.session_key).encode(data)
         s.save()
 
-    print [s.get_decoded().get('galaxy_server') for s in sessions]

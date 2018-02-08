@@ -19,8 +19,9 @@
 
 /* Style the accordion panel. Note: hidden by default */
 .formtool {
-    padding: 0 18px;
-    margin-top: 0px;
+    padding: 1px 18px;
+    margin-top: -5px;
+    margin-bottom: 10px;
     box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.16), 0 2px 10px 0 rgba(0, 0, 0, 0.12) !important;
     background-color: white;
     display: none;

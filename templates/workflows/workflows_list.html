@@ -39,21 +39,15 @@
         {% endblock %}
         <div class="col-md-9">
             <div class="row">
-                <div class="col-md-9">
                     <h4>Workflow steps overview:</h4>
                     {% block workflow-overview %}
                         {% for workflow in workflow_list|dictsort:"rank" %}
                             {% include "workflows/include/workflow_overview.html" %}
                         {% endfor %}
-                    <a id='more_info' href="{{ workflow_list.0.slug }}"> <span
-                            class="glyphicon glyphicon-question-sign"></span> See more detail
-                    </a>
                     <br>
                     {% endblock %}
-                </div>
             </div>
             <br>
-
             {% block workflow-form %}
             {% endblock %}
         </div>

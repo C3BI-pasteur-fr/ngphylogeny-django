@@ -7,4 +7,4 @@ class WorkspaceConfig(AppConfig):
     name = 'workspace'
 
     def ready(self):
-        pass
+        import signals

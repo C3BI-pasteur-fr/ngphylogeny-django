@@ -87,7 +87,8 @@ def tool_exec_view(request, pk, store_output=None):
                     tmp_file.flush()
 
                     # send file to galaxy
-                    outputs = gi.tools.upload_file(path=tmp_file.name, file_name=uploaded_file.name,
+                    outputs = gi.tools.upload_file(path=tmp_file.name,
+                                                   file_name=uploaded_file.name + " (as fasta)",
                                                    history_id=history_id)
                     file_id = outputs.get('outputs')[0].get('id')
 
