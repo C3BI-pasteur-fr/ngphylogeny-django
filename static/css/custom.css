@@ -50,8 +50,8 @@ header.jumbotron {
     background-size: 100%;
     color: #fff;
     font-family: 'Hallo sans', sans-serif;
-    padding: 0px;
-    margin: 0px;
+    padding: 0;
+    margin: 0;
     width: 100%;
 }
 
@@ -64,8 +64,7 @@ header.jumbotron {
 
 .sidenav {
     background-color: #f6f6f6;
-    border-right: 15px;
-
+    margin-right: 15px;
 }
 
 .table tbody tr td {
@@ -82,13 +81,13 @@ header.jumbotron {
 }
 
 .miniworkflow .panel {
-    top: 0px;
+    top: 0;
     width: 120px;
 }
 
 .miniworkflow .glyphicon-arrow-right {
     font-size: 20px;
-    font-color: #446cb3;
+    color: #446cb3;
     padding: 2px;
 }
 
@@ -214,4 +213,13 @@ a.btn.btn-toolbar {
 
     width: 100%;
     text-align: left;
+}
+
+.loader {
+    border: 16px solid #f3f3f3;
+    border-top: 16px solid #5cb85c;
+    border-radius: 50%;
+    width: 120px;
+    height: 120px;
+    animation: spin 2s linear infinite;
 }
