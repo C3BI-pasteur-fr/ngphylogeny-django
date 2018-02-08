@@ -1,33 +1,8 @@
-import requests
 from crispy_forms.bootstrap import FormActions
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Layout, Field, Div, Fieldset
 from django import forms
-
 from .models import ToolFieldWhiteList
-
-
-def tool_form_factory(tool, galaxy_server):
-    """
-    toolform class factory
-    :param galaxy_server:
-    :return: Form class
-    """
-
-    tool_url = '%s/%s/%s/%s/' % (galaxy_server.url, 'api', 'tools', tool.id_galaxy)
-    tool_info_request = requests.get(tool_url, params={'io_details': "true"})
-    tool_inputs_details = tool_info_request.json()
-
-    tool_field_white_list, created = ToolFieldWhiteList.objects.get_or_create(tool=tool, context="w")
-
-    return type(str(tool.name) + 'Form', (ToolForm,),
-                {'tool_params': tool_inputs_details.get('inputs'),
-                 'tool_id': tool.id_galaxy,
-                 'visible_field': tool_field_white_list.saved_params,
-                 'fields_ids_mapping': {},
-                 'n': 0,
-                 }
-                )
 
 
 def map_galaxy_tool_input(attr):
@@ -139,8 +114,13 @@ class ToolForm(forms.Form):
                         if case_inputs:
                             case_value = case.get('value')
                             if case_value:
-                                nested_field.append(
-                                    Div(data_test=conditional_field, data_case=case_value, css_class="well",
+                                data_test = conditional_field
+                                if self.prefix:
+                                    data_test = self.prefix + '-' + data_test
+
+                                nested_field.append(Div(data_test=data_test,
+                                                        data_case=case_value,
+                                                        css_class="well",
                                         *self.parse_galaxy_input_tool(case_inputs, cond_name)))
 
                     fields_created.append(Div(conditional_field, *nested_field))
@@ -177,5 +157,5 @@ class ToolFieldWhiteListForm(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super(ToolFieldWhiteListForm, self).clean()
-        cleaned_data['_params'] = ",".join(self.cleaned_data.get('_params'))
+        cleaned_data['_params'] = ",".join(self.cleaned_data.get('_params', []))
         return cleaned_data

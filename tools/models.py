@@ -1,6 +1,6 @@
 import ast
-
 import requests
+
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.functional import cached_property
@@ -8,14 +8,6 @@ from django.utils.translation import ugettext as _
 
 from data.models import ExampleFile
 from galaxy.models import Server
-
-TOOL_TAGS = (
-    ('', '----'),
-    ('algn', 'Multiple Alignment'),
-    ('clean', 'Alignment curation'),
-    ('tree', 'Construction of phylogenetic tree'),
-    ('visu', 'Visualisation of phylogenetic tree')
-)
 
 
 class Tool(models.Model):
@@ -59,7 +51,6 @@ class Tool(models.Model):
             """fetch and created tool io information"""
             self.import_tool_io(self.tool_json)
 
-
     class Meta:
         unique_together = (('galaxy_server', 'id_galaxy'),)
 
@@ -89,7 +80,6 @@ class Tool(models.Model):
             if query in panel.get('name').lower():
                 return [t.get("id") for t in panel.get('elems')]
         return []
-
 
     def fetch_tool_json(self):
         """
@@ -178,7 +168,6 @@ class Tool(models.Model):
 
                 output_obj.save()
 
-
     @classmethod
     def import_tools(cls, galaxy_server, tools=None, query="phylogeny", force=False):
         """
@@ -258,7 +247,7 @@ class Tool(models.Model):
         return Tool.objects.filter(pk__in=tools_compatible)
 
     def __unicode__(self):
-        return self.name
+        return "{} - {}".format(self.name, self.version)
 
 
 class ToolData(models.Model):
@@ -359,7 +348,8 @@ class ToolFieldWhiteList(models.Model):
     DICT_CONTEXT_CHOICES = dict(CONTEXT_CHOICES)
 
     tool = models.ForeignKey(Tool, on_delete=models.CASCADE)
-    context = models.CharField(max_length=2, choices=CONTEXT_CHOICES, help_text='In which context use the whitelist')
+    context = models.CharField(max_length=2, choices=CONTEXT_CHOICES,
+                               help_text='In which context use the whitelist')
     _params = models.TextField(max_length=1000, blank=True, default="")
 
     @property

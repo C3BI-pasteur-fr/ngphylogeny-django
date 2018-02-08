@@ -16,9 +16,9 @@ Including another URLconf
 
 from django.conf.urls import url
 
-from .views.oneclick import WorkflowStartedView, WorkflowOneClickListView, WorkflowOneClickFormView
-from .views.wkadvanced import WorkflowAdvancedListView, WorkflowAdvancedRedirectView
-from .views.wkmaker import WorkflowsMarkerRedirectView, workflows_alacarte_build
+from .views.wkoneclick import WorkflowStartedView, WorkflowOneClickListView, WorkflowOneClickFormView
+from .views.wkadvanced import WorkflowAdvancedListView, WorkflowAdvancedSinglePageView
+from .views.wkmaker import WorkflowMakerView, workflows_alacarte_build
 
 urlpatterns = [
 
@@ -26,9 +26,9 @@ urlpatterns = [
     url(r'^oneclick/$', WorkflowOneClickListView.as_view(), name="workflow_oneclick_list"),
     url(r'^oneclick/(?P<slug>[\w-]+)$', WorkflowOneClickFormView.as_view(), name="workflow_oneclick_form"),
     url(r'^advanced/$', WorkflowAdvancedListView.as_view(), name="workflows_advanced"),
-    url(r'^advanced/(?P<slug>[\w-]+)$', WorkflowAdvancedRedirectView.as_view(), name="workflows_advanced_step"),
+    url(r'^advanced/(?P<slug>[\w-]+)$', WorkflowAdvancedSinglePageView.as_view(), name="workflows_advanced_fullsteps"),
 
     url(r'^alacarte$', workflows_alacarte_build, name="workflows_alacarte"),
-    url(r'^wkmake/(?P<id>[\w-]+)$', WorkflowsMarkerRedirectView.as_view(), name="workflow_maker_form"),
+    url(r'^wkmake/(?P<id>[\w-]+)$', WorkflowMakerView.as_view(), name="workflow_maker_form"),
 
 ]

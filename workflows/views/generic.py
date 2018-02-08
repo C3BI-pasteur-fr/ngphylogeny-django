@@ -22,7 +22,6 @@ class WorkflowListView(WorkflowDetailMixin, ListView):
     model = Workflow
     context_object_name = "workflow_list"
     template_name = 'workflows/workflows_list.html'
-    restrict_toolset = None
 
     @cached_property
     def workflow_list(self):
@@ -45,7 +44,7 @@ class WorkflowFormView(WorkflowDetailMixin, UploadView, ImportPastedContentView,
     form_class = UploadView.form_class
     form2_class = ImportPastedContentView.form_class
     template_name = 'workflows/workflows_form.html'
-    restrict_toolset = None
+    restricted_toolset = None
 
     def get_context_data(self, **kwargs):
 
