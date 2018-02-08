@@ -1,6 +1,5 @@
 {% extends "base_site.html" %}
 {% load crispy_forms_tags %}
-{% block title %}Tool{% endblock %}
 {% load static %}
 {% block stylesheet %}
     <link href="https://gitcdn.github.io/bootstrap-toggle/2.2.2/css/bootstrap-toggle.min.css" rel="stylesheet">
@@ -162,13 +161,8 @@
         });
     </script>
 {% endblock %}
+{% block title %}{{ tool.name }} <span class="badge">{{ tool.version }}</span></h3>{% endblock %}
 {% block content %}
-    <div class="row">
-        <div class="col-md-4 col-md-offset-1">
-            <h3>{{ tool.name }} <span class="badge">{{ tool.version }}</span></h3>
-        </div>
-    </div>
-<hr>
     <div class="row">
         <div class="col-md-6 col-md-offset-2">
             <form action="" method="post" enctype="multipart/form-data">
