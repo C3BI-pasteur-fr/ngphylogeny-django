@@ -99,7 +99,7 @@ class ToolOutputDataAdmin(admin.ModelAdmin):
 class ToolInputOutputLinkAdmin(admin.ModelAdmin):
     list_display = ['pk', 'tooloutputdata', 'toolinputdata']
     list_filter = ['tooloutputdata__tool__galaxy_server', 'tooloutputdata__tool', ]
-    search_fields = ('tooloutputdata__tool__name', 'toolinputdata__tool')
+    search_fields = ('tooloutputdata__tool__name', 'toolinputdata__tool__name')
 
 
 class ToolFlagAdmin(admin.ModelAdmin):
