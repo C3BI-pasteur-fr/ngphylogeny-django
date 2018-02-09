@@ -39,22 +39,7 @@ class WorkflowDetailMixin(object):
         return wk_obj
 
 
-class WorkflowDeleteWorkingCopyMixin(object):
-    """
-    Clean working copy to Galaxy
-    """
-
-    def delete_workflow(self, workflow_id):
-        wk = Workflow.objects.filter(id_galaxy=workflow_id)
-        msg = ''
-        # Verify workflow doesnt exist in db
-        if not wk:
-            msg = self.request.galaxy.workflows.delete_workflow(workflow_id=workflow_id)
-        print (msg)
-        return msg
-
-
-class WorkflowDuplicateMixin(WorkflowDeleteWorkingCopyMixin):
+class WorkflowDuplicateMixin(object):
     """
         get_workflow return a working copy from workflow
     """
@@ -84,6 +69,15 @@ class WorkflowDuplicateMixin(WorkflowDeleteWorkingCopyMixin):
                 self.copy_workflow = wk
 
         return self.copy_workflow
+
+    def delete_workflow(self, workflow_id):
+        wk = Workflow.objects.filter(id_galaxy=workflow_id)
+        msg = ''
+        # Verify workflow doesnt exist in db
+        if not wk:
+            msg = self.request.galaxy.workflows.delete_workflow(workflow_id=workflow_id)
+        print (msg)
+        return msg
 
     def clean_copy(self):
         """

@@ -45,6 +45,8 @@ class ToolAdmin(admin.ModelAdmin):
 
     list_display = ['name', 'galaxy_server', 'toolshed', 'version', 'visible', 'toolflags']
     list_filter = ['galaxy_server', 'toolshed']
+    search_fields = ('name',)
+
     fields = ('name', 'version', 'oneclick', 'galaxy_server', 'toolshed', 'id_galaxy',)
     inlines = [
         ToolInputDataInline,
@@ -97,6 +99,7 @@ class ToolOutputDataAdmin(admin.ModelAdmin):
 class ToolInputOutputLinkAdmin(admin.ModelAdmin):
     list_display = ['pk', 'tooloutputdata', 'toolinputdata']
     list_filter = ['tooloutputdata__tool__galaxy_server', 'tooloutputdata__tool', ]
+    search_fields = ('tooloutputdata__tool__name', 'toolinputdata__tool')
 
 
 class ToolFlagAdmin(admin.ModelAdmin):
