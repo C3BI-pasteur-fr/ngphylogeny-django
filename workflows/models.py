@@ -124,14 +124,14 @@ class WorkflowGalaxyFactory(object):
             self.steps[str(step)] = WorkflowToolInformation(tool, gi, history_id)
             self.steps[str(step)].set_id(step)
 
+            previous_step = self.steps.get(str(step - 1), None)
+
+            # link output compatible from previous step
             for inputdata in tool.toolinputdata_set.all():
 
-                # link output compatible from previous step
-                previous_step = self.steps.get(str(step - 1), None)
-
                 if previous_step:
-                    # if first step
-                    if previous_step.type == "data_input":
+
+                    if previous_step.type == "data_input":  # i.e first step
                         self.steps.get(str(step)).set_input_connections(
                             stepid=previous_step.id,
                             input_name=inputdata.name,
@@ -139,9 +139,11 @@ class WorkflowGalaxyFactory(object):
                         )
 
                     if previous_step.type == 'tool':
-                        # retrieve all outputs of tool in step-1 compatible with current tool input
+                        # find outputs of tool in step-1 compatible with current tool input
                         compatible_outputs = ToolOutputData.objects.filter(compatible_inputs=inputdata,
+                                                                           # current tool input
                                                                            tool__id_galaxy=previous_step.tool_id
+                                                                           # previous step output
                                                                            )
 
                         if compatible_outputs:
@@ -158,14 +160,18 @@ class WorkflowGalaxyFactory(object):
                                 first_ext = "".join(i_extensions[:1])
                                 self.steps.get(str(previous_step.id)).convert_action(o.name, first_ext)
 
+                        #if not find try to invoke convertor
                         else:
-                            # Search format conversion tool
-                            # Edam : operation_0335
-                            compatible_output = ToolOutputData.objects.filter(compatible_inputs=inputdata,
-                                                                              tool__toolflag__name=self.CONVERSION_TOOL_FLAG
-                                                                              ).first()
-                            if compatible_output:
-                                conv_tool = compatible_output.tool
+                            # Search Conversion tool
+                            # Todo use Edam Format : operation_0335
+
+                            conv_output = ToolOutputData.objects.filter(compatible_inputs=inputdata,
+                                                                        # current tool input
+                                                                        tool__toolflag__name=self.CONVERSION_TOOL_FLAG
+                                                                        ).first()
+
+                            if conv_output:
+                                conv_tool = conv_output.tool
 
                                 # move step...
                                 self.steps[str(step + 1)] = self.steps.pop(str(step))
@@ -173,24 +179,30 @@ class WorkflowGalaxyFactory(object):
                                 self.steps[str(step + 1)].set_input_connections(
                                     stepid=step,
                                     input_name=inputdata.name,
-                                    output_name=compatible_output.name
+                                    output_name=conv_output.name
                                 )
 
-                                # ... to insert conversion tool step
+                                # ...to insert conversion tool step
                                 self.steps[str(step)] = WorkflowToolInformation(conv_tool, gi, history_id)
                                 self.steps[str(step)].set_id(step)
 
-                                conv_tool_input = conv_tool.toolinputdata_set.filter().first()
-                                output_name = ToolOutputData.objects.filter(compatible_inputs=conv_tool_input,
-                                                                            tool__id_galaxy=previous_step.tool_id
-                                                                            )
+                                conv_tool_input = conv_tool.toolinputdata_set.first()
+                                conv_compatible_output = ToolOutputData.objects.filter(
+                                    compatible_inputs=conv_tool_input,
+                                    tool__id_galaxy=previous_step.tool_id
+                                    ).first()
 
-                                self.steps[str(step)].set_input_connections(
-                                    stepid=step - 1,
-                                    input_name=conv_tool_input.name,
-                                    output_name=output_name.first().name
-                                )
-
+                                if conv_compatible_output:
+                                    self.steps[str(step)].set_input_connections(
+                                        stepid=previous_step.id,
+                                        input_name=conv_tool_input.name,
+                                        output_name=conv_compatible_output.name
+                                    )
+                                else:
+                                    __tool = Tool.objects.get(id_galaxy=previous_step.tool_id)
+                                    raise ValueError(
+                                        "Relationship between {} and {} is missing".format(conv_tool_input.tool.name,
+                                                                                           __tool.name))
 
     def __repr__(self):
         return str(self.__dict__)
