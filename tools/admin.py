@@ -43,7 +43,7 @@ class ToolAdmin(admin.ModelAdmin):
 
     """
 
-    list_display = ['name', 'galaxy_server', 'toolshed', 'version', 'visible', 'toolflags']
+    list_display = ['name', 'version', 'id_galaxy', 'galaxy_server', 'visible', 'toolflags']
     list_filter = ['galaxy_server', 'toolshed']
     search_fields = ('name',)
 

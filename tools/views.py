@@ -59,6 +59,8 @@ def tool_exec_view(request, pk, store_output=None):
     tool_form = ToolForm(tool_params=tool_inputs_details['inputs'], tool_id=pk, whitelist=tool_visible_field,
                          data=request.POST or None)
 
+    hid = {}
+
     if request.method == 'POST':
 
         if tool_form.is_valid():
@@ -75,7 +77,7 @@ def tool_exec_view(request, pk, store_output=None):
                     tool_inputs.set_param(fields.get(key), value)
 
             for inputfile in inputs_data:
-
+                outputs = ""
                 uploaded_file = ""
                 if request.FILES:
                     uploaded_file = request.FILES.get(inputfile, '')
@@ -88,11 +90,8 @@ def tool_exec_view(request, pk, store_output=None):
 
                     # send file to galaxy
                     outputs = gi.tools.upload_file(path=tmp_file.name,
-                                                   file_name=uploaded_file.name + " (as fasta)",
+                                                   file_name=uploaded_file.name,
                                                    history_id=history_id)
-                    file_id = outputs.get('outputs')[0].get('id')
-
-                    tool_inputs.set_dataset_param(fields.get(inputfile), file_id)
 
                 else:
                     # else paste content
@@ -107,11 +106,19 @@ def tool_exec_view(request, pk, store_output=None):
                         outputs = gi.tools.upload_file(path=tmp_file.name,
                                                        file_name=input_fieldname + " pasted_sequence",
                                                        history_id=history_id)
-                        file_id = outputs.get('outputs')[0].get('id')
-                        tool_inputs.set_dataset_param(fields.get(inputfile),
-                                                      file_id)
+
+                if outputs:
+                    file_id = outputs.get('outputs')[0].get('id')
+                    hid[outputs.get('outputs')[0].get('hid')] = file_id
+
+            # TODO
+            # find new dataset id according to automatic convertion operate by Galaxy
+            # tool_build = gi.make_get_request(url=gi.tools.url + '/' + tool_obj.id_galaxy + '/build',
+            #                                 params=dict(history_id=history_id)).json()
 
 
+            for h, file_id in hid.items():
+                tool_inputs.set_dataset_param(fields.get(inputfile), file_id)
 
             try:
 
@@ -141,8 +148,7 @@ def tool_exec_view(request, pk, store_output=None):
 
     context = {"toolform": tool_form,
                "tool": tool_obj,
-               "message": message,
-               }
+               "message": message}
 
     return render(request, 'tools/tool_form.html', context)
 
