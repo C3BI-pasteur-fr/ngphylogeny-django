@@ -12,14 +12,17 @@
                 limit: 1,
                 showThumbs: true,
                 changeInput: true,
-                extensions: ['fasta', 'fna', 'fa', 'faa'],
                 fileMaxSize: 5 //MO
             });
-            $('form').attr('action', "{{ workflow_list.0.slug }}");
+            var f = $('form');
+            f.attr('action', "{{ workflow_list.0.slug }}");
+            $('form').submit(function (event) {
+                $('#wait').modal('show');
+            });
         });
     </script>
 {% endblock %}
-{% block workflow-type %}One Click Workflows{% endblock %}
+{% block title %}One Click Workflows{% endblock %}
 {% block workflow-form %}
     <div class="row">
         <div class="col-md-8">

@@ -16,7 +16,11 @@ def connection_galaxy(view_function):
     def wrapper(request, *args, **kwargs):
 
         try:
-            if hasattr(request, 'galaxy_server'):
+            if request.session.get('server_change') is True:
+                galaxy_server = Server.objects.get(current=True)
+                request.session['server_change'] = False
+
+            elif hasattr(request, 'galaxy_server'):
                 galaxy_server = request.galaxy_server
 
             elif request.session.get('galaxy_server'):
@@ -34,7 +38,7 @@ def connection_galaxy(view_function):
 
         except Exception as e:
             logger.exception(e)
-            raise HttpResponseGone()
+            return HttpResponseGone()
 
         request.galaxy_server = galaxy_server
         request.session['galaxy_server'] = galaxy_server.id

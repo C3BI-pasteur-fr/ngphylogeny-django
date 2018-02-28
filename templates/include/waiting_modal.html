@@ -1,0 +1,29 @@
+<div id="wait" class="modal fade in" style="" role="dialog">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-title">
+                <div class="col-md-offset-1">
+                    <h3>Please wait <span class="h2 loader-dot">.</span><span class="h2 loader-dot">.</span><span
+                            class="h2 loader-dot">.</span></h3>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <div class="col-md-offset-1 col-md-3">
+                    <div class="loader"></div>
+                </div>
+
+                <div class="col-md-8">
+                    <h4>Your request has been submitted</h4>
+                    <h4>You will be redirected in a few moment</h4>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+<script>
+    $('form').submit(function (event) {
+        $('#wait').modal('show');
+    });
+</script>

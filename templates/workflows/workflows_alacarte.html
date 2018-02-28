@@ -1,22 +1,13 @@
-{% extends "base.html" %}
+{% extends "base_site.html" %}
 {% load crispy_forms_tags %}
 {% load static %}
-{% block nav-analysis %}class="active"{% endblock %}
 {% block stylesheet %}
-    {#    <script src="https://code.jquery.com/ui/1.12.0/jquery-ui.js" xmlns="http://www.w3.org/1999/html"></script>#}
-    {#    <script>#}
-    {#     $( function() {#}
-    {#          $( "#mini-wk" ).sortable();#}
-    {#          $( "#mini-wk" ).disableSelection();#}
-    {#     });#}
-    {#      </script>#}
     <script>
         $(function () {
             $('input:radio:checked').each(function () {
                 $('#' + $(this).attr('data-target')).show().empty().append($('#' + $(this).attr('data-panel')).clone().show());
                 $(this).parent().addClass('active btn-info');
             });
-
             $('input:radio').change(function () {
                 $('input:radio').parent().removeClass('active btn-info');
                 $('input:radio:checked').parent().addClass('active btn-info');
@@ -38,19 +29,15 @@
             $('[data-panel="' + $(obj).parent().attr('id') + '"]').prop('checked', false).parent().removeClass('active btn-info');
             $(obj).parent().remove();
         }
-
     </script>
 
 {% endblock %}
+{% block title %}
+    Workflows Maker
+    <span class="small">Select tools following step to build your own workflow</span>
+{% endblock %}
 {% block xl-content %}
-<h2><span class="glyphicon glyphicon-chevron-right"></span>Workflows Maker</h2>
-<h5>Select tools in a this predefine order to build your own workflow</h5>
 <br>
-<div class="row">
-    <div class="col-md-11 col-md-offset-1">
-        <h3><span class="glyphicon glyphicon-chevron-right small"></span>List of Tools</h3>
-    </div>
-</div>
 {% if messages %}
 <ul class="messages">
     {% for message in messages %}
@@ -108,7 +95,7 @@
     <div class="row">
         <div class="col-md-11 col-md-offset-1">
             <h3><span class="glyphicon glyphicon-chevron-right small"></span>
-                Workflow overview
+                Workflow overview:
             </h3></div>
     </div>
     <div class="row">
@@ -136,17 +123,20 @@
 </div>
 <div class="row">
     <div class="col-md-11 col-md-offset-1">
-        <h3 class="text-justify"><span class="glyphicon glyphicon-chevron-right small"></span>Workflow name</h3>
+        <h3 class="text-justify"><span class="glyphicon glyphicon-chevron-right small"></span> Workflow name:</h3>
     </div>
 </div>
 <div class="row">
     <div class="col-md-6 col-md-offset-2">
-        <h5></h5>
-        <input id='wkname' class="form-control" placeholder="Workflow name.." type="text">
+        <div class="input-group">
+            <span class="btn input-group-addon">
+                <span class="glyphicon glyphicon-pencil"></span>
+            </span>
+            <input id='wkname' class="form-control input-lg" placeholder="Workflow name.." type="text">
+        </div>
         <hr>
         <button id="submit1" type="submit" class="btn btn-primary" name="run" value="Build workflow">
             <span class="glyphicon glyphicon-play-circle"></span> Create workflow
         </button>
-    </div>
 </div>
 {% endblock xl-content %}

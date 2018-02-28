@@ -1,14 +1,19 @@
 {% extends "base.html" %}
 {% load static %}
-{% block stylesheet %}
-
+{% block nav-workspace %}
+    {{ block.super }}
+    <li class="active">
+        <a href="{% url 'history_detail' history_info.id %}">
+            <span class="glyphicon glyphicon-list-alt"></span> {{ history_info.id |truncatechars:9 }}
+        </a>
+    </li>
 {% endblock %}
-{% block nav-workspace %}class="active"{% endblock %}
+
 {% block content %}
     <div class="row">
         <div class="col-md-12">
             {% if history_content %}
-                {# {% include "workspace/include/history_contents_provenance.html" %}#}
+                {# {% include "workspace/include/history_contents_provenance.html" %} #}
                 {% include "workspace/include/history_contents_provenance_ajax.html" %}
             {% else %}
                 <div class="jumbotron">

@@ -1,7 +1,6 @@
-{% extends "base.html" %}
+{% extends "base_site.html" %}
 {% load crispy_forms_tags %}
 {% load static %}
-{% block nav-analysis %}class="active"{% endblock %}
 {% block stylesheet %}
     <script>
         $(document).ready(function () {
@@ -9,7 +8,6 @@
                 limit: 1,
                 showThumbs: true,
                 changeInput: true,
-                extensions: ['fasta', 'fna', 'fa', 'faa'],
                 fileMaxSize: 5 //MO
             });
         });

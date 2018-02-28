@@ -1,4 +1,5 @@
 @import 'https://fonts.googleapis.com/css?family=Bungee+Inline|Francois+One';
+
 /*font-family: 'Francois One', sans-serif;
 font-family: 'Fascinate Inline', cursive;
 font-family: 'Bungee Inline', cursive;*/
@@ -6,28 +7,40 @@ font-family: 'Bungee Inline', cursive;*/
 .title-bg {
     #background-color: rgb(0, 0, 0);
     #background-color: rgba(0, 0, 0, 0.6);
-    padding: 10px;
+    padding: 20px;
 }
 
 .title-cap {
     font-family: 'Bungee Inline', cursive;
 }
 
-.nav {
+.title-page:before {
+    font-family: 'Glyphicons Halflings';
+    content: "\e080";
+    margin: 10px;
+}
+
+nav.navbar-default {
     font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
     font-size: 14px;
+    padding-top: 5px;
+}
+
+.nav .badge {
+    display: inline;
 }
 
 table.center {
     float: none;
     margin: 0 auto;
-    text-align:center;
+    text-align: center;
 }
 
 .nomargin {
     margin: 0 auto;
     width: inherit;
 }
+
 header.jumbotron {
 
     background-image: url("/static/images/banner.png");
@@ -37,7 +50,8 @@ header.jumbotron {
     background-size: 100%;
     color: #fff;
     font-family: 'Hallo sans', sans-serif;
-    margin-bottom: 0px;
+    padding: 0;
+    margin: 0;
     width: 100%;
 }
 
@@ -50,43 +64,30 @@ header.jumbotron {
 
 .sidenav {
     background-color: #f6f6f6;
-    border-right: 15px;
-
+    margin-right: 15px;
 }
 
-.table > tbody > tr > td {
+.table tbody tr td {
     vertical-align: middle;
 }
 
-.phylo-analysis > .col-md-4 > div {
-    padding: 10px 0;
-    margin-top: 30px;
-    height: 90%;
-    width: 90%;
-    border-bottom-color: #1f77b4;
-    border-bottom-style: solid;
-    border-top-color: white;
-    border-top-style: solid;
-    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.0), rgba(255, 255, 255, 0.95), rgba(242, 242, 242, 0.95));
+.dropdown:hover .dropdown-menu {
+    display: block;
+    margin-top: 0;
 }
 
-.phylo-analysis > .col-md-4 > div:hover {
-    border-top-color: #1f77b4;
-    border-top-style: solid;
-}
-
-.phylo-analysis a:hover {
-    text-decoration: none;
+.dropdown-menu {
+    min-width: 185px;
 }
 
 .miniworkflow .panel {
-    top: 0px;
+    top: 0;
     width: 120px;
 }
 
 .miniworkflow .glyphicon-arrow-right {
     font-size: 20px;
-    font-color: #446cb3;
+    color: #446cb3;
     padding: 2px;
 }
 
@@ -115,11 +116,110 @@ footer {
 
 .logo_contrib {
     max-width: 100%;
-    max-height: 50px;
-    height:  auto;
+    max-height: 42px;
+    height: auto;
     width: auto;
+    margin: 3.5%;
+    float: left;
 }
 
 textarea {
-  font-family: Courier New, Consolas,Monaco,Lucida Console, monospace;
+    font-family: Courier New, Consolas, Monaco, Lucida Console, monospace;
+}
+
+[id*='error'] {
+    color: red;
+}
+
+.btn.playbtn {
+    color: #fff;
+    background-color: #21bd8d;
+    margin: 20px;
+    border-radius: 99px;
+    text-align: center;
+
+}
+/* Icon when the collapsible content is shown */
+.btn-collapse:after {
+    width: 100%;
+    content: '\2796';
+    float: right;
+    font-size: 13px;
+    color: #777;
+    margin-top: -10px;
+    margin-left: 15px;
+
+}
+
+#mini-wk .col-md-2:first-child {
+    padding-top: 6%;
+}
+
+div[id*='wk-display'] {
+    padding: 0;
+}
+
+div[id*='wk-display']:before {
+    content: '\2192';
+    float: left;
+    font-size: 28px;
+    color: #555;
+    margin-top: 50%;
+    margin-left: -15px;
+}
+
+table .panel-body {
+    padding: 5px;
+    text-align: center;
+}
+
+table .panel-heading {
+    padding: 5px 15px;
+    text-align: center;
+}
+
+.histories-nav li {
+    padding: 0px 0px;
+}
+
+.histories-nav li a {
+    padding: 15px 5px;
+}
+
+.histories-nav li a div {
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+@keyframes blink {
+    50% {
+        color: transparent
+    }
+}
+
+.loader-dot {
+    animation: 2.5s blink infinite;
+}
+
+.loader-dot:nth-child(2) {
+    animation-delay: 250ms;
+}
+
+.loader-dot:nth-child(3) {
+    animation-delay: 500ms;
+}
+
+a.btn.btn-toolbar {
+
+    width: 100%;
+    text-align: left;
+}
+
+.loader {
+    border: 16px solid #f3f3f3;
+    border-top: 16px solid #5cb85c;
+    border-radius: 50%;
+    width: 120px;
+    height: 120px;
+    animation: spin 2s linear infinite;
 }

@@ -1,5 +1,6 @@
 from __future__ import unicode_literals
 
+import requests
 from django.contrib.auth.models import User
 from django.db import models
 from django.utils.functional import cached_property
@@ -9,7 +10,7 @@ from .galaxylib import GalaxyInstance
 
 class Server(models.Model):
     """
-    Galaxy Server Informations
+    Galaxy Server Information
     """
     name = models.CharField(max_length=80)
     url = models.URLField(max_length=254, unique=True, null=False)
@@ -23,7 +24,13 @@ class Server(models.Model):
                                   )
 
     def save(self, *args, **kwargs):
-        # one server can be used at the same time
+
+        if self._state.adding:
+            connection = requests.get(self.url + '/api/version')
+            if connection.status_code == 200:
+                self.version = connection.json().get('version_major')
+
+        # only one server can be used at the same time
         if self.current is True:
             Server.objects.all().update(current=False)
 
@@ -46,6 +53,12 @@ class GalaxyUser(models.Model):
                                               "for NGPhylogeny Anonymous User"
                                     )
 
+    def save(self, *args, **kwargs):
+        # only one Anonymous user can be used for one Galaxy server the same time
+        if self.anonymous is True:
+            GalaxyUser.objects.filter(galaxy_server=self.galaxy_server).update(anonymous=False)
+        super(GalaxyUser, self).save(*args, **kwargs)
+
     @cached_property
     def get_galaxy_instance(self):
         """
@@ -54,7 +67,7 @@ class GalaxyUser(models.Model):
         if self.api_key:
             return GalaxyInstance(url=self.galaxy_server.url, key=self.api_key)
         else:
-            raise "API key must be set"
+            raise ValueError("API key must be set")
 
     def __unicode__(self):
         return "%s %s" % (self.user.username, self.api_key)

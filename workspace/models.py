@@ -2,16 +2,15 @@ from __future__ import unicode_literals
 
 from django.contrib.auth.models import User
 from django.db import models
-from django.db.models.signals import pre_delete
 
 from galaxy.models import Server, GalaxyUser
 
-
+import uuid
 class WorkspaceHistory(models.Model):
     """
     Galaxy history information
     """
-
+    # uuid = models.UUIDField(unique=True, default=uuid.uuid4, editable=False)
     history = models.CharField(max_length=20)
     galaxy_server = models.ForeignKey(Server, on_delete=models.CASCADE)
     name = models.CharField(max_length=100)
@@ -39,13 +38,3 @@ class WorkspaceHistory(models.Model):
         unique_together = (("history", "galaxy_server"),)
 
 
-def send_delete_galaxy_history(sender, instance, using, **kwargs):
-    """remove history from db and from Galaxy server"""
-
-    gu = instance.get_galaxy_user()
-    if gu:
-        gi = gu.get_galaxy_instance
-        gi.histories.delete_history(instance.history, purge=True)
-
-
-pre_delete.connect(send_delete_galaxy_history, sender=WorkspaceHistory)

@@ -1,7 +1,6 @@
 {% extends "base.html" %}
-
 {% block content %}
-<h2>Are you sure?</h2>
+    <h3>Delete?</h3>
 <p class="lead">Are you sure you want to delete "{{ object.name }}" : {{ object.history }} create on {{ object.created_date }}?
 </p>
 <form method="post">{% csrf_token %}
@@ -11,5 +10,4 @@
         <a href="{% url 'previous_analyses' %}" class="button cancel-link">"No, take me back"</a>
     </div>
 </form>
-
 {% endblock %}

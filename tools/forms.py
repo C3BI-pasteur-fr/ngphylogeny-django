@@ -1,33 +1,8 @@
-import requests
 from crispy_forms.bootstrap import FormActions
 from crispy_forms.helper import FormHelper
-from crispy_forms.layout import Submit, Layout, Field, Div
+from crispy_forms.layout import Layout, Field, Div, Fieldset
 from django import forms
-
 from .models import ToolFieldWhiteList
-
-
-def tool_form_factory(tool, galaxy_server):
-    """
-    toolform class factory
-    :param galaxy_server:
-    :return: Form class
-    """
-
-    tool_url = '%s/%s/%s/%s/' % (galaxy_server.url, 'api', 'tools', tool.id_galaxy)
-    tool_info_request = requests.get(tool_url, params={'io_details': "true"})
-    tool_inputs_details = tool_info_request.json()
-
-    tool_field_white_list, created = ToolFieldWhiteList.objects.get_or_create(tool=tool, context="w")
-
-    return type(str(tool.name) + 'Form', (ToolForm,),
-                {'tool_params': tool_inputs_details.get('inputs'),
-                 'tool_id': tool.id_galaxy,
-                 'visible_field': tool_field_white_list.saved_params,
-                 'fields_ids_mapping': {},
-                 'n': 0,
-                 }
-                )
 
 
 def map_galaxy_tool_input(attr):
@@ -80,6 +55,8 @@ class ToolForm(forms.Form):
             else:
 
                 self.fields[field_id] = forms.FileField(**map_galaxy_tool_input(attrfield))
+                self.fields[field_id].widget.attrs = ({'data-ext': attrfield.get('extensions')})
+                self.fields[field_id].widget.attrs = ({'data-name': attrfield.get('name')})
 
         elif fieldtype == "select":
             if attrfield.get("display", "") == 'radio':
@@ -117,7 +94,11 @@ class ToolForm(forms.Form):
 
         for input_tool in list_inputs:
 
-            if input_tool.get('name') in whitelist or not whitelist:
+            if input_tool.get('type') == 'section':
+                fields_created.append(Fieldset(input_tool.get('title'),
+                                               *self.parse_galaxy_input_tool(input_tool.get('inputs'))))
+
+            elif input_tool.get('name') in whitelist or not whitelist:
 
                 cond_input = input_tool.get('test_param')
                 if cond_input:
@@ -132,8 +113,15 @@ class ToolForm(forms.Form):
                         case_inputs = case.get('inputs')
                         if case_inputs:
                             case_value = case.get('value')
-                            nested_field.append(Div(data_test=conditional_field, data_case=case_value, css_class="well",
-                                                    *self.parse_galaxy_input_tool(case_inputs, cond_name)))
+                            if case_value:
+                                data_test = conditional_field
+                                if self.prefix:
+                                    data_test = self.prefix + '-' + data_test
+
+                                nested_field.append(Div(data_test=data_test,
+                                                        data_case=case_value,
+                                                        css_class="well",
+                                        *self.parse_galaxy_input_tool(case_inputs, cond_name)))
 
                     fields_created.append(Div(conditional_field, *nested_field))
                     cond_name = ''
@@ -157,19 +145,17 @@ class ToolForm(forms.Form):
         self.helper.form_tag = False
         self.formset = self.parse_galaxy_input_tool(self.tool_params, whitelist=self.visible_field)
         self.helper.layout = Layout(FormActions(Field(*self.formset),
-                                                Submit('submit', 'Submit', css_class="pull-right"),
                                                 )
                                     )
 
 
 class ToolFieldWhiteListForm(forms.ModelForm):
-
     _params = forms.MultipleChoiceField(label='Params')
 
     model = ToolFieldWhiteList
-    fields = ['tool', 'context', '_params',]
+    fields = ['tool', 'context', '_params', ]
 
     def clean(self):
         cleaned_data = super(ToolFieldWhiteListForm, self).clean()
-        cleaned_data['_params'] = ",".join(self.cleaned_data.get('_params'))
+        cleaned_data['_params'] = ",".join(self.cleaned_data.get('_params', []))
         return cleaned_data

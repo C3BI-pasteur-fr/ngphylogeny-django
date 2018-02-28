@@ -11,7 +11,7 @@ class UploadForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super(UploadForm, self).__init__(*args, **kwargs)
-        self.helper = FormHelper(self)
+        self.helper = FormHelper()
         self.helper.form_method = 'POST'
         self.helper.layout = Layout('input_file',
                                     FormActions(

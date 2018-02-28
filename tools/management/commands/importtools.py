@@ -14,13 +14,14 @@ class Command(BaseCommand):
         parser.add_argument('--galaxyurl')
         parser.add_argument('-q', '--query', help="Find tools according to query by default 'phylogeny' ")
         parser.add_argument('--id', help="Find tool according to galaxy tool id")
+        parser.add_argument('--force', action='store_true', help="force re-import tools")
 
     def handle(self, *args, **options):
 
         galaxy_url = options.get('galaxyurl')
         query = options.get('query')
         tool_id = options.get('id')
-        tools_list = []
+        tools_found = []
 
         if galaxy_url:
             galaxy_server, created = Server.objects.get_or_create(url=galaxy_url)
@@ -33,35 +34,55 @@ class Command(BaseCommand):
 
         tools_url = '%s/%s/%s/' % (galaxy_server.url, 'api', 'tools')
 
-        if query:
-            connection = requests.get(tools_url, params={'q': query})
-        else:
-            connection = requests.get(tools_url, params={'q': "phylogeny"})
-
         if tool_id:
-            tools_url_id = '%s/%s' % (tools_url, tool_id)
-            connection = requests.get(tools_url_id)
+            # search specific tool
+            tools_url_id = '%s/%s/' % (tools_url, tool_id)
+            connection = requests.get(tools_url_id).json()
+            if 'traceback' in connection:
+                raise CommandError('Tool {} was not found in {}'.format(tool_id, galaxy_server.url))
 
-        if connection.status_code == 200:
-            tools_ids = connection.json()
+            tools_found.append(connection.get('id'))
 
-            if tools_ids:
+        else:
+            # fetch list of tools
+            connection = requests.get(tools_url, params={'in_panel': "false"})
+            if connection.status_code == 200:
+                tools_list = connection.json() or []
 
-                tools_list = []
+            for tool in tools_list:
+                _m = [
+                    tool.get('id').lower(),
+                    tool.get('name').lower(),
+                    str(tool.get('panel_section_name')).lower()
+                ]
+                if query in _m:
+                    tools_found.append(tool.get('id'))
 
-                if type(tools_ids) is list:
-                    tools_list = tools_ids
-                    self.stdout.write("%s" % ('\n'.join(tools_ids)))
+        if tools_found:
 
-                if type(tools_ids) is dict:
-                    tools_list.append(tools_ids.get("id"))
-                    self.stdout.write("%s" % (tools_ids.get("id")))
+            self.stdout.write("%s" % ('\n'.join(tools_found)))
+            response = raw_input('Do you want (re)import this tool(s)? [y/N] from {}:'.format(galaxy_server))
 
-                response = raw_input('Do you want (re)import this tool(s)? [y/N]: ')
+            if response.lower() == 'y':
 
-                if response.lower() == 'y':
-                    tools_imported = Tool.import_tools(galaxy_server, tools=tools_list)
-                    self.stdout.write(self.style.SUCCESS("%s successfully imported new tools." % (len(tools_imported))))
+                import_tools_report = Tool.import_tools(galaxy_server, tools=tools_found, force=options.get('force'))
 
-            else:
-                self.stdout.write("No result was found for query  %s" % (options.get('query')))
+                if import_tools_report['new']:
+                    self.stdout.write(
+                        self.style.SUCCESS("%s successfully imported new tools." % (len(import_tools_report['new']))))
+
+                    for ti in import_tools_report['new']:
+                        self.stdout.write(
+                            self.style.SUCCESS("%s %s successfully imported" % (ti.name, ti.version))
+                        )
+
+                else:
+                    self.stdout.write(self.style.WARNING("No new tool has been imported"))
+
+                for tool_id in import_tools_report['error']:
+                    self.stdout.write(
+                        self.style.ERROR("import of %s has failed " % (tool_id))
+                    )
+
+        else:
+            self.stdout.write("No result was found for query  %s" % (options.get('query')))

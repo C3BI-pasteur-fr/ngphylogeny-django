@@ -1,7 +1,7 @@
 """NGPhylogeny_fr URL Configuration
 
 The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/1.9/topics/http/urls/
+    https://docs.djangoproject.com/en/1.11/topics/http/urls/
 Examples:
 Function views
     1. Add an import:  from my_app import views
@@ -27,7 +27,7 @@ from workflows import urls as workflows_urls
 from workspace import urls as workspace_urls
 
 urlpatterns = [
-    url(r'^admin/', admin.site.urls, name='admin'), # Django ADMIN URLS
+    url(r'^admin/', admin.site.urls, name='admin'),  # Django ADMIN URLS
     url(r'^about$', TemplateView.as_view(template_name="about.html"), name="about"),
     url(r'^about/', include(surveys_urls)),
     url(r'^documentation$', TemplateView.as_view(template_name="documentation.html"), name="documentation"),

@@ -1,13 +1,9 @@
-{% extends "base.html" %}
+{% extends "base_site.html" %}
 {% load crispy_forms_tags %}
 {% load static %}
-
-{% block nav-tools %}class="active"{% endblock %}
 {% block stylesheet %}
     <link href="https://gitcdn.github.io/bootstrap-toggle/2.2.2/css/bootstrap-toggle.min.css" rel="stylesheet">
     <script src="https://gitcdn.github.io/bootstrap-toggle/2.2.2/js/bootstrap-toggle.min.js"></script>
-    <script src="{% static 'js/jquery.filer.min.js' %} "></script>
-    <link rel="stylesheet" href="{% static 'css/jquery.filer.css' %}"/>
     <script>
         function boolean_checkbox(element) {
             if ($(element).prop('checked')) {
@@ -34,16 +30,82 @@
             return myid.replace(/(:|\.|\[|\]|\||\,)/g, "\\$1");
         }
 
+
+    </script>
+<script type="text/javascript">
+        function init_input_file() {
+
+            //var fileInput = $(':file').first();
+            $(':file').each(function(){
+            var fileInput = $(this);
+            var parentFileDiv = fileInput.parent().parent();
+            var ext = fileInput.data('ext');
+            var input_name = fileInput.data('name');
+
+            // read input file
+            parentFileDiv.append("<textarea id='filecontent_" + fileInput.attr('name') + "'"
+                                 + "class='textarea form-control' rows='10' cols='40' name='"
+                                 + fileInput.attr('name') + "'  ></textarea>"
+                                 );
+
+
+            //fileInput.attr('required', false);
+            //read file
+            fileInput.change(function (evt) {
+
+                var fileDisplayArea = parentFileDiv.find('textarea');
+                var reader = new FileReader();
+
+                reader.onload = function (e) {
+                    fileDisplayArea.val(reader.result);
+                };
+
+                if (evt.target.files[0]){
+                reader.readAsText(evt.target.files[0]);
+                } else {
+                    parentFileDiv.find('textarea').val("");
+
+                }
+
+            });
+            parentFileDiv.find('textarea').change(function() {
+                fileInput.val('');
+            });
+
+            parentFileDiv.append("<button id='cleanTextarea"+ fileInput.attr('name')+"' type='button' class='btn btn-default'><span class='glyphicon glyphicon-trash'></span></button>");
+            $("#cleanTextarea"+fileInput.attr('name')).click(this, function () {
+                parentFileDiv.find('textarea').val("");
+                fileInput.val('');
+            });
+
+            // fetch example file
+             $.post(
+                "{% url 'get_example'%}",
+                {
+                    ext_file: ext,
+                    input_name: input_name,
+                    tool_id : {{ tool.id }},
+                    'csrfmiddlewaretoken': '{{ csrf_token }}'
+                },
+                function (response) {
+                    if ($.trim(response)){
+                    parentFileDiv.find('textarea').data('example', response);
+                    parentFileDiv.append("<button id='getExample"+ fileInput.attr('name')+"' type='button' class='btn btn btn-info'><span class='glyphicon glyphicon-question-sign'> </span> Example</button>");
+
+                    $('#getExample'+ fileInput.attr('name')).click(function () {
+
+                        parentFileDiv.find('textarea').val(parentFileDiv.find('textarea').data('example'));
+                        fileInput.val('');
+                    });
+                }
+            });
+            });
+        }
     </script>
     <script type="text/javascript">
         $(document).ready(function () {
-            //file field
-            $(':file').filer({
-                limit: 1,
-                showThumbs: true,
-                changeInput: true
-
-            });
+            //init input file
+            init_input_file();
             //put label on the top of checkbox//
             $('[data-toggle="toggle"]').each(function () {
                 if (this.id) {
@@ -99,22 +161,16 @@
         });
     </script>
 {% endblock %}
+{% block title %}{{ tool.name }} <span class="badge">{{ tool.version }}</span></h3>{% endblock %}
 {% block content %}
-
     <div class="row">
-        <div class="col-md-2"></div>
-        <div class="col-md-4 text-center">
-            <h3>{{ tool.name }} <span class="badge">{{ tool.version }}</span></h3>
-        </div>
-    </div>
-
-    <div class="row">
-        <div class="col-md-2"></div>
-        <div class="col-md-6">
+        <div class="col-md-6 col-md-offset-2">
             <form action="" method="post" enctype="multipart/form-data">
                 <fieldset>
                     {% crispy toolform %}
                 </fieldset>
+                <hr>
+                <input name="submit" value="Submit" class="btn btn-primary pull-right" id="submit" type="submit">
             </form>
         </div>
     </div>

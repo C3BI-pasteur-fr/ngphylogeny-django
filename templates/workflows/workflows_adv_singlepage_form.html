@@ -1,0 +1,258 @@
+{% extends "workflows/workflows_list.html" %}
+{% load crispy_forms_tags %}
+{% load static %}
+{% load i18n %}
+{% block stylesheet %}
+    <link href="https://gitcdn.github.io/bootstrap-toggle/2.2.2/css/bootstrap-toggle.min.css" rel="stylesheet">
+    <script src="https://gitcdn.github.io/bootstrap-toggle/2.2.2/js/bootstrap-toggle.min.js"></script>
+    <script src="{% static 'js/jquery.filer.min.js' %} "></script>
+    <link rel="stylesheet" href="{% static 'css/jquery.filer.css' %}"/>
+    <link rel="stylesheet" href="{% static 'css/workflows_form.css' %}"/>
+    <script type="text/javascript">
+
+        function boolean_checkbox(element) {
+            if ($(element).prop('checked')) {
+                $(element).attr('value', $(element).attr("data-on-value"));
+            } else {
+                $(element).attr('value', $(element).attr("data-off-value"));
+            }
+        }
+
+        function test_data_case(test_param, data_case) {
+            if ($(data_case).attr('data-case') === test_param.val()) {
+                $(data_case).show();
+            } else {
+                $(data_case).hide();
+            }
+        }
+
+        function toggle_condition(test_field, toggle_elt) {
+            boolean_checkbox(test_field);
+            test_data_case(test_field, toggle_elt);
+        }
+
+        function jq_conv_id(myid) {
+            return myid.replace(/(:|\.|\[|\]|\||\,)/g, "\\$1");
+        }
+
+        function init_input_file() {
+
+            var fileInput = $(':file').first();
+            var parentFileDiv = fileInput.parent().parent();
+            var ext = fileInput.data('ext');
+            var input_name = fileInput.data('name');
+
+            // read input file
+            parentFileDiv.append("<textarea id='filecontent_" + fileInput.attr('name') + "'"
+                + "class='textarea form-control' rows='10' cols='40' name='"
+                + fileInput.attr('name') + "'  ></textarea>"
+            );
+
+
+            //fileInput.attr('required', false);
+            //read file
+            fileInput.change(function (evt) {
+
+                var fileDisplayArea = parentFileDiv.find('textarea');
+                var reader = new FileReader();
+
+                reader.onload = function (e) {
+                    fileDisplayArea.val(reader.result);
+                };
+
+                if (evt.target.files[0]) {
+                    reader.readAsText(evt.target.files[0]);
+                } else {
+                    parentFileDiv.find('textarea').val("");
+
+                }
+
+            });
+            parentFileDiv.find('textarea').change(function () {
+                fileInput.val('');
+            });
+
+            parentFileDiv.append("<button id='cleanTextarea" + fileInput.attr('name') + "' type='button' class='btn btn-default'><span class='glyphicon glyphicon-trash'></span></button>");
+            $("#cleanTextarea" + fileInput.attr('name')).click(this, function () {
+                parentFileDiv.find('textarea').val("");
+                fileInput.val('');
+            });
+
+            // fetch example file
+            $.get(
+                "{% url 'get_example'%}",
+                {
+                    ext_file: ext,
+                },
+                function (response) {
+                    if ($.trim(response)) {
+                        parentFileDiv.find('textarea').data('example', response);
+                        parentFileDiv.append("<button id='getExample" + fileInput.attr('name') + "' type='button' class='btn btn btn-info'><span class='glyphicon glyphicon-question-sign'> </span> Example</button>");
+
+                        $('#getExample' + fileInput.attr('name')).click(function () {
+
+                            parentFileDiv.find('textarea').val(parentFileDiv.find('textarea').data('example'));
+                            fileInput.val('');
+                        });
+                    }
+                });
+
+        }
+    </script>
+    <script type="text/javascript">
+        $(document).ready(function () {
+
+            //put label on the top of checkbox//
+            $('[data-toggle="toggle"]').each(function () {
+                if (this.id) {
+                    var checkbox_label = $('label[for="' + this.id + '"]>div');
+                    var parent = checkbox_label.parent();
+                    parent.after(checkbox_label).addClass('control-label');
+                    parent.parent().removeClass("checkbox").before(parent);
+                }
+            });
+
+            //hide or show conditionals fields
+            $('[data-test]').each(function (index, elt) {
+
+                // search related test_param
+                var m_id = $(elt).attr("data-test");
+                var test_param = $('input[name="' + jq_conv_id(m_id) + '"], ' +
+                    'select[name="' + jq_conv_id(m_id) + '"]'
+                );
+
+                // if radiobox
+                if (test_param.length > 1) {
+                    test_data_case(test_param.filter(':checked'), $(elt));
+                }
+                else if (test_param.length === 1) {
+
+                    // if checkbox
+                    if (test_param.attr("data-toggle")) {
+                        toggle_condition(test_param, $(elt));
+                    } else {
+                        // if selectbox
+                        test_data_case(test_param, $(elt));
+                    }
+                }
+
+                test_param.change(function () {
+                    // if radiobox
+                    if (test_param.length > 1) {
+                        test_data_case(test_param.filter(':checked'), $(elt));
+                    }
+                    else if (test_param.length === 1) {
+
+                        // if checkbox
+                        if (test_param.attr("data-toggle")) {
+                            toggle_condition(test_param, $(elt));
+                        } else {
+                            // if selectbox
+                            test_data_case(test_param, $(elt));
+                        }
+                    }
+                });
+            });
+            //scrollspy navbar
+            $('body').attr('data-target', '#navbar-tool').attr('data-spy', 'scroll');
+            $('#navbar-tool').affix({offset: {top: $('#navbar-tool').offset().top}});
+            init_input_file();
+        });
+    </script>
+{% endblock %}
+{% block title %}Workflow Advanced Setting{% endblock %}
+{% block workflow-name %}<h3>{{ workflow.name }}</h3>{% endblock %}
+{% block workflow-sidebar %}
+    <div class="col-md-1"></div>
+{% endblock %}
+{% block workflow-form %}
+    <hr>
+    <h4>Workflow form:</h4>
+    <div class="row">
+        <div class="col-md-3">
+            <nav id="navbar-tool">
+                <ul class="nav nav-pills nav-stacked">
+                    {% for toolform in form_list %}
+                        <li class="tool_li">
+                            <a href="#tool-{{ forloop.counter }}">
+                                {{ toolform.tool_name }}
+                            </a>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </nav>
+        </div>
+        <div class="col-md-9">
+            <form action="" method="post" enctype="multipart/form-data">
+                <div class="col-md-10">
+                    <div class="row">
+                        <h4>Select an input data</h4>
+                        <div class="panel panel-info">
+                            <div class="panel-heading">Choose a file or Paste yours sequences (Fasta format)</div>
+                            <div class="panel-body">
+                                <div class="form-group">
+                                    <input data-ext="fasta" name="file" type="file">
+                                </div>
+                            </div>
+                        </div>
+                        {% for toolform in form_list %}
+                            <section id="tool-{{ forloop.counter }}">
+                                <button type="button" class="accordion"><span class="h5">{{ toolform.tool_name }}</span>
+                                </button>
+                                <div class="formtool">
+                                    {% crispy toolform %}
+                                </div>
+                            </section>
+                        {% endfor %}
+                    </div>
+
+                    <div class="row">
+                        <hr>
+                        <input name="submit" value="Submit" class="btn btn-primary pull-right" id="submit"
+                               type="submit">
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    <script>
+        function toggleToolForm(elt) {
+            /* Toggle between adding and removing the "active" class,
+            to highlight the button that controls the panel */
+            elt.classList.toggle("active");
+
+            /* Toggle between hiding and showing the active panel */
+            var panel = elt.nextElementSibling;
+
+            if (panel.style.display === "block") {
+                panel.style.display = "none";
+            } else {
+                panel.style.display = "block";
+            }
+        }
+
+        function updateActiveToolli(elt) {
+            $(".tool_li").removeClass("active");
+            $(elt).addClass("active");
+        }
+
+        var acc = document.getElementsByClassName("accordion");
+        var i;
+        for (i = 0; i < acc.length; i++) {
+            acc[i].addEventListener("click", function () {
+                toggleToolForm(this);
+                updateActiveToolli($("a[href$='" + $(this).parent().attr('id') + "']").parent());
+            });
+
+        }
+
+        $(function () {
+            $(".tool_li").on("click", function () {
+                this.classList.toggle("active");
+                var buttonTarget = $($(this).find('a').attr("href")).find('button')[0];
+                toggleToolForm(buttonTarget);
+
+            });
+        });
+    </script>
+{% endblock %}

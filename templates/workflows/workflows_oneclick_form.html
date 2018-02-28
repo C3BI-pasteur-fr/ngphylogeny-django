@@ -1,9 +1,8 @@
 {% extends "workflows/workflows_form.html" %}
 {% load crispy_forms_tags %}
 {% load static %}
-
+{% block title %}Workflows One Click <span class="small">... Load your data and run analyse</span>
+{% endblock title %}
 {% block content %}
-<h2><span class="glyphicon glyphicon-chevron-right"></span>Workflows One Click</h2>
-<h5>... Load input and run analyse</h5>
-{{ block.super }}
+    {{ block.super }}
 {% endblock content %}

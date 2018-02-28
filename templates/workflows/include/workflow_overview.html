@@ -3,7 +3,7 @@
     <tr>
         <td class="d-inline-block">
             <div class="panel-group">
-                <div class="panel{% if steps_current == "0" %}
+                <div class="panel{% if steps_current == '0' %}
                                             panel-info{% else %} panel-default {% endif %}">
                     <div class="panel-heading">Input data</div>
                     <div class="panel-body">
@@ -18,18 +18,19 @@
         {% for step, tool in workflow.detail %}
             <td class="d-inline-block">
                 <div class="panel-group">
-                    <div class="panel {% if steps_current == forloop.counter|stringformat:"i" %}
+                    <div class="panel {% if steps_current == forloop.counter|stringformat:'i' %}
                                             panel-info{% else %} panel-default {% endif %}">
                         <div class="panel-heading">{{ tool.toolflag_set.first|default_if_none:"" }}</div>
                         <div class="panel-body">
-                            <a data-toggle="collapse"
-                               href="#collapse-{{ step }}-{{ workflow.slug }}"><span
-                                    class="glyphicon glyphicon-info-sign"></span></a> {{ tool.name }}
+                            {{ tool.name }}
                         </div>
-                        <div id="collapse-{{ step }}-{{ workflow.slug }}"
-                             class="panel-collapse collapse">
-                            <div class="panel-footer">
-                                {{ tool.description }}
+                        <div class="panel-footer">
+                            <a class="btn-collapse collapsed" data-toggle="collapse"
+                               href="#collapse-{{ step }}-{{ workflow.slug }}">
+                            </a>
+                            <div id="collapse-{{ step }}-{{ workflow.slug }}"
+                                 class="panel-collapse collapse">
+                                <span>{{ tool.description }}</span>
                             </div>
                         </div>
                     </div>

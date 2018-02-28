@@ -1,7 +1,6 @@
-{% extends "base.html" %}
+{% extends "base_site.html" %}
 {% load static %}
-{% block nav-tools %}class="active"{% endblock %}
-
+{% block title %}Tool{% endblock %}
 {% block content %}
 <div class="row">
     <div class="col-md-2"></div>
@@ -21,9 +20,7 @@
                 </th>
             </tr>
             </thead>
-
-            {% regroup tool_list by toolflag_set.first as tool_groups %}
-
+            {% regroup tool_list|dictsort:"toolflag_set.first.verbose_name" by toolflag_set.first as tool_groups %}
             {% for flag in tool_groups %}
             <tr>
                 <td class="list-inline active" colspan="4"><span class="h5">{{flag.grouper}}</span></td>

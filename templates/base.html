@@ -1,42 +1,39 @@
 {% load static %}
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta http-equiv="Content-type" content="text/html;charset=UTF-8"/>
     <title>NGPhylogeny.fr{% block title-block %}{% endblock %}</title>
-    <script type="text/javascript" src="{% static 'js/jquery-2.1.4.min.js' %}"></script>
+    <script src="{% static 'js/jquery-2.1.4.min.js' %}"></script>
 
     <!-- Bootstrap -->
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
 
     <!-- Bootstrap Material Design -->
-    <link rel="stylesheet" type="text/css" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
-    <link rel="stylesheet" type="text/css" href="{% static 'css/custom.css' %}"/>
+    <link rel="stylesheet" type="text/css" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
 
     {% block stylesheet %} {% endblock %}
+    <link rel="stylesheet" type="text/css" href="{% static 'css/custom.css' %}"/>
+
     {% block javascripts %} {% endblock %}
 </head>
 <body>
-<div class="alert alert-warning" role="alert" style="margin-bottom:0px">
-    <span class="glyphicon glyphicon-warning-sign"> </span>
-    <b>WARNING</b> This BETA version may be unstable, Please to contribute by submitting your bug report at <a
-        href="{% url 'feedback' %}">Contact</a>
-</div>
 <header class="jumbotron">
     <div class="container text-center">
         <div class="title-bg">
-            <h1><span class="title-cap">NG</span>PHYLOGENY.FR</h1>
+            <h1><span class="title-cap">NG</span>Phylogeny.fr</h1>
             <br>
         </div>
     </div>
 </header>
-<nav class="navbar-default" style="padding-left: 7%">
-    <div id="topnavbar" class="container-fluid">
+<nav class="navbar-default">
+    <div id="topnavbar" class="container-fluid col-md-offset-1">
         <ul class="nav nav-tabs">
-            <li {% block nav-home %}{% endblock %}><a href="{% url 'home' %}">
+            {% block nav-home %}
+                <li><a href="{% url 'home' %}">
                 <span class="glyphicon glyphicon-home"></span> Home</a></li>
-            <li {% block nav-analysis %}{% endblock %}>
-                <a class="dropdown-toggle" data-toggle="dropdown" href="#">
+            <li class="dropdown {% block nav-analysis %}{% endblock %}">
+                <a class="dropdown-toggle" href="{% url 'analysis_list' %}">
                     <span class="glyphicon glyphicon-cog"></span> Phylogeny Analysis
                     <span class="caret"></span>
                 </a>
@@ -45,11 +42,16 @@
                     <li><a href="{% url 'workflows_advanced' %}">Advanced workflows</a></li>
                     <li><a href="{% url 'workflows_alacarte' %}">Workflows maker</a></li>
                 </ul>
+            </li>
+            {% endblock %}
+            {% block nav-tools %}
+                <li>
+                <a href="{% url 'tools' %}"><span class="glyphicon glyphicon-briefcase"></span> Tools</a>
 
             </li>
-            <li {% block nav-tools %}{% endblock %}><a href="{% url 'tools' %}">
-                <span class="glyphicon glyphicon-briefcase"></span> Tools</a></li>
-            <li {% block nav-workspace %}{% endblock %}>
+            {% endblock %}
+            {% block nav-workspace %}
+                <li>
                 <a {% if request.session.histories|length > 1 %}
                     href="{% url 'previous_analyses' %}"
                     {% elif request.session.histories|length is 1%}
@@ -58,16 +60,18 @@
                     class="text-muted"
                     {% endif %}
                     >
-                    <span class="glyphicon glyphicon-list-alt"></span> Workspace
+                    <span class="glyphicon glyphicon-th-list"></span> Workspace
                     <span class="badge">{{ request.session.histories|length }}</span>
                 </a>
-            </li>
 
-            <li {% block nav-doc %}{% endblock %}><a href="{% url 'documentation' %}">
+            </li>
+            {% endblock %}
+            {% block nav-doc %}
+                <li><a href="{% url 'documentation' %}">
                 <span class="glyphicon glyphicon-book"></span> Documentation</a>
             </li>
-            <li {% block nav-about %}{% endblock %}>
-                <a class="dropdown-toggle" data-toggle="dropdown" href="#">
+            <li class="dropdown {% block nav-about %}{% endblock %}">
+                <a class="dropdown-toggle" data-toggle="dropdown" href="{% url 'about' %}">
                     <span class="glyphicon glyphicon-question-sign"></span> About
                     <span class="caret"></span>
                 </a>
@@ -76,6 +80,7 @@
                     <li><a href="{% url 'feedback' %}">Contact</a></li>
                 </ul>
             </li>
+            {% endblock %}
             <li class="user navbar-right">
                 {%if user.is_authenticated %}
                 <a href="{% url 'logout' %}">
@@ -104,39 +109,56 @@
     </div>
 </nav>
 <br>
+{% block section-title %}
+{% endblock %}
 <div class="container">
     {% block jumbotron %}{% endblock %}
+    {% block goback %} {% endblock %}
     {% block content %} {% endblock %}
 </div>
 <div class="container-fluid" style="padding-left: 4%;">
 {% block xl-content %} {% endblock %}
 </div>
 <footer class="footer container-fluid">
-    <div class="container">
+
         <div class="row">
-            <a href="https://c3bi.pasteur.fr/">
-                <div class="col-md-3"><img class="center-block logo_contrib"
-                                           src="{% static 'images/logo_ip_cnrs_c3bi.png' %}"></div>
+            <a href="https://c3bi.pasteur.fr">
+                <div><img class="center-block logo_contrib" alt="C3BI"
+                          src="{% static 'images/logo_ip_cnrs_c3bi.png' %}"></div>
             </a>
-            <a href="http://www.lirmm.fr/">
-                <div class="col-md-2"><img class="center-block logo_contrib"
-                                           src="{% static 'images/logo_lirmm.png' %}"></div>
+            <a href="http://www.lirmm.fr">
+                <div><img class="center-block logo_contrib" alt="Lirmm"
+                          src="{% static 'images/logo_lirmm.png' %}"></div>
+            </a>
+            <a href="http://www.atgc-montpellier.fr">
+                <div><img class="center-block logo_contrib" alt="LRI"
+                          src="{% static 'images/logo_atgc.png' %}"></div>
             </a>
             <a href="https://www.lri.fr/">
-                <div class="col-md-2"><img class="center-block logo_contrib"
-                                           src="{% static 'images/logo_lri.png' %}"></div>
+                <div><img class="center-block logo_contrib" alt="LRI"
+                          src="{% static 'images/logo_lri.png' %}"></div>
             </a>
-            <a href="https://www.france-bioinformatique.fr/">
-                <div class="col-md-2"><img class="center-block logo_contrib"
-                                           src="{% static 'images/logo_ifb.png' %}"></div>
+
+            <a href="https://www.france-bioinformatique.fr">
+                <div><img class="center-block logo_contrib" alt="IFB"
+                          src="{% static 'images/logo_ifb.png' %}"></div>
             </a>
-            <a href="https://www.igs.cnrs-mrs.fr/">
-                <div class="col-md-3">
-                    <img class="center-block logo_contrib"
+            <a href="https://www.igs.cnrs-mrs.fr">
+                <div>
+                    <img class="center-block logo_contrib" alt="IGS"
                          src="{% static 'images/logo_igs.jpg' %}"></div>
             </a>
         </div>
-    </div>
+
 </footer>
+<script>
+    var str = location.href;
+    $("#topnavbar > ul > li > a ").each(function () {
+        console.log(this.href, str);
+        if (this.href == str) {
+            $(this).parent().addClass("active");
+        }
+    });
+</script>
 </body>
 </html>

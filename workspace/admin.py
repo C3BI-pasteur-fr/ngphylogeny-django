@@ -5,7 +5,7 @@ from .models import WorkspaceHistory
 
 class WorkspaceAdmin(admin.ModelAdmin):
     change_form_template = "workspace/admin/custom_change_form.html"
-    list_display = ('name', 'history', 'user', 'created_date', 'galaxy_server',)
+    list_display = ('pk', 'name', 'history', 'user', 'created_date', 'galaxy_server',)
 
     def change_view(self, request, object_id, form_url='', extra_context=None):
         obj = self.get_object(request, object_id)
