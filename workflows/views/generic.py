@@ -62,7 +62,7 @@ class WorkflowFormView(WorkflowDetailMixin, UploadView, ImportPastedContentView,
             context["inputs"] = wk.json['inputs'].keys()
 
             # add workfow galaxy information
-            context["steps"] = WorkflowStepInformation(wk.json, tools=self.restrict_toolset).steps_tooldict
+            context["steps"] = WorkflowStepInformation(wk.json, tools=self.restricted_toolset).steps_tooldict
 
         context["workflow"] = wk
         return context
