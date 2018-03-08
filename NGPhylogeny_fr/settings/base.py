@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     'surveys.apps.SurveysConfig',
     'workflows.apps.WorkflowsConfig',
     'workspace.apps.WorkspaceConfig',
+    'markdown_deux',
 ]
 
 MIDDLEWARE = [

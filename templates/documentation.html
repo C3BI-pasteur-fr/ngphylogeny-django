@@ -1,712 +1,722 @@
 {% extends "base.html" %}
+{% load markdown_deux_tags %}
 {% load static %}
 {% block title %}Documentation{% endblock %}
 {% block content %}
-    {% comment %} import from html source code on documentation of phylogeny.fr {% endcomment %}
-    <div id="page_content">
-        <a name="toc"></a>
-        <h2>Table of Content</h2>
-        <ol>
-            <li><a href="documentation#overview">1. Overview</a></li>
-            <li><a href="documentation#phylogeny">2. Phylogeny Analysis</a>
-                <ol>
-                    <li><a href="documentation#oneclick">2.1 &quot;One Click&quot; mode</a></li>
-                    <li><a href="documentation#advanced">2.2 Advanced mode</a></li>
-                    <li><a href="documentation#alacarte">2.3 &quot;A la carte&quot; mode</a></li>
-                </ol>
-            </li>
-            <li><a href="documentation#explore">3. Blast: Sequence explorer</a></li>
-            <li><a href="documentation#prog_use">4. Programs use and technical details</a></li>
-            <li><a href="documentation#formats">5. Formats</a>
-                <ol>
-                    <li><a href="documentation#fasta">5.1 FASTA format</a></li>
-                    <li><a href="documentation#genbanks">5.2 GenBank format</a></li>
-                    <li><a href="documentation#embl">5.3 EMBL format</a></li>
-                    <li><a href="documentation#phylip">5.4 PHYLIP format</a></li>
-                    <li><a href="documentation#clustal">5.5 Clustal format</a></li>
-                    <li><a href="documentation#nexus">5.6 Nexus format</a></li>
-                </ol>
-            </li>
-            <li><a href="documentation#moreinfo">6. More information about external softwares</a></li>
-        </ol>
-        <hr/>
-        <br/>
-        <a name="overview"></a>
-        <h2>1. Overview</h2>
-        <p>
-            <b>Phylogeny.fr</b> has been designed to provide a high performance platform
-            that transparently chains programs relevant to phylogenetic analysis in a
-            comprehensive, and flexible pipeline. Although phylogenetic aficionados will
-            be able to find most of their favorite tools and run sophisticated analysis,
-            the primary philosophy of Phylogeny.fr is to assist biologists with no
-            experience in phylogeny in analyzing their data in a robust way.
-        </p>
-        <p>
-            The Phylogeny.fr platform offers a phylogeny pipeline which can be executed
-            through three main modes:
-        </p>
-        <div class="indent">
-            <p class="bullet_p">
-                The <a href="simple_phylogeny">&quot;One Click mode&quot;</a> targets users that
-                do not wish to deal with program and parameter selection. By default, the
-                pipeline is already set up to run and connect programs recognized for their
-                accuracy and speed (<a href="one_task?task_type=muscle">MUSCLE</a> for multiple alignment
-                and <a href="one_task?task_type=phyml">PhyML</a> for phylogeny) to
-                reconstruct a robust phylogenetic tree from a set of sequences.
-            </p>
-            <p class="bullet_p">
-                In the <a href="advanced">&quot;Advanced mode&quot;</a>,
-                the Phylogeny.fr server proposes the succession of the same programs but
-                users can choose the steps to perform (multiple sequence alignment,
-                phylogenetic reconstruction, tree drawing) and the options of each program.
-            </p>
-            <p class="bullet_p">
-                The <a href="alacarte">&quot;A la carte mode&quot;</a>
-                offers the possibility of running and testing more alignment and phylogeny
-                programs, such as <a href="one_task?task_type=muscle">MUSCLE</a>,
-                <a href="one_task?task_type=clustalw">ClustalW</a>,
-                <a href="one_task?task_type=tcoffee">T-Coffee</a>,
-                <a href="one_task?task_type=phyml">PhyML</a>,
-                <a href="one_task?task_type=bionj">BioNJ</a>,
-                <a href="one_task?task_type=tnt">TNT</a>,...
-            </p>
-        </div>
-        <p>
-            Alternatively, users have the possibility to run the
-            <a href="programs">different programs</a> separately.
-        </p>
-        <a href="#toc">&uarr; Table of Content</a>
-        <hr class="separator"/>
-        <br/>
-        <a name="phylogeny"></a>
-        <h2>2. Phylogeny Analysis</h2>
-        <a name="oneclick"></a>
-        <h3>2.1 &quot;One Click&quot; mode</h3>
-        <p>
-            This is a &quot;default&quot; mode which proposes a pipeline already set up
-            to run and connect programs recognized for their accuracy and speed
-            (<a href="one_task?task_type=muscle">MUSCLE</a> for multiple alignment, optionally
-            <a href="one_task?task_type=gblocks">Gblocks</a> for alignment curation,
-            <a href="one_task?task_type=phyml">PhyML</a> for phylogeny and finally
-            <a href="one_task?task_type=treedyn">TreeDyn</a> for tree drawing) to reconstruct a robust
-            phylogenetic tree from a set of sequences.
-        </p>
-        <br/>
-        <p>
-            What users have to do is just to copy and paste their set of sequences in the
-            FASTA format (or upload their FASTA file) and to click the Submit button.
-            The system will do all the rest work, all the parameters are those of programs
-            by default. However, users are able to decide to use or not the Gblocks program
-            to eliminate poorly aligned positions and divergent regions, by checking the
-            corresponding checkbox in the form page. At the end of the analysis, the server
-            displays a publication quality image of the phylogenetic tree.
-        </p>
-        <table>
-            <caption><b>Table I:</b> "One Click" programs settings</caption>
-            <thead>
-            <tr>
-                <th>Step</th>
-                <th>Program&nbsp;used</th>
-                <th>Settings</th>
-                <th>Notes</th>
-            </tr>
-            </thead>
-            <tfoot>
-            <tr>
-                <th colspan="4">&nbsp;</th>
-            </tr>
-            </tfoot>
-            <tbody>
-            <tr>
-                <td>Alignment</td>
-                <td>MUSCLE 3.7</td>
-                <td>
-                    <li>Find diagonals option disabled</li>
-                    <li>Maximum number of iterations: 16</li>
-                    <li>No duration limitation</li>
-                    <li>No more than 200 sequences</li>
-                    </ul></td>
-                <td>Several studies and especially the BAliBASE benchmark showed that MUSCLE achieved the highest
-                    ranking of any method at the time of publication.<br/></td>
-            </tr>
-            <tr>
-                <td>Alignment refinement</td>
-                <td>Gblocks 0.91b</td>
-                <td>
-                    <li>Minimum number of sequences for a conserved position: half the number of sequences + 1</li>
-                    <li>Minimum number of sequences for a flank position: 85% of the number of sequences</li>
-                    <li>Maximum number of contiguous nonconserved positions: 8</li>
-                    <li>Minimum length of a block: 10</li>
-                    <li>Allowed gap positions: none</li>
-                    </ul></td>
-                <td>This step is optional. Gblocks eliminates poorly aligned positions and divergent regions (removes
-                    alignment noise).<br/><br/>Parameters are set to their default values in Gblocks. These are rather
-                    stringent; e.g. all positions with gaps are removed.
-                </td>
-            </tr>
-            <tr>
-                <td>Phylogeny</td>
-                <td>PhyML 3.0</td>
-                <td>
-                    <li>Substitution model: HKY85 for DNA/RNA, WAG for proteins</li>
-                    <li>aLRT test: SH-like</li>
-                    <li>Number of substitution rate categories: 4</li>
-                    <li>Gamma parameter: estimated</li>
-                    <li>Proportion of invariable sites: estimated</li>
-                    <li>Transition/transversion ratio (DNA/RNA): 4</li>
-                    </ul></td>
-                <td>PhyML was shown to be at least as accurate as other existing phylogeny programs using simulated
-                    data, while being one order of magnitude faster.<br/><br/>HKY fits well in most cases as it
-                    modelizes the main features of DNA substitutions: transition/transversion and unequal base
-                    frequencies.<br/><br/>LG has been shown to be the best amino-acid replacement matrix to
-                    date.<br/><br/>Gamma distributed rates are mandatory in most (if not all) analyses, and using
-                    invariant sites generally improves (never degrade) the fit.
-                </td>
-            </tr>
-            <tr>
-                <td>Tree rendering</td>
-                <td>TreeDyn 198.3</td>
-                <td>
-                    <li>Rectangular tree</li>
-                    <li>Display branch support values (in red)</li>
-                    <li>Font: Times, 10pt</li>
-                    </ul></td>
-                <td>TreeDyn offers many tree customization options compared to other tree rendering tools and especially
-                    for tree annotations.<br/><br/>The starting output tree is rooted using mid-point rooting method
-                    (performed by Retree from PHYLIP package) but the user can reroot the tree using our dynamic tree
-                    editing interface.
-                </td>
-            </tr>
-            </tbody>
-        </table>
-        <br/>
-        <a href="#toc">&uarr; Table of Content</a>
-        <hr class="separator"/>
-        <br/>
-        <a name="advanced"></a>
-        <h3>2.2 Advanced mode</h3>
-        <p>
-            The pipeline is the same as the &quot;One Click&quot; mode but is flexible
-            enough to allow users to select which steps to perform. In this manner, the
-            input data can be a set of non-aligned sequences in FASTA format, an
-            alignment of multiple sequences in FASTA, PHYLIP or Clustal format, or a
-            tree in NEWICK format.<br/>
-            Users are provided with options to set the parameters of the different
-            programs of the pipeline.
-        </p>
-        <br/>
-        <div>
-            <img class="doc_image" src="http://phylogeny.lirmm.fr/images/capture_advanced_input.png"
-                 alt="advanced screenshot"/>
-        </div>
-        <br/>
-        <p>
-            Furthermore, the system offers the possibility to control results of each
-            step before launching the next program, so that users can modify and properly
-            adjust parameters for a given task. This is possible in checking the
-            &quot;Step by step&quot; option.
-        </p>
-        <p>
-            In the case of an &quot;All at once&quot;, at the end of the pipeline
-            processing, users have access to detailed reports for all the different
-            analysis steps of the pipeline through different tabs of results.
-        </p>
-        <br/>
-        <div>
-            <img class="doc_image" src="http://phylogeny.lirmm.fr/images/capture_advanced_output1bis.png"
-                 alt="advanced mode alignment output screenshot"/>
-            <img class="doc_image" src="http://phylogeny.lirmm.fr/images/capture_advanced_output1.png"
-                 alt="advanced mode tree output screenshot"/>
-        </div>
-        <br/>
-        <p>
-            At the end of the analysis, users have the possibility to look at a schematic
-            representation of the workflow, with details about software options, so as
-            the references of the different selected tools. This summary of the run is
-            accessible through the &quot;Overview&quot; tab since the analysis is
-            finished. This fonctionality is also observable in the &quot;One Click
-            mode&quot;.
-        </p>
-        <br/>
-        <div>
-            <img class="doc_image" src="http://phylogeny.lirmm.fr/images/capture_advanced_schema.png"
-                 alt="advanced mode workflow overview screenshot"/>
-        </div>
-        <br/>
-        <p>
-            In the case of an &quot;Step by step&quot; analysis, users have the
-            possibility to control and edit the results of each step before launching the
-            next program.
-        </p>
-        <br/>
-        <div>
-            <img class="doc_image" src="http://phylogeny.lirmm.fr/images/capture_advanced_output3.png"
-                 alt="advanced mode sequence explorer output screenshot"/>
-        </div>
-        <a href="#toc">&uarr; Table of Content</a>
-        <hr class="separator"/>
-        <br/>
-        <a name="alacarte"></a>
-        <h3>2.3 &quot;A la carte&quot; mode</h3>
-        <p>
-            The server offers the possibility to run other alignment and phylogeny
-            programs than those preselected in the &quot;One Click&quot; and
-            &quot;Advanced&quot; modes:
-        </p>
-        <ul>
-            <li>a multiple sequence alignment using <a href="one_task?task_type=muscle">MUSCLE</a>,
-                <a href="one_task?task_type=tcoffee">T-Coffee</a>,
-                <a href="one_task?task_type=expresso">3DCoffee</a> or
-                <a href="one_task?task_type=clustalw">ClustalW</a> according to user preference
-            </li>
-            <li>a phylogenetic reconstruction using <a href="one_task?task_type=phyml">PhyML</a>,
-                TNT,
-                <a href="one_task?task_type=bionj">BioNJ</a> or
-                <a href="one_task?task_type=neighbor">Neighbor</a> and
-            </li>
-            <li>the generation of a publication quality image of the resulting
-                phylogenetic tree using
-                <a href="one_task?task_type=treedyn">TreeDyn</a>,
-                <a href="one_task?task_type=drawgram">Drawgram</a>
-                or <a href="one_task?task_type=drawtree">Drawtree</a></li>
-        </ul>
-        <br/>
-        <div>
-            <img class="doc_image" src="http://phylogeny.lirmm.fr/images/capture_alacarte.png"
-                 alt="&quot;A la carte&quot; screenshot"/>
-        </div>
-        <a href="#toc">&uarr; Table of Content</a>
-        <hr class="separator"/>
-        <br/>
-        <a name="explore"></a>
-        <h2>3. Blast: Explore your sequence neighbors</h2>
-        <p>
-            A fast BLAST search on
-            <a href="http://www.igs.cnrs-mrs.fr/Giga2/~database/remoteblast">Gigablaster</a>
-            allows to quickly explore your sequence neighbors. Paste your single sequence,
-            run blast and explore its homologous sequences. The system facilitates the
-            selection of homologous sequences, based on a 'quick-and-dirty' phylogenetic
-            representation using BLAST results and an estimator of the final multiple
-            alignment length.
-        </p>
-        <br/>
-        <div>
-            <img class="doc_image" src="http://phylogeny.lirmm.fr/images/capture_blast_output.png"
-                 alt="Blast output screenshot"/>
-        </div>
-        <a href="#toc">&uarr; Table of Content</a>
-        <hr class="separator"/>
-        <br/>
-        <a name="prog_use"></a>
-        <h2>4. Programs use and technical details</h2>
-        <table>
-            <caption>Note: With fast programs Phylogeny.fr displays the results within a few minutes or less. Slow
-                programs require about one hour or so, but their results are still displayed on-line, while the results
-                of very slow program are sent by email.</span></caption>
-            <thead>
-            <tr>
-                <th>Program</th>
-                <th>Function</th>
-                <th>Input</th>
-                <th>Output</th>
-                <th>Speed</th>
-                <th>Current Limitations</th>
-                <th>Use</th>
-            </tr>
-            </thead>
-            <tfoot>
-            <tr>
-                <th colspan="7">&nbsp;</th>
-            </tr>
-            </tfoot>
-            <tbody>
-            <tr>
-                <td>Blastall 2.2.17</td>
-                <td>Sequence searching</td>
-                <td>Raw, FASTA</td>
-                <td>FASTA</td>
-                <td>Fast</td>
-                <td>None</td>
-                <td>Advanced and "A la Carte"</td>
-            </tr>
-            <tr>
-                <td>MUSCLE 3.7</td>
-                <td>Multiple alignment</td>
-                <td>FASTA, EMBL/Uniprot, GenBank, PAUP*/Nexus</td>
-                <td>FASTA, Clustal, PHYLIP</td>
-                <td>Fast</td>
-                <td>&lt;200 nucleic sequences, &lt;6000 sites<br/>&lt;200 protein sequences, &lt;2000 sites</td>
-                <td>All modes<br/>Large dataset</td>
-            </tr>
-            <tr>
-                <td>T-Coffee 5.56</td>
-                <td>Multiple alignment</td>
-                <td>FASTA, EMBL/Uniprot, GenBank, PAUP*/Nexus</td>
-                <td>FASTA, Clustal, PHYLIP</td>
-                <td>Very slow</td>
-                <td>&lt;50 nucleic sequences, &lt;2000 sites<br/>&lt;50 protein sequences, &lt;2000 sites</td>
-                <td>"A la Carte"<br/>Small dataset</td>
-            </tr>
-            <tr>
-                <td>3DCoffee 5.56</td>
-                <td>Multiple alignment using structural information</td>
-                <td>FASTA, EMBL/Uniprot, GenBank, PAUP*/Nexus</td>
-                <td>FASTA, Clustal, PHYLIP</td>
-                <td>Very slow</td>
-                <td>&lt;50 nucleic sequences, &lt;2000 sites<br/>&lt;50 protein sequences, &lt;2000 sites</td>
-                <td>"A la Carte"<br/>Small dataset</td>
-            </tr>
-            <tr>
-                <td>ClustalW 2.0.3</td>
-                <td>Multiple alignment</td>
-                <td>FASTA, EMBL/Uniprot, GenBank, PAUP*/Nexus</td>
-                <td>FASTA, Clustal, PHYLIP</td>
-                <td>Fast</td>
-                <td>&lt;200 nucleic sequences, &lt;4000 sites<br/>&lt;200 protein sequences, &lt;2000 sites</td>
-                <td>"A la Carte"<br/>Large dataset</td>
-            </tr>
-            <tr>
-                <td>Gblocks 0.91b</td>
-                <td>Alignment refinement</td>
-                <td>FASTA, Clustal, PHYLIP, EMBL, PAUP*/Nexus</td>
-                <td>FASTA, Clustal, PHYLIP</td>
-                <td>Fast</td>
-                <td>None</td>
-                <td>All modes<br/>Large dataset</td>
-            </tr>
-            <tr>
-                <td>PhyML 3.0</td>
-                <td>Phylogeny using maximum likelihood</td>
-                <td>FASTA, Clustal, PHYLIP, EMBL, PAUP*/Nexus</td>
-                <td>Newick</td>
-                <td>Fast to Slow</td>
-                <td>(sequence size) &times; (number of taxa)<sup>2</sup> &lt;100000000</td>
-                <td>All modes<br/>Medium to large dataset</td>
-            </tr>
-            <tr>
-                <td>TNT 1.1</td>
-                <td>Phylogeny using parsimony</td>
-                <td>FASTA, Clustal, PHYLIP, EMBL, PAUP*/Nexus</td>
-                <td>Newick</td>
-                <td>Fast to Slow</td>
-                <td>&lt;200 sequences, &lt;6000 sites</td>
-                <td>"A la Carte"<br/>Medium to large dataset</td>
-            </tr>
-            <tr>
-                <td>FastDist/Protdist +<br/>BioNJ / Neighbor (PHYLYP) 3.67</td>
-                <td>Phylogeny using distances</td>
-                <td>FASTA, Clustal, PHYLIP, EMBL, PAUP*/Nexus</td>
-                <td>Newick</td>
-                <td>Fast</td>
-                <td>&lt;5000 taxa for BioNJ<br/>&lt;500 taxa for Neighbor</td>
-                <td>"A la Carte"<br/>Large dataset</td>
-            </tr>
-            <tr>
-                <td>Bootstrap with PhyML and TNT</td>
-                <td>Estimations of clade supports</td>
-                <td>FASTA, Clustal, PHYLIP, EMBL, PAUP*/Nexus</td>
-                <td>Newick</td>
-                <td>Very slow</td>
-                <td>&lt;500 replicates with PhyML<br/>&lt;1000 replicates with TNT</td>
-                <td>Advanced and "A la Carte"<br/>Small to medium datasets</td>
-            </tr>
-            <tr>
-                <td>Bootstrap with distance methods</td>
-                <td>Estimations of clade supports</td>
-                <td>FASTA, Clustal, PHYLIP, EMBL, PAUP*/Nexus</td>
-                <td>Newick</td>
-                <td>Slow</td>
-                <td>&lt;1000 replicates with FastDist<br/>&lt;1000 replicates with Protdist</td>
-                <td>"A la Carte"<br/>Medium to large datasets</td>
-            </tr>
-            <tr>
-                <td>TreeDyn 198.3</td>
-                <td>Tree rendering</td>
-                <td>Newick, New Hampshire Extanded, PAUP*/Nexus</td>
-                <td>Newick, PNG, PS, PDF, SVG, TGF</td>
-                <td>Fast</td>
-                <td>None</td>
-                <td>All modes</td>
-            </tr>
-            <tr>
-                <td>Drawgram 3.67</td>
-                <td>Various tree shapes rendering</td>
-                <td>Newick, New Hampshire Extanded, PAUP*/Nexus</td>
-                <td>PNG, PS, PDF</td>
-                <td>Fast</td>
-                <td>None</td>
-                <td>"A la Carte"</td>
-            </tr>
-            <tr>
-                <td>Drawtree 3.67</td>
-                <td>Unrooted tree rendering</td>
-                <td>Newick, New Hampshire Extanded, PAUP*/Nexus</td>
-                <td>PNG, PS, PDF</td>
-                <td>Fast</td>
-                <td>None</td>
-                <td>"A la Carte"</td>
-            </tr>
-            </tbody>
-        </table>
-        <br/>
-        <a href="#toc">&uarr; Table of Content</a>
-        <hr class="separator"/>
-        <br/>
-        <a name="formats"></a>
-        <h3>5. Formats</h3>
-        <a name="fasta"></a><h4>5.1 FASTA format</h4>
-        <p>
-            This format can be used for single sequence, multiple sequences or alignment.
-            Each sequence begins with a single header line providing the sequence name
-            (optionnaly description), followed by lines of sequence data. The description
-            line must start with a greater-than (&quot;&gt;&quot;) symbol in the first
-            column.
-        </p>
-        <div class="code">
-<pre>&gt;Homo sapiens
-MEVEAVCGGAGEVEAQDSDPAPAFSKAPGSAGHYELPWVEKYRPVKLNEIVGNEDTVSRLEVFAREGNVP
-NIIIAGPPGTGKTTSILCLARALLGPALKDAMLELNASNDRGIDVVRNKIKMFAQQKVTLPKGRHKIIIL
-DEADSMTDGAQQALRRTMEIYSKTTRFALACNASDKIIEPIQSRCAVLRYTKLTDAQILTRLMNVIEKER
-VPYTDDGLEAIIFTAQGDMRQALNNLQSTFSGFGFINSENVFKVCDEPHPLLVKEMIQHCVNANIDEAYK
-ILAHLWHLGYSPEDIIGNIFRVCKTFQMAEYLKLEFIKEIGYTHMKIAEGVNSLLQMAGLLARLCQKTMA
-PVAS
-&gt;Arabidopsis thaliana
-MASSSSTSTGDGYNEPWVEKYRPSKVVDIVGNEDAVSRLQVIARDGNMPNLILSGPPGTGKTTSILALAH
-ELLGTNYKEAVLELNASDDRGIDVVRNKIKMFAQKKVTLPPGRHKVVILDEADSMTSGAQQALRRTIEIY
-SNSTRFALACNTSAKIIEPIQSRCALVRFSRLSDQQILGRLLVVVAAEKVPYVPEGLEAIIFTADGDMRQ
-ALNNLQATFSGFSFVNQENVFKVCDQPHPLHVKNIVRNVLESKFDIACDGLKQLYDLGYSPTDIITTLFR
-IIKNYDMAEYLKLEFMKETGFAHMRICDGVGSYLQLCGLLAKLSIVRETAKAP
-</pre>
-        </div>
-        <a href="#toc">&uarr; Table of Content</a>
-        <hr class="separator"/>
-        <br/>
-        <a name="genbanks"></a><h4>5.2 GenBank format</h4>
-        <p>
-            This format can be used for single sequence or multiple sequences.<br/>
-            Each sequence entry begins with a line containing the word &quot;LOCUS&quot;,
-            indicating the short name for this sequence, followed by several annotation
-            lines. The start of each sequence is marked by a line containing the word
-            &quot;ORIGIN&quot; and the end of each sequence is marked by two slashes
-            (&quot;//&quot;).
-        </p>
-        <div class="code">
-<pre>LOCUS       CAA36839                 152 aa            linear   PRI 14-NOV-2006
-DEFINITION  calmodulin [Homo sapiens].
-ACCESSION   CAA36839
-VERSION     CAA36839.1  GI:825635
-DBSOURCE    embl accession X52606.1
-            embl accession X52607.1
-            embl accession X52608.1
-ORIGIN      
-        1 madqlteeqi aefkeafslf dkdgdgtitt kelgtvmrsl gqnpteaelq dminevdadd
-       61 lpgngtidfp efltmmarkm kdtdseeeir eafrvfdkdg ngyisaaelr hvmtnlgekl
-      121 tdeevdemir eadidgdgqv nyeefvqmmt ak
-//
+{% comment %} import from html source code on documentation of phylogeny.fr {% endcomment %}
 
-LOCUS       CAA59418                 149 aa            linear   PLN 18-APR-2005
-DEFINITION  calmodulin [Macrocystis pyrifera].
-ACCESSION   CAA59418
-VERSION     CAA59418.1  GI:728609
-DBSOURCE    embl accession X85091.1
-ORIGIN      
-        1 madqlteeqi aefkeafslf dkdgdgtitt kelgtvmrsl gqnpteaelq dminevdadg
-       61 ngtidfpefl tmmarkmkdt dseeeiieaf kvfdkdgngf isaaelrhim tnlgekltde
-      121 evdemiread idgdgqinye efvkmmmak
-//
-</pre>
-        </div>
-        <a href="#toc">&uarr; Table of Content</a>
-        <hr class="separator"/>
-        <br/>
-        <a name="embl"></a><h4>5.3 EMBL format</h4>
-        <p>
-            This format can be used for single sequence or multiple sequences.<br/>
-            Each sequence starts with an identifier line containing the word
-            &quot;ID &quot;, followed by several annotation lines. The start of each
-            sequence is marked by a line starting with the identification &quot;SQ&quot;,
-            and the end of each sequence is marked by two slashes (&quot;//&quot;).
-        </p>
-        <div class="code">
-<pre>ID   Homo sapiens; AA; UNK; 354 AA.
-XX
-AC   unknown;
-XX
-DE   
-XX
-FH   Key             Location/Qualifiers
-FH
-XX
-SQ   Sequence 354 BP; 35 A; 8 C; 23 G; 18 T; 270 other;
-     meveavcgga geveaqdsdp apafskapgs aghyelpwve kyrpvklnei vgnedtvsrl        60
-     evfaregnvp niiiagppgt gkttsilcla rallgpalkd amlelnasnd rgidvvrnki       120
-     kmfaqqkvtl pkgrhkiiil deadsmtdga qqalrrtmei yskttrfala cnasdkiiep       180
-     iqsrcavlry tkltdaqilt rlmnvieker vpytddglea iiftaqgdmr qalnnlqstf       240
-     sgfgfinsen vfkvcdephp llvkemiqhc vnanideayk ilahlwhlgy spediignif       300
-     rvcktfqmae ylklefikei gythmkiaeg vnsllqmagl larlcqktma pvas             354
-//
-ID   Arabidopsis thaliana; AA; UNK; 333 AA.
-XX
-AC   unknown;
-XX
-DE   
-XX
-FH   Key             Location/Qualifiers
-FH
-XX
-SQ   Sequence 333 BP; 27 A; 6 C; 21 G; 18 T; 261 other;
-     masssststg dgynepwvek yrpskvvdiv gnedavsrlq viardgnmpn lilsgppgtg        60
-     kttsilalah ellgtnykea vlelnasddr gidvvrnkik mfaqkkvtlp pgrhkvvild       120
-     eadsmtsgaq qalrrtieiy snstrfalac ntsakiiepi qsrcalvrfs rlsdqqilgr       180
-     llvvvaaekv pyvpegleai iftadgdmrq alnnlqatfs gfsfvnqenv fkvcdqphpl       240
-     hvknivrnvl eskfdiacdg lkqlydlgys ptdiittlfr iiknydmaey lklefmketg       300
-     fahmricdgv gsylqlcgll aklsivreta kap                                    333
-//
-</pre>
-        </div>
-        <a href="#toc">&uarr; Table of Content</a>
-        <hr class="separator"/>
-        <br/>
-        <a name="phylip"></a><h4>5.4 PHYLIP format</h4>
-        <p>
-            This is an alignment format.<br/>
-            The first line contains the number of sequences and their length (in
-            characters) separated by blanks.<br/>
-            The next line contains the sequence name, followed by the sequence in blocks
-            of 10 characters.
-        </p>
-        <div class="code">
-<pre> 7 100
-T25          ACTATTGAAA GAAGGGGGTT CCTAGATATC TGCGAGTATA ATCGTGCTTG
-T16          ATTAATCAAA GTAGGCGGGG CGGCCGTAGA TGCTAAGAAA ATCGAGTTCG
-T27          ATTAATCAAA GTAGGCAGGG CGGCCGTAGA TGCTAAGAAA ATCGAGTTCG
-T1           GTTAACCGAA GTAGGCGGAA CGGACGTATA TGCGATTAAA ATCGAGTTCG
-T19          GTTAACCGAA GTAGGCGGAA CGGACGTATA TGCGATTAAA ATCGAGTTCG
-T35          ATTAATCAAA GCAGGCGGTC CGGACGTATA TCCTAATAAA ATCGAGTTCG
-T56          ATTAATCAAA GTAGGCGGTC CGGCCGAATA TGCGAATAAA ATCGAGTTCG
+{% markdown %}
 
-             GTCTCCTATC GATGCGCATC GGACCGAGAG GCTCTCCAGC CATGTGGACG
-             GTCACCTCCC ATTGGGCAGC AGATCGCTAG GCTCTTTAGC CAGGTGGACG
-             GTCACCTCCC ATTGCGCAGC AGATCGCTAG GCTCTTTAGC CAGGCGGACG
-             GACACCTTCC AGGGCGCAGC AGATCGCGAG GCTTTCTAAC CAGGTGGACG
-             GACACCTTCC AGGGCGCAGC AGATCGCGAG GCTTTCTAGC CAGGTGGACG
-             GTCACCTCCC AGGGCGCAGA AGATCGCGAG GCTCTCCAGC CAGGTGGACG
-             GTAACCTCCC AGTCCGCAGA AGATCGCGAG GCTCTCCAGC CAGGGGGACG
-</pre>
-        </div>
-        <a href="#toc">&uarr; Table of Content</a>
-        <hr class="separator"/>
-        <br/>
-        <a name="clustal"></a><h4>5.5 Clustal format</h4>
-        <p>
-            This is an alignment format.<br/>
-            The word &quot;CLUSTAL&quot; is on the first line of the file. The alignment
-            is written in blocks of a fixed length. Every block starts with the sequence
-            names (maximum of 10 characters), followed by at least one space character.
-            The sequence is then displayed in upper or lower cases, &quot;-&quot; denotes
-            gaps.
-        </p>
-        <p>
-            A count of the total number of residues may be shown at the end of the line.
-        </p>
-        <p>
-            Below each block of residues, an additional line shows the degree of
-            conservation for each site.
-        </p>
-        <div class="code">
-<pre>CLUSTAL W (1.83) multiple sequence alignment
+## Overview
+NGPhylogeny.fr is a webservice dedicated to phylogenetic analysis. It provides a  complete  set
+of  phylogenetic tools and workflows adapted  to  various  contexts and various levels of user
+expertise.
+
+NGPhylogeny.fr works together with a [Galaxy instance](https://galaxy.pasteur.fr/) to:
+
+1. Manage tools and workflows;
+2. Run tools and workflows and the underlying cluster;
+3. Keep track of the history of runs.
+
+Different ways of using NGPhylogeny.fr are offered, depending on the user needs or expertise:
+
+1. [Oneclick workflows]({% url 'workflow_oneclick_list' %}) are already preconfigured to work on the majority of usecases. The only required
+input is the input sequence data in Fasta format.
+2. [Advanced workflows](/workflows/advanced/) have basically the same structure as oneclick workflows, but can be parametrized.
+It means that the user can customize the options of each step of the workflows: alignment, curation, tree inference.
+3. [Workflow maker](/workflows/alacarte/) allows the user to choose the combination of tools that suits best his/her needs, and to customize the parameters.
+4. [Individual tool](/tools/) may be run if specific taks are required.
+
+Finally, NGPhylogeny.fr provides a user-friendly visualization layer specific to the different
+kinds of data usually manipulated in phylogenetics (i.e. alignments, trees).
+
+## [Onclick workflows](/workflows/oneclick)
+
+## [Advanced workflows](/workflows/advanced)
+
+## Build custom workflows
+
+## List of tools
+
+{% endmarkdown %}
+<!--         <hr/> -->
+<!--         <br/> -->
+<!--         <a name="overview"></a> -->
+<!--         <h2>1. Overview</h2> -->
+<!--         <p> -->
+<!--             <b>Phylogeny.fr</b> has been designed to provide a high performance platform -->
+<!--             that transparently chains programs relevant to phylogenetic analysis in a -->
+<!--             comprehensive, and flexible pipeline. Although phylogenetic aficionados will -->
+<!--             be able to find most of their favorite tools and run sophisticated analysis, -->
+<!--             the primary philosophy of Phylogeny.fr is to assist biologists with no -->
+<!--             experience in phylogeny in analyzing their data in a robust way. -->
+<!--         </p> -->
+<!--         <p> -->
+<!--             The Phylogeny.fr platform offers a phylogeny pipeline which can be executed -->
+<!--             through three main modes: -->
+<!--         </p> -->
+<!--         <div class="indent"> -->
+<!--             <p class="bullet_p"> -->
+<!--                 The <a href="simple_phylogeny">&quot;One Click mode&quot;</a> targets users that -->
+<!--                 do not wish to deal with program and parameter selection. By default, the -->
+<!--                 pipeline is already set up to run and connect programs recognized for their -->
+<!--                 accuracy and speed (<a href="one_task?task_type=muscle">MUSCLE</a> for multiple alignment -->
+<!--                 and <a href="one_task?task_type=phyml">PhyML</a> for phylogeny) to -->
+<!--                 reconstruct a robust phylogenetic tree from a set of sequences. -->
+<!--             </p> -->
+<!--             <p class="bullet_p"> -->
+<!--                 In the <a href="advanced">&quot;Advanced mode&quot;</a>, -->
+<!--                 the Phylogeny.fr server proposes the succession of the same programs but -->
+<!--                 users can choose the steps to perform (multiple sequence alignment, -->
+<!--                 phylogenetic reconstruction, tree drawing) and the options of each program. -->
+<!--             </p> -->
+<!--             <p class="bullet_p"> -->
+<!--                 The <a href="alacarte">&quot;A la carte mode&quot;</a> -->
+<!--                 offers the possibility of running and testing more alignment and phylogeny -->
+<!--                 programs, such as <a href="one_task?task_type=muscle">MUSCLE</a>, -->
+<!--                 <a href="one_task?task_type=clustalw">ClustalW</a>, -->
+<!--                 <a href="one_task?task_type=tcoffee">T-Coffee</a>, -->
+<!--                 <a href="one_task?task_type=phyml">PhyML</a>, -->
+<!--                 <a href="one_task?task_type=bionj">BioNJ</a>, -->
+<!--                 <a href="one_task?task_type=tnt">TNT</a>,... -->
+<!--             </p> -->
+<!--         </div> -->
+<!--         <p> -->
+<!--             Alternatively, users have the possibility to run the -->
+<!--             <a href="programs">different programs</a> separately. -->
+<!--         </p> -->
+<!--         <a href="#toc">&uarr; Table of Content</a> -->
+<!--         <hr class="separator"/> -->
+<!--         <br/> -->
+<!--         <a name="phylogeny"></a> -->
+<!--         <h2>2. Phylogeny Analysis</h2> -->
+<!--         <a name="oneclick"></a> -->
+<!--         <h3>2.1 &quot;One Click&quot; mode</h3> -->
+<!--         <p> -->
+<!--             This is a &quot;default&quot; mode which proposes a pipeline already set up -->
+<!--             to run and connect programs recognized for their accuracy and speed -->
+<!--             (<a href="one_task?task_type=muscle">MUSCLE</a> for multiple alignment, optionally -->
+<!--             <a href="one_task?task_type=gblocks">Gblocks</a> for alignment curation, -->
+<!--             <a href="one_task?task_type=phyml">PhyML</a> for phylogeny and finally -->
+<!--             <a href="one_task?task_type=treedyn">TreeDyn</a> for tree drawing) to reconstruct a robust -->
+<!--             phylogenetic tree from a set of sequences. -->
+<!--         </p> -->
+<!--         <br/> -->
+<!--         <p> -->
+<!--             What users have to do is just to copy and paste their set of sequences in the -->
+<!--             FASTA format (or upload their FASTA file) and to click the Submit button. -->
+<!--             The system will do all the rest work, all the parameters are those of programs -->
+<!--             by default. However, users are able to decide to use or not the Gblocks program -->
+<!--             to eliminate poorly aligned positions and divergent regions, by checking the -->
+<!--             corresponding checkbox in the form page. At the end of the analysis, the server -->
+<!--             displays a publication quality image of the phylogenetic tree. -->
+<!--         </p> -->
+<!--         <table> -->
+<!--             <caption><b>Table I:</b> "One Click" programs settings</caption> -->
+<!--             <thead> -->
+<!--             <tr> -->
+<!--                 <th>Step</th> -->
+<!--                 <th>Program&nbsp;used</th> -->
+<!--                 <th>Settings</th> -->
+<!--                 <th>Notes</th> -->
+<!--             </tr> -->
+<!--             </thead> -->
+<!--             <tfoot> -->
+<!--             <tr> -->
+<!--                 <th colspan="4">&nbsp;</th> -->
+<!--             </tr> -->
+<!--             </tfoot> -->
+<!--             <tbody> -->
+<!--             <tr> -->
+<!--                 <td>Alignment</td> -->
+<!--                 <td>MUSCLE 3.7</td> -->
+<!--                 <td> -->
+<!--                     <li>Find diagonals option disabled</li> -->
+<!--                     <li>Maximum number of iterations: 16</li> -->
+<!--                     <li>No duration limitation</li> -->
+<!--                     <li>No more than 200 sequences</li> -->
+<!--                     </ul></td> -->
+<!--                 <td>Several studies and especially the BAliBASE benchmark showed that MUSCLE achieved the highest -->
+<!--                     ranking of any method at the time of publication.<br/></td> -->
+<!--             </tr> -->
+<!--             <tr> -->
+<!--                 <td>Alignment refinement</td> -->
+<!--                 <td>Gblocks 0.91b</td> -->
+<!--                 <td> -->
+<!--                     <li>Minimum number of sequences for a conserved position: half the number of sequences + 1</li> -->
+<!--                     <li>Minimum number of sequences for a flank position: 85% of the number of sequences</li> -->
+<!--                     <li>Maximum number of contiguous nonconserved positions: 8</li> -->
+<!--                     <li>Minimum length of a block: 10</li> -->
+<!--                     <li>Allowed gap positions: none</li> -->
+<!--                     </ul></td> -->
+<!--                 <td>This step is optional. Gblocks eliminates poorly aligned positions and divergent regions (removes -->
+<!--                     alignment noise).<br/><br/>Parameters are set to their default values in Gblocks. These are rather -->
+<!--                     stringent; e.g. all positions with gaps are removed. -->
+<!--                 </td> -->
+<!--             </tr> -->
+<!--             <tr> -->
+<!--                 <td>Phylogeny</td> -->
+<!--                 <td>PhyML 3.0</td> -->
+<!--                 <td> -->
+<!--                     <li>Substitution model: HKY85 for DNA/RNA, WAG for proteins</li> -->
+<!--                     <li>aLRT test: SH-like</li> -->
+<!--                     <li>Number of substitution rate categories: 4</li> -->
+<!--                     <li>Gamma parameter: estimated</li> -->
+<!--                     <li>Proportion of invariable sites: estimated</li> -->
+<!--                     <li>Transition/transversion ratio (DNA/RNA): 4</li> -->
+<!--                     </ul></td> -->
+<!--                 <td>PhyML was shown to be at least as accurate as other existing phylogeny programs using simulated -->
+<!--                     data, while being one order of magnitude faster.<br/><br/>HKY fits well in most cases as it -->
+<!--                     modelizes the main features of DNA substitutions: transition/transversion and unequal base -->
+<!--                     frequencies.<br/><br/>LG has been shown to be the best amino-acid replacement matrix to -->
+<!--                     date.<br/><br/>Gamma distributed rates are mandatory in most (if not all) analyses, and using -->
+<!--                     invariant sites generally improves (never degrade) the fit. -->
+<!--                 </td> -->
+<!--             </tr> -->
+<!--             <tr> -->
+<!--                 <td>Tree rendering</td> -->
+<!--                 <td>TreeDyn 198.3</td> -->
+<!--                 <td> -->
+<!--                     <li>Rectangular tree</li> -->
+<!--                     <li>Display branch support values (in red)</li> -->
+<!--                     <li>Font: Times, 10pt</li> -->
+<!--                     </ul></td> -->
+<!--                 <td>TreeDyn offers many tree customization options compared to other tree rendering tools and especially -->
+<!--                     for tree annotations.<br/><br/>The starting output tree is rooted using mid-point rooting method -->
+<!--                     (performed by Retree from PHYLIP package) but the user can reroot the tree using our dynamic tree -->
+<!--                     editing interface. -->
+<!--                 </td> -->
+<!--             </tr> -->
+<!--             </tbody> -->
+<!--         </table> -->
+<!--         <br/> -->
+<!--         <a href="#toc">&uarr; Table of Content</a> -->
+<!--         <hr class="separator"/> -->
+<!--         <br/> -->
+<!--         <a name="advanced"></a> -->
+<!--         <h3>2.2 Advanced mode</h3> -->
+<!--         <p> -->
+<!--             The pipeline is the same as the &quot;One Click&quot; mode but is flexible -->
+<!--             enough to allow users to select which steps to perform. In this manner, the -->
+<!--             input data can be a set of non-aligned sequences in FASTA format, an -->
+<!--             alignment of multiple sequences in FASTA, PHYLIP or Clustal format, or a -->
+<!--             tree in NEWICK format.<br/> -->
+<!--             Users are provided with options to set the parameters of the different -->
+<!--             programs of the pipeline. -->
+<!--         </p> -->
+<!--         <br/> -->
+<!--         <div> -->
+<!--             <img class="doc_image" src="http://phylogeny.lirmm.fr/images/capture_advanced_input.png" -->
+<!--                  alt="advanced screenshot"/> -->
+<!--         </div> -->
+<!--         <br/> -->
+<!--         <p> -->
+<!--             Furthermore, the system offers the possibility to control results of each -->
+<!--             step before launching the next program, so that users can modify and properly -->
+<!--             adjust parameters for a given task. This is possible in checking the -->
+<!--             &quot;Step by step&quot; option. -->
+<!--         </p> -->
+<!--         <p> -->
+<!--             In the case of an &quot;All at once&quot;, at the end of the pipeline -->
+<!--             processing, users have access to detailed reports for all the different -->
+<!--             analysis steps of the pipeline through different tabs of results. -->
+<!--         </p> -->
+<!--         <br/> -->
+<!--         <div> -->
+<!--             <img class="doc_image" src="http://phylogeny.lirmm.fr/images/capture_advanced_output1bis.png" -->
+<!--                  alt="advanced mode alignment output screenshot"/> -->
+<!--             <img class="doc_image" src="http://phylogeny.lirmm.fr/images/capture_advanced_output1.png" -->
+<!--                  alt="advanced mode tree output screenshot"/> -->
+<!--         </div> -->
+<!--         <br/> -->
+<!--         <p> -->
+<!--             At the end of the analysis, users have the possibility to look at a schematic -->
+<!--             representation of the workflow, with details about software options, so as -->
+<!--             the references of the different selected tools. This summary of the run is -->
+<!--             accessible through the &quot;Overview&quot; tab since the analysis is -->
+<!--             finished. This fonctionality is also observable in the &quot;One Click -->
+<!--             mode&quot;. -->
+<!--         </p> -->
+<!--         <br/> -->
+<!--         <div> -->
+<!--             <img class="doc_image" src="http://phylogeny.lirmm.fr/images/capture_advanced_schema.png" -->
+<!--                  alt="advanced mode workflow overview screenshot"/> -->
+<!--         </div> -->
+<!--         <br/> -->
+<!--         <p> -->
+<!--             In the case of an &quot;Step by step&quot; analysis, users have the -->
+<!--             possibility to control and edit the results of each step before launching the -->
+<!--             next program. -->
+<!--         </p> -->
+<!--         <br/> -->
+<!--         <div> -->
+<!--             <img class="doc_image" src="http://phylogeny.lirmm.fr/images/capture_advanced_output3.png" -->
+<!--                  alt="advanced mode sequence explorer output screenshot"/> -->
+<!--         </div> -->
+<!--         <a href="#toc">&uarr; Table of Content</a> -->
+<!--         <hr class="separator"/> -->
+<!--         <br/> -->
+<!--         <a name="alacarte"></a> -->
+<!--         <h3>2.3 &quot;A la carte&quot; mode</h3> -->
+<!--         <p> -->
+<!--             The server offers the possibility to run other alignment and phylogeny -->
+<!--             programs than those preselected in the &quot;One Click&quot; and -->
+<!--             &quot;Advanced&quot; modes: -->
+<!--         </p> -->
+<!--         <ul> -->
+<!--             <li>a multiple sequence alignment using <a href="one_task?task_type=muscle">MUSCLE</a>, -->
+<!--                 <a href="one_task?task_type=tcoffee">T-Coffee</a>, -->
+<!--                 <a href="one_task?task_type=expresso">3DCoffee</a> or -->
+<!--                 <a href="one_task?task_type=clustalw">ClustalW</a> according to user preference -->
+<!--             </li> -->
+<!--             <li>a phylogenetic reconstruction using <a href="one_task?task_type=phyml">PhyML</a>, -->
+<!--                 TNT, -->
+<!--                 <a href="one_task?task_type=bionj">BioNJ</a> or -->
+<!--                 <a href="one_task?task_type=neighbor">Neighbor</a> and -->
+<!--             </li> -->
+<!--             <li>the generation of a publication quality image of the resulting -->
+<!--                 phylogenetic tree using -->
+<!--                 <a href="one_task?task_type=treedyn">TreeDyn</a>, -->
+<!--                 <a href="one_task?task_type=drawgram">Drawgram</a> -->
+<!--                 or <a href="one_task?task_type=drawtree">Drawtree</a></li> -->
+<!--         </ul> -->
+<!--         <br/> -->
+<!--         <div> -->
+<!--             <img class="doc_image" src="http://phylogeny.lirmm.fr/images/capture_alacarte.png" -->
+<!--                  alt="&quot;A la carte&quot; screenshot"/> -->
+<!--         </div> -->
+<!--         <a href="#toc">&uarr; Table of Content</a> -->
+<!--         <hr class="separator"/> -->
+<!--         <br/> -->
+<!--         <a name="explore"></a> -->
+<!--         <h2>3. Blast: Explore your sequence neighbors</h2> -->
+<!--         <p> -->
+<!--             A fast BLAST search on -->
+<!--             <a href="http://www.igs.cnrs-mrs.fr/Giga2/~database/remoteblast">Gigablaster</a> -->
+<!--             allows to quickly explore your sequence neighbors. Paste your single sequence, -->
+<!--             run blast and explore its homologous sequences. The system facilitates the -->
+<!--             selection of homologous sequences, based on a 'quick-and-dirty' phylogenetic -->
+<!--             representation using BLAST results and an estimator of the final multiple -->
+<!--             alignment length. -->
+<!--         </p> -->
+<!--         <br/> -->
+<!--         <div> -->
+<!--             <img class="doc_image" src="http://phylogeny.lirmm.fr/images/capture_blast_output.png" -->
+<!--                  alt="Blast output screenshot"/> -->
+<!--         </div> -->
+<!--         <a href="#toc">&uarr; Table of Content</a> -->
+<!--         <hr class="separator"/> -->
+<!--         <br/> -->
+<!--         <a name="prog_use"></a> -->
+<!--         <h2>4. Programs use and technical details</h2> -->
+<!--         <table> -->
+<!--             <caption>Note: With fast programs Phylogeny.fr displays the results within a few minutes or less. Slow -->
+<!--                 programs require about one hour or so, but their results are still displayed on-line, while the results -->
+<!--                 of very slow program are sent by email.</span></caption> -->
+<!--             <thead> -->
+<!--             <tr> -->
+<!--                 <th>Program</th> -->
+<!--                 <th>Function</th> -->
+<!--                 <th>Input</th> -->
+<!--                 <th>Output</th> -->
+<!--                 <th>Speed</th> -->
+<!--                 <th>Current Limitations</th> -->
+<!--                 <th>Use</th> -->
+<!--             </tr> -->
+<!--             </thead> -->
+<!--             <tfoot> -->
+<!--             <tr> -->
+<!--                 <th colspan="7">&nbsp;</th> -->
+<!--             </tr> -->
+<!--             </tfoot> -->
+<!--             <tbody> -->
+<!--             <tr> -->
+<!--                 <td>Blastall 2.2.17</td> -->
+<!--                 <td>Sequence searching</td> -->
+<!--                 <td>Raw, FASTA</td> -->
+<!--                 <td>FASTA</td> -->
+<!--                 <td>Fast</td> -->
+<!--                 <td>None</td> -->
+<!--                 <td>Advanced and "A la Carte"</td> -->
+<!--             </tr> -->
+<!--             <tr> -->
+<!--                 <td>MUSCLE 3.7</td> -->
+<!--                 <td>Multiple alignment</td> -->
+<!--                 <td>FASTA, EMBL/Uniprot, GenBank, PAUP*/Nexus</td> -->
+<!--                 <td>FASTA, Clustal, PHYLIP</td> -->
+<!--                 <td>Fast</td> -->
+<!--                 <td>&lt;200 nucleic sequences, &lt;6000 sites<br/>&lt;200 protein sequences, &lt;2000 sites</td> -->
+<!--                 <td>All modes<br/>Large dataset</td> -->
+<!--             </tr> -->
+<!--             <tr> -->
+<!--                 <td>T-Coffee 5.56</td> -->
+<!--                 <td>Multiple alignment</td> -->
+<!--                 <td>FASTA, EMBL/Uniprot, GenBank, PAUP*/Nexus</td> -->
+<!--                 <td>FASTA, Clustal, PHYLIP</td> -->
+<!--                 <td>Very slow</td> -->
+<!--                 <td>&lt;50 nucleic sequences, &lt;2000 sites<br/>&lt;50 protein sequences, &lt;2000 sites</td> -->
+<!--                 <td>"A la Carte"<br/>Small dataset</td> -->
+<!--             </tr> -->
+<!--             <tr> -->
+<!--                 <td>3DCoffee 5.56</td> -->
+<!--                 <td>Multiple alignment using structural information</td> -->
+<!--                 <td>FASTA, EMBL/Uniprot, GenBank, PAUP*/Nexus</td> -->
+<!--                 <td>FASTA, Clustal, PHYLIP</td> -->
+<!--                 <td>Very slow</td> -->
+<!--                 <td>&lt;50 nucleic sequences, &lt;2000 sites<br/>&lt;50 protein sequences, &lt;2000 sites</td> -->
+<!--                 <td>"A la Carte"<br/>Small dataset</td> -->
+<!--             </tr> -->
+<!--             <tr> -->
+<!--                 <td>ClustalW 2.0.3</td> -->
+<!--                 <td>Multiple alignment</td> -->
+<!--                 <td>FASTA, EMBL/Uniprot, GenBank, PAUP*/Nexus</td> -->
+<!--                 <td>FASTA, Clustal, PHYLIP</td> -->
+<!--                 <td>Fast</td> -->
+<!--                 <td>&lt;200 nucleic sequences, &lt;4000 sites<br/>&lt;200 protein sequences, &lt;2000 sites</td> -->
+<!--                 <td>"A la Carte"<br/>Large dataset</td> -->
+<!--             </tr> -->
+<!--             <tr> -->
+<!--                 <td>Gblocks 0.91b</td> -->
+<!--                 <td>Alignment refinement</td> -->
+<!--                 <td>FASTA, Clustal, PHYLIP, EMBL, PAUP*/Nexus</td> -->
+<!--                 <td>FASTA, Clustal, PHYLIP</td> -->
+<!--                 <td>Fast</td> -->
+<!--                 <td>None</td> -->
+<!--                 <td>All modes<br/>Large dataset</td> -->
+<!--             </tr> -->
+<!--             <tr> -->
+<!--                 <td>PhyML 3.0</td> -->
+<!--                 <td>Phylogeny using maximum likelihood</td> -->
+<!--                 <td>FASTA, Clustal, PHYLIP, EMBL, PAUP*/Nexus</td> -->
+<!--                 <td>Newick</td> -->
+<!--                 <td>Fast to Slow</td> -->
+<!--                 <td>(sequence size) &times; (number of taxa)<sup>2</sup> &lt;100000000</td> -->
+<!--                 <td>All modes<br/>Medium to large dataset</td> -->
+<!--             </tr> -->
+<!--             <tr> -->
+<!--                 <td>TNT 1.1</td> -->
+<!--                 <td>Phylogeny using parsimony</td> -->
+<!--                 <td>FASTA, Clustal, PHYLIP, EMBL, PAUP*/Nexus</td> -->
+<!--                 <td>Newick</td> -->
+<!--                 <td>Fast to Slow</td> -->
+<!--                 <td>&lt;200 sequences, &lt;6000 sites</td> -->
+<!--                 <td>"A la Carte"<br/>Medium to large dataset</td> -->
+<!--             </tr> -->
+<!--             <tr> -->
+<!--                 <td>FastDist/Protdist +<br/>BioNJ / Neighbor (PHYLYP) 3.67</td> -->
+<!--                 <td>Phylogeny using distances</td> -->
+<!--                 <td>FASTA, Clustal, PHYLIP, EMBL, PAUP*/Nexus</td> -->
+<!--                 <td>Newick</td> -->
+<!--                 <td>Fast</td> -->
+<!--                 <td>&lt;5000 taxa for BioNJ<br/>&lt;500 taxa for Neighbor</td> -->
+<!--                 <td>"A la Carte"<br/>Large dataset</td> -->
+<!--             </tr> -->
+<!--             <tr> -->
+<!--                 <td>Bootstrap with PhyML and TNT</td> -->
+<!--                 <td>Estimations of clade supports</td> -->
+<!--                 <td>FASTA, Clustal, PHYLIP, EMBL, PAUP*/Nexus</td> -->
+<!--                 <td>Newick</td> -->
+<!--                 <td>Very slow</td> -->
+<!--                 <td>&lt;500 replicates with PhyML<br/>&lt;1000 replicates with TNT</td> -->
+<!--                 <td>Advanced and "A la Carte"<br/>Small to medium datasets</td> -->
+<!--             </tr> -->
+<!--             <tr> -->
+<!--                 <td>Bootstrap with distance methods</td> -->
+<!--                 <td>Estimations of clade supports</td> -->
+<!--                 <td>FASTA, Clustal, PHYLIP, EMBL, PAUP*/Nexus</td> -->
+<!--                 <td>Newick</td> -->
+<!--                 <td>Slow</td> -->
+<!--                 <td>&lt;1000 replicates with FastDist<br/>&lt;1000 replicates with Protdist</td> -->
+<!--                 <td>"A la Carte"<br/>Medium to large datasets</td> -->
+<!--             </tr> -->
+<!--             <tr> -->
+<!--                 <td>TreeDyn 198.3</td> -->
+<!--                 <td>Tree rendering</td> -->
+<!--                 <td>Newick, New Hampshire Extanded, PAUP*/Nexus</td> -->
+<!--                 <td>Newick, PNG, PS, PDF, SVG, TGF</td> -->
+<!--                 <td>Fast</td> -->
+<!--                 <td>None</td> -->
+<!--                 <td>All modes</td> -->
+<!--             </tr> -->
+<!--             <tr> -->
+<!--                 <td>Drawgram 3.67</td> -->
+<!--                 <td>Various tree shapes rendering</td> -->
+<!--                 <td>Newick, New Hampshire Extanded, PAUP*/Nexus</td> -->
+<!--                 <td>PNG, PS, PDF</td> -->
+<!--                 <td>Fast</td> -->
+<!--                 <td>None</td> -->
+<!--                 <td>"A la Carte"</td> -->
+<!--             </tr> -->
+<!--             <tr> -->
+<!--                 <td>Drawtree 3.67</td> -->
+<!--                 <td>Unrooted tree rendering</td> -->
+<!--                 <td>Newick, New Hampshire Extanded, PAUP*/Nexus</td> -->
+<!--                 <td>PNG, PS, PDF</td> -->
+<!--                 <td>Fast</td> -->
+<!--                 <td>None</td> -->
+<!--                 <td>"A la Carte"</td> -->
+<!--             </tr> -->
+<!--             </tbody> -->
+<!--         </table> -->
+<!--         <br/> -->
+<!--         <a href="#toc">&uarr; Table of Content</a> -->
+<!--         <hr class="separator"/> -->
+<!--         <br/> -->
+<!--         <a name="formats"></a> -->
+<!--         <h3>5. Formats</h3> -->
+<!--         <a name="fasta"></a><h4>5.1 FASTA format</h4> -->
+<!--         <p> -->
+<!--             This format can be used for single sequence, multiple sequences or alignment. -->
+<!--             Each sequence begins with a single header line providing the sequence name -->
+<!--             (optionnaly description), followed by lines of sequence data. The description -->
+<!--             line must start with a greater-than (&quot;&gt;&quot;) symbol in the first -->
+<!--             column. -->
+<!--         </p> -->
+<!--         <div class="code"> -->
+<!-- <pre>&gt;Homo sapiens -->
+<!-- MEVEAVCGGAGEVEAQDSDPAPAFSKAPGSAGHYELPWVEKYRPVKLNEIVGNEDTVSRLEVFAREGNVP -->
+<!-- NIIIAGPPGTGKTTSILCLARALLGPALKDAMLELNASNDRGIDVVRNKIKMFAQQKVTLPKGRHKIIIL -->
+<!-- DEADSMTDGAQQALRRTMEIYSKTTRFALACNASDKIIEPIQSRCAVLRYTKLTDAQILTRLMNVIEKER -->
+<!-- VPYTDDGLEAIIFTAQGDMRQALNNLQSTFSGFGFINSENVFKVCDEPHPLLVKEMIQHCVNANIDEAYK -->
+<!-- ILAHLWHLGYSPEDIIGNIFRVCKTFQMAEYLKLEFIKEIGYTHMKIAEGVNSLLQMAGLLARLCQKTMA -->
+<!-- PVAS -->
+<!-- &gt;Arabidopsis thaliana -->
+<!-- MASSSSTSTGDGYNEPWVEKYRPSKVVDIVGNEDAVSRLQVIARDGNMPNLILSGPPGTGKTTSILALAH -->
+<!-- ELLGTNYKEAVLELNASDDRGIDVVRNKIKMFAQKKVTLPPGRHKVVILDEADSMTSGAQQALRRTIEIY -->
+<!-- SNSTRFALACNTSAKIIEPIQSRCALVRFSRLSDQQILGRLLVVVAAEKVPYVPEGLEAIIFTADGDMRQ -->
+<!-- ALNNLQATFSGFSFVNQENVFKVCDQPHPLHVKNIVRNVLESKFDIACDGLKQLYDLGYSPTDIITTLFR -->
+<!-- IIKNYDMAEYLKLEFMKETGFAHMRICDGVGSYLQLCGLLAKLSIVRETAKAP -->
+<!-- </pre> -->
+<!--         </div> -->
+<!--         <a href="#toc">&uarr; Table of Content</a> -->
+<!--         <hr class="separator"/> -->
+<!--         <br/> -->
+<!--         <a name="genbanks"></a><h4>5.2 GenBank format</h4> -->
+<!--         <p> -->
+<!--             This format can be used for single sequence or multiple sequences.<br/> -->
+<!--             Each sequence entry begins with a line containing the word &quot;LOCUS&quot;, -->
+<!--             indicating the short name for this sequence, followed by several annotation -->
+<!--             lines. The start of each sequence is marked by a line containing the word -->
+<!--             &quot;ORIGIN&quot; and the end of each sequence is marked by two slashes -->
+<!--             (&quot;//&quot;). -->
+<!--         </p> -->
+<!--         <div class="code"> -->
+<!-- <pre>LOCUS       CAA36839                 152 aa            linear   PRI 14-NOV-2006 -->
+<!-- DEFINITION  calmodulin [Homo sapiens]. -->
+<!-- ACCESSION   CAA36839 -->
+<!-- VERSION     CAA36839.1  GI:825635 -->
+<!-- DBSOURCE    embl accession X52606.1 -->
+<!--             embl accession X52607.1 -->
+<!--             embl accession X52608.1 -->
+<!-- ORIGIN       -->
+<!--         1 madqlteeqi aefkeafslf dkdgdgtitt kelgtvmrsl gqnpteaelq dminevdadd -->
+<!--        61 lpgngtidfp efltmmarkm kdtdseeeir eafrvfdkdg ngyisaaelr hvmtnlgekl -->
+<!--       121 tdeevdemir eadidgdgqv nyeefvqmmt ak -->
+<!-- // -->
+
+<!-- LOCUS       CAA59418                 149 aa            linear   PLN 18-APR-2005 -->
+<!-- DEFINITION  calmodulin [Macrocystis pyrifera]. -->
+<!-- ACCESSION   CAA59418 -->
+<!-- VERSION     CAA59418.1  GI:728609 -->
+<!-- DBSOURCE    embl accession X85091.1 -->
+<!-- ORIGIN       -->
+<!--         1 madqlteeqi aefkeafslf dkdgdgtitt kelgtvmrsl gqnpteaelq dminevdadg -->
+<!--        61 ngtidfpefl tmmarkmkdt dseeeiieaf kvfdkdgngf isaaelrhim tnlgekltde -->
+<!--       121 evdemiread idgdgqinye efvkmmmak -->
+<!-- // -->
+<!-- </pre> -->
+<!--         </div> -->
+<!--         <a href="#toc">&uarr; Table of Content</a> -->
+<!--         <hr class="separator"/> -->
+<!--         <br/> -->
+<!--         <a name="embl"></a><h4>5.3 EMBL format</h4> -->
+<!--         <p> -->
+<!--             This format can be used for single sequence or multiple sequences.<br/> -->
+<!--             Each sequence starts with an identifier line containing the word -->
+<!--             &quot;ID &quot;, followed by several annotation lines. The start of each -->
+<!--             sequence is marked by a line starting with the identification &quot;SQ&quot;, -->
+<!--             and the end of each sequence is marked by two slashes (&quot;//&quot;). -->
+<!--         </p> -->
+<!--         <div class="code"> -->
+<!-- <pre>ID   Homo sapiens; AA; UNK; 354 AA. -->
+<!-- XX -->
+<!-- AC   unknown; -->
+<!-- XX -->
+<!-- DE    -->
+<!-- XX -->
+<!-- FH   Key             Location/Qualifiers -->
+<!-- FH -->
+<!-- XX -->
+<!-- SQ   Sequence 354 BP; 35 A; 8 C; 23 G; 18 T; 270 other; -->
+<!--      meveavcgga geveaqdsdp apafskapgs aghyelpwve kyrpvklnei vgnedtvsrl        60 -->
+<!--      evfaregnvp niiiagppgt gkttsilcla rallgpalkd amlelnasnd rgidvvrnki       120 -->
+<!--      kmfaqqkvtl pkgrhkiiil deadsmtdga qqalrrtmei yskttrfala cnasdkiiep       180 -->
+<!--      iqsrcavlry tkltdaqilt rlmnvieker vpytddglea iiftaqgdmr qalnnlqstf       240 -->
+<!--      sgfgfinsen vfkvcdephp llvkemiqhc vnanideayk ilahlwhlgy spediignif       300 -->
+<!--      rvcktfqmae ylklefikei gythmkiaeg vnsllqmagl larlcqktma pvas             354 -->
+<!-- // -->
+<!-- ID   Arabidopsis thaliana; AA; UNK; 333 AA. -->
+<!-- XX -->
+<!-- AC   unknown; -->
+<!-- XX -->
+<!-- DE    -->
+<!-- XX -->
+<!-- FH   Key             Location/Qualifiers -->
+<!-- FH -->
+<!-- XX -->
+<!-- SQ   Sequence 333 BP; 27 A; 6 C; 21 G; 18 T; 261 other; -->
+<!--      masssststg dgynepwvek yrpskvvdiv gnedavsrlq viardgnmpn lilsgppgtg        60 -->
+<!--      kttsilalah ellgtnykea vlelnasddr gidvvrnkik mfaqkkvtlp pgrhkvvild       120 -->
+<!--      eadsmtsgaq qalrrtieiy snstrfalac ntsakiiepi qsrcalvrfs rlsdqqilgr       180 -->
+<!--      llvvvaaekv pyvpegleai iftadgdmrq alnnlqatfs gfsfvnqenv fkvcdqphpl       240 -->
+<!--      hvknivrnvl eskfdiacdg lkqlydlgys ptdiittlfr iiknydmaey lklefmketg       300 -->
+<!--      fahmricdgv gsylqlcgll aklsivreta kap                                    333 -->
+<!-- // -->
+<!-- </pre> -->
+<!--         </div> -->
+<!--         <a href="#toc">&uarr; Table of Content</a> -->
+<!--         <hr class="separator"/> -->
+<!--         <br/> -->
+<!--         <a name="phylip"></a><h4>5.4 PHYLIP format</h4> -->
+<!--         <p> -->
+<!--             This is an alignment format.<br/> -->
+<!--             The first line contains the number of sequences and their length (in -->
+<!--             characters) separated by blanks.<br/> -->
+<!--             The next line contains the sequence name, followed by the sequence in blocks -->
+<!--             of 10 characters. -->
+<!--         </p> -->
+<!--         <div class="code"> -->
+<!-- <pre> 7 100 -->
+<!-- T25          ACTATTGAAA GAAGGGGGTT CCTAGATATC TGCGAGTATA ATCGTGCTTG -->
+<!-- T16          ATTAATCAAA GTAGGCGGGG CGGCCGTAGA TGCTAAGAAA ATCGAGTTCG -->
+<!-- T27          ATTAATCAAA GTAGGCAGGG CGGCCGTAGA TGCTAAGAAA ATCGAGTTCG -->
+<!-- T1           GTTAACCGAA GTAGGCGGAA CGGACGTATA TGCGATTAAA ATCGAGTTCG -->
+<!-- T19          GTTAACCGAA GTAGGCGGAA CGGACGTATA TGCGATTAAA ATCGAGTTCG -->
+<!-- T35          ATTAATCAAA GCAGGCGGTC CGGACGTATA TCCTAATAAA ATCGAGTTCG -->
+<!-- T56          ATTAATCAAA GTAGGCGGTC CGGCCGAATA TGCGAATAAA ATCGAGTTCG -->
+
+<!--              GTCTCCTATC GATGCGCATC GGACCGAGAG GCTCTCCAGC CATGTGGACG -->
+<!--              GTCACCTCCC ATTGGGCAGC AGATCGCTAG GCTCTTTAGC CAGGTGGACG -->
+<!--              GTCACCTCCC ATTGCGCAGC AGATCGCTAG GCTCTTTAGC CAGGCGGACG -->
+<!--              GACACCTTCC AGGGCGCAGC AGATCGCGAG GCTTTCTAAC CAGGTGGACG -->
+<!--              GACACCTTCC AGGGCGCAGC AGATCGCGAG GCTTTCTAGC CAGGTGGACG -->
+<!--              GTCACCTCCC AGGGCGCAGA AGATCGCGAG GCTCTCCAGC CAGGTGGACG -->
+<!--              GTAACCTCCC AGTCCGCAGA AGATCGCGAG GCTCTCCAGC CAGGGGGACG -->
+<!-- </pre> -->
+<!--         </div> -->
+<!--         <a href="#toc">&uarr; Table of Content</a> -->
+<!--         <hr class="separator"/> -->
+<!--         <br/> -->
+<!--         <a name="clustal"></a><h4>5.5 Clustal format</h4> -->
+<!--         <p> -->
+<!--             This is an alignment format.<br/> -->
+<!--             The word &quot;CLUSTAL&quot; is on the first line of the file. The alignment -->
+<!--             is written in blocks of a fixed length. Every block starts with the sequence -->
+<!--             names (maximum of 10 characters), followed by at least one space character. -->
+<!--             The sequence is then displayed in upper or lower cases, &quot;-&quot; denotes -->
+<!--             gaps. -->
+<!--         </p> -->
+<!--         <p> -->
+<!--             A count of the total number of residues may be shown at the end of the line. -->
+<!--         </p> -->
+<!--         <p> -->
+<!--             Below each block of residues, an additional line shows the degree of -->
+<!--             conservation for each site. -->
+<!--         </p> -->
+<!--         <div class="code"> -->
+<!-- <pre>CLUSTAL W (1.83) multiple sequence alignment -->
 
 
-aboA            -NLFV-ALYDFVASGDNTLSITKGEKLRV-------LGYNHNG-------EWCEA--QTK 42
-ycsB            KGVIY-ALWDYEPQNDDELPMKEGDCMTI-------IHREDEDEI-----EWWWA--RLN 45
-pht             -GYQYRALYDYKKEREEDIDLHLGDILTVNKGSLVALGFSDGQEARPEEIGWLNGYNETT 59
-vie             ---------DRVRKKSG--AAWQGQIVGW---------YCTNLTP----EGYAVESEAHP 36
-ihvA            ------NFRVYYRDSRD--PVWKGPAKLL---------WKGEG-------AVVIQ---DN 33
-                             .         *                                    
+<!-- aboA            -NLFV-ALYDFVASGDNTLSITKGEKLRV-------LGYNHNG-------EWCEA--QTK 42 -->
+<!-- ycsB            KGVIY-ALWDYEPQNDDELPMKEGDCMTI-------IHREDEDEI-----EWWWA--RLN 45 -->
+<!-- pht             -GYQYRALYDYKKEREEDIDLHLGDILTVNKGSLVALGFSDGQEARPEEIGWLNGYNETT 59 -->
+<!-- vie             ---------DRVRKKSG--AAWQGQIVGW---------YCTNLTP----EGYAVESEAHP 36 -->
+<!-- ihvA            ------NFRVYYRDSRD--PVWKGPAKLL---------WKGEG-------AVVIQ---DN 33 -->
+<!--                              .         *                                     -->
 
-aboA            NGQGWVPSNYITPVN------ 57
-ycsB            DKEGYVPRNLLGLYP------ 60
-pht             GERGDFPGTYVEYIGRKKISP 80
-vie             GSVQIYPVAALERIN------ 51
-ihvA            SDIKVVPRRKAKIIRD----- 49
-                .     *              
-</pre>
-        </div>
-        <a href="#toc">&uarr; Table of Content</a>
-        <hr class="separator"/>
-        <br/>
-        <a name="nexus"></a><h4>5.6 Nexus</h4>
-        <p>
-            Nexus format can be used for multiple sequences, alignments, distance
-            matrices and trees. It starts with &quot;#NEXUS&quot;. It has been
-            detailed in <a href="http://www.jstor.org/pss/2413497">Maddison &amp; al.,
-            <i>NEXUS: An Extensible File Format for Systematic Information</i></a>.
-        </p>
-        <div class="code">
-<pre>#NEXUS
+<!-- aboA            NGQGWVPSNYITPVN------ 57 -->
+<!-- ycsB            DKEGYVPRNLLGLYP------ 60 -->
+<!-- pht             GERGDFPGTYVEYIGRKKISP 80 -->
+<!-- vie             GSVQIYPVAALERIN------ 51 -->
+<!-- ihvA            SDIKVVPRRKAKIIRD----- 49 -->
+<!--                 .     *               -->
+<!-- </pre> -->
+<!--         </div> -->
+<!--         <a href="#toc">&uarr; Table of Content</a> -->
+<!--         <hr class="separator"/> -->
+<!--         <br/> -->
+<!--         <a name="nexus"></a><h4>5.6 Nexus</h4> -->
+<!--         <p> -->
+<!--             Nexus format can be used for multiple sequences, alignments, distance -->
+<!--             matrices and trees. It starts with &quot;#NEXUS&quot;. It has been -->
+<!--             detailed in <a href="http://www.jstor.org/pss/2413497">Maddison &amp; al., -->
+<!--             <i>NEXUS: An Extensible File Format for Systematic Information</i></a>. -->
+<!--         </p> -->
+<!--         <div class="code"> -->
+<!-- <pre>#NEXUS -->
 
-BEGIN TAXA;
-    DIMENSIONS ntax=5;
-    TAXLABELS  1aboA 2ycsB 3pht 4vie 5ihvA;
-END;
+<!-- BEGIN TAXA; -->
+<!--     DIMENSIONS ntax=5; -->
+<!--     TAXLABELS  1aboA 2ycsB 3pht 4vie 5ihvA; -->
+<!-- END; -->
 
-BEGIN UNALIGNED;
-    DIMENSIONS ntax=5;
-    FORMAT  datatype=Protein gap=-;
-    MATRIX
-    1aboA   NLFVALYDFVASGDNTLSITKGEKLRVLGYNHNGEWCEAQTKNGQGWVPSNYITPVN
-    2ycsB   KGVIYALWDYEPQNDDELPMKEGDCMTIIHREDEDEIEWWWARLNDKEGYVPRNLLGLYP
-    3pht    GYQYRALYDYKKEREEDIDLHLGDILTVNKGSLVALGFSDGQEARPEEIGWLNGYNETTGERGDFPGTYVEYIGRKKISP
-    4vie    DRVRKKSGAAWQGQIVGWYCTNLTPEGYAVESEAHPGSVQIYPVAALERIN
-    5ihvA   NFRVYYRDSRDPVWKGPAKLLWKGEGAVVIQDNSDIKVVPRRKAKIIRD
-    ;
-END;
-</pre>
-        </div>
-        <a href="#toc">&uarr; Table of Content</a>
-        <hr class="separator"/>
-        <br/>
-        <a name="moreinfo"></a>
-        <h2>6. More information about external softwares</h2>
-        <dl class="indent">
-            <dt>Multiple Alignment:</dt>
-            <dd>
-                <ul>
-                    <li><a href="http://www.drive5.com/muscle/muscle.html" target="_blank">MUSCLE</a></li>
-                    <li><a href="http://www.tcoffee.org/Documentation/t_coffee/t_coffee_technical.htm" target="_blank">T-Coffee
-                        / 3DCoffee</a></li>
-                    <li><a href="http://bips.u-strasbg.fr/fr/Documentation/ClustalW/" target="_blank">ClustalW</a></li>
-                </ul>
-            </dd>
-            <dt>Phylogeny:</dt>
-            <dd>
-                <ul>
-                    <li><a href="http://www.atgc-montpellier.fr/bionj/" target="_blank">BioNJ</a></li>
-                    <li><a href="http://www.atgc-montpellier.fr/phyml/usersguide.php?type=command"
-                           target="_blank">PhyML</a></li>
-                </ul>
-            </dd>
-            <dt>Tree Viewers:</dt>
-            <dd>
-                <ul>
-                    <li><a href="http://www.treedyn.org/overview/treedynoverview.pdf" target="_blank">TreeDyn</a></li>
-                    <li><a href="http://evolution.genetics.washington.edu/phylip/doc/drawgram.html" target="_blank">Drawgram</a>
-                    </li>
-                    <li><a href="http://evolution.genetics.washington.edu/phylip/doc/drawtree.html" target="_blank">Drawtree</a>
-                    </li>
-                </ul>
-            </dd>
-            <dt>Alignment Refinement:</dt>
-            <dd>
-                <ul>
-                    <li><a href="http://molevol.cmima.csic.es/castresana/Gblocks/Gblocks_documentation.html"
-                           target="_blank">Gblocks</a></li>
-                </ul>
-            </dd>
-        </dl>
-        <br/>
-        <a href="#toc">&uarr; Table of Content</a>
-        <hr class="separator"/>
-        <br/>
-    </div>
+<!-- BEGIN UNALIGNED; -->
+<!--     DIMENSIONS ntax=5; -->
+<!--     FORMAT  datatype=Protein gap=-; -->
+<!--     MATRIX -->
+<!--     1aboA   NLFVALYDFVASGDNTLSITKGEKLRVLGYNHNGEWCEAQTKNGQGWVPSNYITPVN -->
+<!--     2ycsB   KGVIYALWDYEPQNDDELPMKEGDCMTIIHREDEDEIEWWWARLNDKEGYVPRNLLGLYP -->
+<!--     3pht    GYQYRALYDYKKEREEDIDLHLGDILTVNKGSLVALGFSDGQEARPEEIGWLNGYNETTGERGDFPGTYVEYIGRKKISP -->
+<!--     4vie    DRVRKKSGAAWQGQIVGWYCTNLTPEGYAVESEAHPGSVQIYPVAALERIN -->
+<!--     5ihvA   NFRVYYRDSRDPVWKGPAKLLWKGEGAVVIQDNSDIKVVPRRKAKIIRD -->
+<!--     ; -->
+<!-- END; -->
+<!-- </pre> -->
+<!--         </div> -->
+<!--         <a href="#toc">&uarr; Table of Content</a> -->
+<!--         <hr class="separator"/> -->
+<!--         <br/> -->
+<!--         <a name="moreinfo"></a> -->
+<!--         <h2>6. More information about external softwares</h2> -->
+<!--         <dl class="indent"> -->
+<!--             <dt>Multiple Alignment:</dt> -->
+<!--             <dd> -->
+<!--                 <ul> -->
+<!--                     <li><a href="http://www.drive5.com/muscle/muscle.html" target="_blank">MUSCLE</a></li> -->
+<!--                     <li><a href="http://www.tcoffee.org/Documentation/t_coffee/t_coffee_technical.htm" target="_blank">T-Coffee -->
+<!--                         / 3DCoffee</a></li> -->
+<!--                     <li><a href="http://bips.u-strasbg.fr/fr/Documentation/ClustalW/" target="_blank">ClustalW</a></li> -->
+<!--                 </ul> -->
+<!--             </dd> -->
+<!--             <dt>Phylogeny:</dt> -->
+<!--             <dd> -->
+<!--                 <ul> -->
+<!--                     <li><a href="http://www.atgc-montpellier.fr/bionj/" target="_blank">BioNJ</a></li> -->
+<!--                     <li><a href="http://www.atgc-montpellier.fr/phyml/usersguide.php?type=command" -->
+<!--                            target="_blank">PhyML</a></li> -->
+<!--                 </ul> -->
+<!--             </dd> -->
+<!--             <dt>Tree Viewers:</dt> -->
+<!--             <dd> -->
+<!--                 <ul> -->
+<!--                     <li><a href="http://www.treedyn.org/overview/treedynoverview.pdf" target="_blank">TreeDyn</a></li> -->
+<!--                     <li><a href="http://evolution.genetics.washington.edu/phylip/doc/drawgram.html" target="_blank">Drawgram</a> -->
+<!--                     </li> -->
+<!--                     <li><a href="http://evolution.genetics.washington.edu/phylip/doc/drawtree.html" target="_blank">Drawtree</a> -->
+<!--                     </li> -->
+<!--                 </ul> -->
+<!--             </dd> -->
+<!--             <dt>Alignment Refinement:</dt> -->
+<!--             <dd> -->
+<!--                 <ul> -->
+<!--                     <li><a href="http://molevol.cmima.csic.es/castresana/Gblocks/Gblocks_documentation.html" -->
+<!--                            target="_blank">Gblocks</a></li> -->
+<!--                 </ul> -->
+<!--             </dd> -->
+<!--         </dl> -->
+<!--         <br/> -->
+<!--         <a href="#toc">&uarr; Table of Content</a> -->
+<!--         <hr class="separator"/> -->
+<!--         <br/> -->
+<!--     </div> -->
 {% endblock %}
