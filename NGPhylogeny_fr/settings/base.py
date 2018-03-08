@@ -153,3 +153,10 @@ CACHES = {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
     }
 }
+
+MARKDOWN_DEUX_STYLES = { 'default': {
+    "extras": {
+        "code-friendly": None,
+    },
+    "safe_mode": False, # << here's the change
+}}
