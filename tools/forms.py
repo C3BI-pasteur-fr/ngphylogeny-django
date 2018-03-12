@@ -113,7 +113,7 @@ class ToolForm(forms.Form):
                         case_inputs = case.get('inputs')
                         if case_inputs:
                             case_value = case.get('value')
-                            if case_value:
+                            if case_value is not None:
                                 data_test = conditional_field
                                 if self.prefix:
                                     data_test = self.prefix + '-' + data_test
