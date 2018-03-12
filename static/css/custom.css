@@ -223,3 +223,9 @@ a.btn.btn-toolbar {
     height: 120px;
     animation: spin 2s linear infinite;
 }
+
+.doc-center-block{
+    margin-right: auto;
+    margin-left: auto;
+    width: 800px;
+}
