@@ -12,6 +12,9 @@ from galaxy.decorator import connection_galaxy
 from workflows.models import Workflow, WorkflowStepInformation
 from workspace.views import create_history
 from .viewmixing import WorkflowDetailMixin
+from Bio import SeqIO
+import StringIO
+from django.shortcuts import render
 
 
 @method_decorator(connection_galaxy, name="dispatch")
@@ -25,7 +28,8 @@ class WorkflowListView(WorkflowDetailMixin, ListView):
 
     @cached_property
     def workflow_list(self):
-        workflow_queryset = Workflow.objects.filter(galaxy_server__current=True).select_related()
+        workflow_queryset = Workflow.objects.filter(
+            galaxy_server__current=True).select_related()
 
         for workflow in workflow_queryset:
             self.fetch_workflow_detail(workflow)
@@ -62,7 +66,8 @@ class WorkflowFormView(WorkflowDetailMixin, UploadView, ImportPastedContentView,
             context["inputs"] = wk.json['inputs'].keys()
 
             # add workfow galaxy information
-            context["steps"] = WorkflowStepInformation(wk.json, tools=self.restricted_toolset).steps_tooldict
+            context["steps"] = WorkflowStepInformation(
+                wk.json, tools=self.restricted_toolset).steps_tooldict
 
         context["workflow"] = wk
         return context
@@ -71,52 +76,66 @@ class WorkflowFormView(WorkflowDetailMixin, UploadView, ImportPastedContentView,
         # determine which form is being submitted
         # uses the name of the form's submit button
         if request.FILES:
-
             # get the primary form (upload file)
             form_class = self.get_form_class()
             form_name = 'form'
-
         else:
-
             # get the secondary form (textaera)
             form_class = self.form2_class
             form_name = 'textarea_form'
-
         # get the form
         form = self.get_form(form_class)
 
         # validate
-        if form.is_valid():
-
+        if form.is_valid() and self.validate_form_inputs(form):
             return self.form_valid(form)
         else:
-            return self.form_invalid(**{form_name: form})
+            return self.form_invalid(form)
+
+    def validate_form_inputs(self, form):
+        valid = True
+        # Check uploaded file or pasted content
+        submitted_file = form.cleaned_data.get('input_file')
+        submitted_text = form.cleaned_data.get('pasted_text')
+
+        if submitted_file:
+            nbseq = 0
+            print submitted_file
+            for r in SeqIO.parse(submitted_file, "fasta"):
+                nbseq += 1
+            if nbseq == 0:
+                form.add_error(
+                    'input_file', "Input file format is not FASTA or file is empty")
+                valid = False
+        elif submitted_text:
+            nbseq = 0
+            for r in SeqIO.parse(StringIO.StringIO(submitted_text), "fasta"):
+                nbseq += 1
+            if nbseq == 0:
+                form.add_error(
+                    'pasted_text', "Input file format is not FASTA or file is empty")
+                valid = False
+        return valid
 
     def form_valid(self, form):
-
         gi = self.request.galaxy
         workflow = self.get_workflow()
-
         # create new history
-        history_id = create_history(self.request, name="NGPhylogeny Analyse - " + workflow.name)
-
-        # upload user file
+        history_id = create_history(
+            self.request, name="NGPhylogeny Analyse - " + workflow.name)
+        # upload user file or pasted content
         submitted_file = form.cleaned_data.get('input_file')
         if submitted_file:
             u_file = self.upload_file(submitted_file, history_id)
-
         # or upload user pasted content
         else:
             u_file = self.upload_content(form.cleaned_data['pasted_text'])
-
         file_id = u_file.get('outputs')[0].get('id')
-
         i_input = workflow.json['inputs'].keys()[0]
         # input file
         dataset_map = dict()
         dataset_map[i_input] = {'id': file_id, 'src': 'hda'}
         print (dataset_map)
-
         try:
             # run workflow
             self.outputs = gi.workflows.run_workflow(workflow_id=workflow.id_galaxy,
@@ -124,11 +143,10 @@ class WorkflowFormView(WorkflowDetailMixin, UploadView, ImportPastedContentView,
                                                      dataset_map=dataset_map,
                                                      # inputs=dataset_map
                                                      )  # ,params=wk_galaxy.params)
-
         except Exception as galaxy_exception:
             raise galaxy_exception
-
-        self.success_url = reverse_lazy("history_detail", kwargs={'history_id': history_id}, )
+        self.success_url = reverse_lazy("history_detail", kwargs={
+                                        'history_id': history_id}, )
 
         return HttpResponseRedirect(self.get_success_url())
 
@@ -144,7 +162,8 @@ class WorkflowWizard(SessionWizardView):
     def done(self, form_list, **kwargs):
 
         workflow = self.get_workflow()
-        history_id = create_history(self.request, name="NGPhylogeny Analyse - " + workflow.name)
+        history_id = create_history(
+            self.request, name="NGPhylogeny Analyse - " + workflow.name)
 
         i_input = workflow.json['inputs'].keys()[0]
         steps = workflow.json['steps']
@@ -171,18 +190,21 @@ class WorkflowWizard(SessionWizardView):
                 if "file" in key:
 
                     output = self.request.galaxy.tools.upload_file(path=str(form.file),
-                                                                   file_name=str(form.name),
+                                                                   file_name=str(
+                                                                       form.name),
                                                                    history_id=history_id
                                                                    )
                     galaxy_file = output.get('outputs')[0]
-                    dataset_map[i_input] = {'id': galaxy_file.get('id'), 'src': 'hda'}
+                    dataset_map[i_input] = {
+                        'id': galaxy_file.get('id'), 'src': 'hda'}
 
                     # delete temp file
                     self.file_storage.delete(form)
 
                 else:
                     # set the Galaxy parameter ( name, value)
-                    params[step_id].set_param(tool_form.fields_ids_mapping.get(key), form)
+                    params[step_id].set_param(
+                        tool_form.fields_ids_mapping.get(key), form)
 
             # convert inputs to dict
             params[step_id] = params[step_id].to_dict()
@@ -198,7 +220,8 @@ class WorkflowWizard(SessionWizardView):
                                                                    allow_tool_state_corrections=True,
                                                                    )
 
-            self.succes_url = reverse_lazy("history_detail", kwargs={'history_id': history_id})
+            self.succes_url = reverse_lazy("history_detail", kwargs={
+                                           'history_id': history_id})
 
         except Exception as galaxy_exception:
 
