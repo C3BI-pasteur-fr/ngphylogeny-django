@@ -1,10 +1,10 @@
 from django.conf.urls import url
 
-from .views import (ImportPastedContentView, display_file, download_file, tree_visualization,
+from .views import ( display_file, download_file, tree_visualization,
                     export_to_itol, display_msa, display_raw, get_example)
 
 urlpatterns = [
-    url(r'^upload/$', ImportPastedContentView.as_view(), name='upload'),
+    #url(r'^upload/$', ImportPastedContentView.as_view(), name='upload'),
 
     url(r'^display/(?P<file_id>[\w-]+)$', display_file, name="display_file"),
     url(r'^displayraw/(?P<file_id>[\w-]+)$', display_raw, name="display_raw"),

@@ -25,24 +25,14 @@
 {% block title %}One Click Workflows{% endblock %}
 {% block workflow-form %}
     <div class="row">
-        <div class="col-md-8">
-            <h4>Select an input data file</h4>
+        <div class="col-md">
+          <h4>Choose input data</h4>
             {% load crispy_forms_tags %}
             <div class="panel panel-info">
                 <div class="panel-heading">Input Data (Fasta format)</div>
                 <div class="panel-body">
                     <div class="form-group">
                         {% crispy form %}
-                    </div>
-                </div>
-            </div>
-            <h4>OR</h4>
-            {% load crispy_forms_tags %}
-            <div class="panel panel-info">
-                <div class="panel-heading">Paste your sequences (Fasta format)</div>
-                <div class="panel-body">
-                    <div class="form-group">
-                        {% crispy textarea_form %}
                     </div>
                 </div>
             </div>

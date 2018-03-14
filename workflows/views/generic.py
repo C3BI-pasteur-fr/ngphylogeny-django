@@ -7,13 +7,11 @@ from django.utils.functional import cached_property
 from django.views.generic import ListView, DetailView
 from formtools.wizard.views import SessionWizardView
 
-from data.views import UploadView, ImportPastedContentView
+from data.views import UploadView
 from galaxy.decorator import connection_galaxy
 from workflows.models import Workflow, WorkflowStepInformation
 from workspace.views import create_history
 from .viewmixing import WorkflowDetailMixin
-from Bio import SeqIO
-import StringIO
 from django.shortcuts import render
 
 
@@ -40,89 +38,50 @@ class WorkflowListView(WorkflowDetailMixin, ListView):
 
 
 @method_decorator(connection_galaxy, name="dispatch")
-class WorkflowFormView(WorkflowDetailMixin, UploadView, ImportPastedContentView, DetailView):
+class WorkflowFormView(WorkflowDetailMixin, UploadView, DetailView):
     """
     Generic Workflow form view, upload one file and run workflow
     """
 
-    form_class = UploadView.form_class
-    form2_class = ImportPastedContentView.form_class
     template_name = 'workflows/workflows_form.html'
     restricted_toolset = None
 
     def get_context_data(self, **kwargs):
-
         context = super(WorkflowFormView, self).get_context_data(**kwargs)
-
         # get workflows
         wk = self.get_object()
         self.fetch_workflow_detail(wk)
-
-        context['form'] = UploadView.form_class()
-        context['textarea_form'] = ImportPastedContentView.form_class()
-
+        if context.get('form') is None:
+            context['form'] = UploadView.form()
         if hasattr(wk, 'json'):
             # parse galaxy workflow json information
             context["inputs"] = wk.json['inputs'].keys()
-
             # add workfow galaxy information
             context["steps"] = WorkflowStepInformation(
-                wk.json, tools=self.restricted_toolset).steps_tooldict
-
+                wk.json, tools=self.restricted_toolset,
+            ).steps_tooldict
         context["workflow"] = wk
         return context
 
     def post(self, request, *args, **kwargs):
-        # determine which form is being submitted
+        # determines which form is being submitted
         # uses the name of the form's submit button
-        if request.FILES:
-            # get the primary form (upload file)
-            form_class = self.get_form_class()
-            form_name = 'form'
-        else:
-            # get the secondary form (textaera)
-            form_class = self.form2_class
-            form_name = 'textarea_form'
-        # get the form
-        form = self.get_form(form_class)
-
+        form_name = 'form'
+        form = self.get_form(UploadView.form())
         # validate
-        if form.is_valid() and self.validate_form_inputs(form):
+        if form.is_valid() and form.validate_form_inputs():
             return self.form_valid(form)
         else:
             return self.form_invalid(form)
-
-    def validate_form_inputs(self, form):
-        valid = True
-        # Check uploaded file or pasted content
-        submitted_file = form.cleaned_data.get('input_file')
-        submitted_text = form.cleaned_data.get('pasted_text')
-
-        if submitted_file:
-            nbseq = 0
-            print submitted_file
-            for r in SeqIO.parse(submitted_file, "fasta"):
-                nbseq += 1
-            if nbseq == 0:
-                form.add_error(
-                    'input_file', "Input file format is not FASTA or file is empty")
-                valid = False
-        elif submitted_text:
-            nbseq = 0
-            for r in SeqIO.parse(StringIO.StringIO(submitted_text), "fasta"):
-                nbseq += 1
-            if nbseq == 0:
-                form.add_error(
-                    'pasted_text', "Input file format is not FASTA or file is empty")
-                valid = False
-        return valid
 
     def form_valid(self, form):
         gi = self.request.galaxy
         workflow = self.get_workflow()
         # create new history
         history_id = create_history(
-            self.request, name="NGPhylogeny Analyse - " + workflow.name)
+            self.request,
+            name="NGPhylogeny Analyse - " + workflow.name,
+        )
         # upload user file or pasted content
         submitted_file = form.cleaned_data.get('input_file')
         if submitted_file:
@@ -150,7 +109,7 @@ class WorkflowFormView(WorkflowDetailMixin, UploadView, ImportPastedContentView,
 
         return HttpResponseRedirect(self.get_success_url())
 
-
+    
 class WorkflowWizard(SessionWizardView):
     """
     Generic Form Wizard for Advanced and Alacarte mode

@@ -16,7 +16,7 @@ from django.urls import reverse_lazy
 from django.utils.decorators import method_decorator
 from django.views.generic.edit import FormView
 from .models import ExampleFile
-from .forms import UploadForm, PastedContentForm
+from .forms import UploadForm
 from galaxy.decorator import connection_galaxy
 from workspace.views import get_or_create_history
 
@@ -63,29 +63,20 @@ class UploadView(UploadMixin, FormView):
     success_url = reverse_lazy("home")
 
     def form_valid(self, form):
-        myfile = form.cleaned_data['file']
-        outputs = self.upload_file(myfile)
+        if form.cleaned_data.get('input_file') is not None:
+            myfile = form.cleaned_data.get('input_file')
+            outputs = self.upload_file(myfile)
+        elif form.cleaned_data['pasted_text'] is not None:
+            p_content = form.cleaned_data['pasted_text']
+            outputs = self.upload_content(p_content)
+
         self.success_url = reverse_lazy("history_detail", kwargs={'history_id': self.history_id}, )
 
         return super(UploadView, self).form_valid()
-
-
-@method_decorator(connection_galaxy, name="dispatch")
-class ImportPastedContentView(UploadMixin, FormView):
-    """
-       Import user pasted content into Galaxy Server
-    """
-
-    form_class = PastedContentForm
-    success_url = reverse_lazy("home")
-
-    def form_valid(self, form):
-        p_content = form.cleaned_data['pasted_text']
-        outputs = self.upload_content(p_content)
-        self.success_url = reverse_lazy("history_detail", kwargs={'history_id': self.history_id}, )
-
-        return super(ImportPastedContentView, self).form_valid()
-
+    
+    @staticmethod
+    def form():
+        return UploadForm
 
 @connection_galaxy
 def download_file(request, file_id):

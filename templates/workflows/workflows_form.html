@@ -19,60 +19,15 @@
         {{ workflow.name }}
     </h3>
     <br>
-    <div class="row row-eq-height">
-        <div class="col-md-6 ">
+    <div class="row">
+        <div class="col-md">
             <h4>Select an input data file</h4>
             {% load crispy_forms_tags %}
             <div class="panel panel-info">
                 <div class="panel-heading">Input Data (Fasta format)</div>
                 <div class="panel-body">
                   <div class="form-group">
-		    {{ form.non_field_errors }}
-		    {{ form.errors }}
-		    {% if form.errors %}
-		    {% for field in form %}
-		    {% for error in field.errors %}
-		    <div class="alert alert-danger">
-                      <strong>{{ error|escape }}</strong>
-		    </div>
-		    {% endfor %}
-		    {% endfor %}
-		    {% for error in form.non_field_errors %}
-		    <div class="alert alert-danger">
-		      <strong>{{ error|escape }}</strong>
-		    </div>
-		    {% endfor %}
-		    {% endif %}
                     {% crispy form %}
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-6 ">
-            {% load crispy_forms_tags %}
-            <div class="panel panel-info">
-                <div class="panel-heading">
-                    <span class="h4">... OR</span> Paste your sequences (Fasta format)</span>
-                </div>
-                <div class="panel-body">
-                  <div class="form-group">
-		    {{ textarea_form.non_field_errors }}
-		    {{ textarea_form.errors }}
-		    {% if textarea_form.errors %}
-		    {% for field in textarea_form %}
-		    {% for error in field.errors %}
-		    <div class="alert alert-danger">
-                      <strong>{{ error|escape }}</strong>
-		    </div>
-		    {% endfor %}
-		    {% endfor %}
-		    {% for error in textarea_form.non_field_errors %}
-		    <div class="alert alert-danger">
-		      <strong>{{ error|escape }}</strong>
-		    </div>
-		    {% endfor %}
-		    {% endif %}
-                    {% crispy textarea_form %}
                     </div>
                 </div>
             </div>
