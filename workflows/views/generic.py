@@ -1,11 +1,8 @@
-from bioblend.galaxy.tools.inputs import inputs
-from django.core.files.storage import FileSystemStorage
 from django.core.urlresolvers import reverse_lazy
 from django.http import HttpResponseRedirect
 from django.utils.decorators import method_decorator
 from django.utils.functional import cached_property
 from django.views.generic import ListView, DetailView
-from formtools.wizard.views import SessionWizardView
 
 from data.views import UploadView, ImportPastedContentView
 from galaxy.decorator import connection_galaxy
@@ -15,7 +12,6 @@ from .viewmixing import WorkflowDetailMixin
 from Bio import SeqIO
 
 import StringIO
-from django.shortcuts import render
 
 
 @method_decorator(connection_galaxy, name="dispatch")
@@ -58,6 +54,7 @@ class WorkflowFormView(WorkflowDetailMixin, UploadView, ImportPastedContentView,
         # get workflows
         wk = self.get_object()
         self.fetch_workflow_detail(wk)
+
         if ('form') not in kwargs:
             context['form'] = UploadView.form_class()
             context['textarea_form'] = ImportPastedContentView.form_class()
