@@ -13,6 +13,7 @@ from workflows.models import Workflow, WorkflowStepInformation
 from workspace.views import create_history
 from .viewmixing import WorkflowDetailMixin
 from Bio import SeqIO
+
 import StringIO
 from django.shortcuts import render
 
@@ -57,9 +58,17 @@ class WorkflowFormView(WorkflowDetailMixin, UploadView, ImportPastedContentView,
         # get workflows
         wk = self.get_object()
         self.fetch_workflow_detail(wk)
-
-        context['form'] = UploadView.form_class()
-        context['textarea_form'] = ImportPastedContentView.form_class()
+        if ('form') not in kwargs:
+            context['form'] = UploadView.form_class()
+            context['textarea_form'] = ImportPastedContentView.form_class()
+        else:
+            invalid_form = kwargs.get('form')
+            if isinstance(invalid_form, ImportPastedContentView.form_class):
+                context['textarea_form'] = invalid_form
+                context['form'] = UploadView.form_class()
+            else:
+                context['form'] = invalid_form
+                context['textarea_form'] = ImportPastedContentView.form_class()
 
         if hasattr(wk, 'json'):
             # parse galaxy workflow json information
@@ -90,6 +99,7 @@ class WorkflowFormView(WorkflowDetailMixin, UploadView, ImportPastedContentView,
         if form.is_valid() and self.validate_form_inputs(form):
             return self.form_valid(form)
         else:
+
             return self.form_invalid(form)
 
     def validate_form_inputs(self, form):
@@ -105,7 +115,7 @@ class WorkflowFormView(WorkflowDetailMixin, UploadView, ImportPastedContentView,
                 nbseq += 1
             if nbseq == 0:
                 form.add_error(
-                    'input_file', "Input file format is not FASTA or file is empty")
+                    'input_file', ValueError("Input file format is not FASTA or file is empty"))
                 valid = False
         elif submitted_text:
             nbseq = 0
@@ -113,7 +123,7 @@ class WorkflowFormView(WorkflowDetailMixin, UploadView, ImportPastedContentView,
                 nbseq += 1
             if nbseq == 0:
                 form.add_error(
-                    'pasted_text', "Input file format is not FASTA or file is empty")
+                    'pasted_text', ValueError("Input file format is not FASTA or file is empty"))
                 valid = False
         return valid
 
@@ -150,81 +160,3 @@ class WorkflowFormView(WorkflowDetailMixin, UploadView, ImportPastedContentView,
 
         return HttpResponseRedirect(self.get_success_url())
 
-
-class WorkflowWizard(SessionWizardView):
-    """
-    Generic Form Wizard for Advanced and Alacarte mode
-    """
-    template_name = 'workflows/workflows_wizard_form.html'
-    file_storage = FileSystemStorage('/tmp')
-    succes_url = ""
-
-    def done(self, form_list, **kwargs):
-
-        workflow = self.get_workflow()
-        history_id = create_history(
-            self.request, name="NGPhylogeny Analyse - " + workflow.name)
-
-        i_input = workflow.json['inputs'].keys()[0]
-        steps = workflow.json['steps']
-
-        # input file
-        dataset_map = {}
-
-        # tool params
-        params = {}
-
-        for tool_form in form_list:
-            step_id = u'0'
-
-            # get from which step the tools are used
-            for i, step in steps.items():
-                if getattr(tool_form, 'tool_id', 'null') == step.get('tool_id'):
-                    step_id = i
-                    break
-
-            params[step_id] = inputs()
-
-            for key, form in tool_form.cleaned_data.items():
-
-                if "file" in key:
-
-                    output = self.request.galaxy.tools.upload_file(path=str(form.file),
-                                                                   file_name=str(
-                                                                       form.name),
-                                                                   history_id=history_id
-                                                                   )
-                    galaxy_file = output.get('outputs')[0]
-                    dataset_map[i_input] = {
-                        'id': galaxy_file.get('id'), 'src': 'hda'}
-
-                    # delete temp file
-                    self.file_storage.delete(form)
-
-                else:
-                    # set the Galaxy parameter ( name, value)
-                    params[step_id].set_param(
-                        tool_form.fields_ids_mapping.get(key), form)
-
-            # convert inputs to dict
-            params[step_id] = params[step_id].to_dict()
-
-            if not params[step_id]:
-                del params[step_id]
-
-        try:
-            output = self.request.galaxy.workflows.invoke_workflow(workflow_id=workflow.id_galaxy,
-                                                                   history_id=history_id,
-                                                                   inputs=dataset_map,
-                                                                   params=params,
-                                                                   allow_tool_state_corrections=True,
-                                                                   )
-
-            self.succes_url = reverse_lazy("history_detail", kwargs={
-                                           'history_id': history_id})
-
-        except Exception as galaxy_exception:
-
-            raise galaxy_exception
-
-        return HttpResponseRedirect(self.succes_url)

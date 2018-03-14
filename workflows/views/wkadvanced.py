@@ -14,7 +14,7 @@ from tools.models import Tool
 from workspace.views import create_history, delete_history
 
 from workflows.forms import tool_form_factory
-from workflows.views.generic import WorkflowWizard, WorkflowListView
+from workflows.views.generic import WorkflowListView
 from workflows.views.viewmixing import WorkflowDuplicateMixin, WorkflowDetailMixin
 
 from bioblend.galaxy.tools.inputs import inputs
