@@ -20,7 +20,8 @@
     </h3>
     <br>
     <div class="row">
-        <div class="col-md">
+        <div class="col-md-2"></div>
+        <div class="col-md-8">
             <h4>Select an input data file</h4>
             {% load crispy_forms_tags %}
             <div class="panel panel-info">
@@ -32,10 +33,11 @@
                 </div>
             </div>
         </div>
+	<div class="col-md-9"></div>
     </div>
 
     <div class="row">
-        <div class="col-md-2"></div>
+      <div class="col-md-2"></div>
         <div class="col-md-8">
             <table id="{{ workflow.slug }}" class="table-responsive center">
                 {% for nbstep, step in steps.items %}

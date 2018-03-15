@@ -12,17 +12,17 @@
     font-weight: 200;
 }
 
-a img{
-    width:80px;
-    margin:30px 10px;
-    float:left;
-}
+/* a img{ */
+/*     width:80px; */
+/*     margin:30px 10px; */
+/*     float:left; */
+/* } */
 
 .phylo-analysis .col-md-4 div {
     padding-right: 10px;
     margin-top: 10px;
     height: 100%;
-    width: 90%;
+//    width: 90%;
     border-bottom-color: #1f77b4;
     border-bottom-style: solid;
     border-top-color: white;

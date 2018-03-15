@@ -16,7 +16,6 @@
         });
     </script>
     {% block workflow-name %}{% endblock %}
-    <br>
     <div class="row row-eq-height">
         {% block workflow-sidebar %}
             <div class="col-md-3 sidenav">
@@ -34,7 +33,6 @@
                         </li>
                     {% endfor %}
                 </ul>
-                <br>
             </div>
         {% endblock %}
         <div class="col-md-9">
@@ -44,10 +42,8 @@
                         {% for workflow in workflow_list|dictsort:"rank" %}
                             {% include "workflows/include/workflow_overview.html" %}
                         {% endfor %}
-                    <br>
                     {% endblock %}
             </div>
-            <br>
             {% block workflow-form %}
             {% endblock %}
         </div>

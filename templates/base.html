@@ -18,16 +18,13 @@
     {% block javascripts %} {% endblock %}
 </head>
 <body>
-<header class="jumbotron">
-    <div class="container text-center">
-        <div class="title-bg">
-            <h1><span class="title-cap">NG</span>Phylogeny.fr</h1>
-            <br>
-        </div>
-    </div>
-</header>
+  <a href="https://github.com/C3BI-pasteur-fr/NGPhylogeny_fr_django"><img style="position: absolute; top: 0; right: 0; border: 0;" src="https://s3.amazonaws.com/github/ribbons/forkme_right_darkblue_121621.png" alt="Fork me on GitHub"></a>
+<div id="page-wrapper">
+  <header class="pagehead">
+    <h1><span class="title-cap">NG</span>Phylogeny.fr</h1>
+  </header>
 <nav class="navbar-default">
-    <div id="topnavbar" class="container-fluid col-md-offset-1">
+    <div id="topnavbar" class="container-fluid">
         <ul class="nav nav-tabs">
             {% block nav-home %}
                 <li><a href="{% url 'home' %}">
@@ -108,7 +105,6 @@
         </ul>
     </div>
 </nav>
-<br>
 {% block section-title %}
 {% endblock %}
 <div class="container">
@@ -120,7 +116,6 @@
 {% block xl-content %} {% endblock %}
 </div>
 <footer class="footer container-fluid">
-
         <div class="row">
             <a href="https://c3bi.pasteur.fr">
                 <div><img class="center-block logo_contrib" alt="C3BI"
@@ -160,5 +155,6 @@
         }
     });
 </script>
+</div>
 </body>
 </html>

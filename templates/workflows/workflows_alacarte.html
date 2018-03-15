@@ -52,21 +52,22 @@
 </ul>
 {% endif %}
 <div class="row">
-    <div class="col-md-10 col-md-offset-2">
+    <div class="col-md-1"></div>
+    <div class="col-md-10">
         {% for step in workflow|dictsort:"step" %}
-        <div class="col-md-2 text-center">
+        <div class="col-md-3 text-center">
             {% for e in step.group %}
             {% if forloop.first %}
             <span class="badge info">{{ forloop.parentloop.counter }}</span><img
                 src="{% static 'images/wmaker/' %}{{e.flag.name}}.png ">
             {% endif %}
             <hr>
-            <span class="h4 text-center">{{ e.flag.verbose_name }}</span>
+            <span class="workflow-step text-center">{{ e.flag.verbose_name }}</span>
             <hr>
             <div class="row"></div>
             <div class="btn-group-vertical" role="group">
                 {% for tool in e.tools %}
-                <label class="btn btn-default" type="button" for="radio-{{ tool.pk }}">{{ tool.name }}
+                <label class="btn btn-default workflow-tool" type="button" for="radio-{{ tool.pk }}">
                     <input type="radio"
                            id="radio-{{ tool.pk }}"
                            name="radio-{{ step.step }}"
@@ -83,13 +84,15 @@
                         {% include 'tools/tool_panel.html' %}
                     </div>
                     {# end tool panel #}
-                </label>
+                    {{ tool.name }}
+		</label>
                 {% endfor %}
             </div>
             {% endfor %}
         </div>
         {% endfor %}
     </div>
+    <div class="col-md-1"></div>
 </div>
 <div style="background-color:#f6f6f6; margin-top: 20px;">
     <div class="row">
