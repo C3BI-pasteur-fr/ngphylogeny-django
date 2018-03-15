@@ -52,6 +52,27 @@
 </ul>
 {% endif %}
 <div class="row">
+    <div class="col-md-11 col-md-offset-1">
+        <h3 class="text-justify"><span class="glyphicon glyphicon-chevron-right small"></span> Workflow name:</h3>
+    </div>
+</div>
+<div class="row">
+    <div class="col-md-10 col-md-offset-2">
+        <div class="input-group">
+            <span class="btn input-group-addon">
+                <span class="glyphicon glyphicon-pencil"></span>
+            </span>
+            <input id='wkname' class="form-control input-lg" placeholder="Workflow name.." type="text">
+        </div>
+        <hr>
+    </div>
+</div>
+<div class="row">
+    <div class="col-md-11 col-md-offset-1">
+        <h3 class="text-justify"><span class="glyphicon glyphicon-chevron-right small"></span> Choose tools:</h3>
+    </div>
+</div>
+<div class="row">
     <div class="col-md-1"></div>
     <div class="col-md-10">
         {% for step in workflow|dictsort:"step" %}
@@ -126,20 +147,9 @@
 </div>
 <div class="row">
     <div class="col-md-11 col-md-offset-1">
-        <h3 class="text-justify"><span class="glyphicon glyphicon-chevron-right small"></span> Workflow name:</h3>
-    </div>
-</div>
-<div class="row">
-    <div class="col-md-6 col-md-offset-2">
-        <div class="input-group">
-            <span class="btn input-group-addon">
-                <span class="glyphicon glyphicon-pencil"></span>
-            </span>
-            <input id='wkname' class="form-control input-lg" placeholder="Workflow name.." type="text">
-        </div>
-        <hr>
         <button id="submit1" type="submit" class="btn btn-primary" name="run" value="Build workflow">
             <span class="glyphicon glyphicon-play-circle"></span> Create workflow
         </button>
     </div>
+</div>
 {% endblock xl-content %}
