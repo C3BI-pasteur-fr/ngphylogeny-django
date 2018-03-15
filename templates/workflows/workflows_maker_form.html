@@ -2,11 +2,11 @@
 {% load crispy_forms_tags %}
 {% load static %}
 {% load i18n %}
-{% block title %}Workflows Marker{% endblock %}
+{% block title %}Workflow Maker{% endblock %}
 {% block workflow-name %}
     <div class="row">
         <div class="col-md-1"></div>
-        <div class="col-md-6"><h3><span class="glyphicon glyphicon-chevron-right"></span>{{ workflow_list.0.name }}</h3>
+        <div class="col-md-11"><div class="alert alert-info workflow-name">Workflow assembled: {{ workflow_list.0.name }}</div>
         </div>
     </div>
 {% endblock %}
