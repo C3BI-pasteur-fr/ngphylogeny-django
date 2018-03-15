@@ -16,9 +16,6 @@
             });
             var f = $('form');
             f.attr('action', "{{ workflow_list.0.slug }}");
-            $('form').submit(function (event) {
-                $('#wait').modal('show');
-            });
         });
     </script>
 {% endblock %}
