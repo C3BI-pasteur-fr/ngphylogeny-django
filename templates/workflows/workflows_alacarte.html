@@ -115,34 +115,32 @@
     </div>
     <div class="col-md-1"></div>
 </div>
-<div style="background-color:#f6f6f6; margin-top: 20px;">
-    <div class="row">
-        <div class="col-md-11 col-md-offset-1">
-            <h3><span class="glyphicon glyphicon-chevron-right small"></span>
-                Workflow overview:
-            </h3></div>
-    </div>
-    <div class="row">
-        <div class="col-md-10 col-md-offset-1">
+<div class="row">
+    <div class="col-md-11 col-md-offset-1">
+        <h3><span class="glyphicon glyphicon-chevron-right small"></span>
+            Workflow overview:
+        </h3></div>
+</div>
+<div class="row">
+    <div class="col-md-10 col-md-offset-1">
 
-            <form id="wkform" action="" method="post">
-                {% csrf_token %}
-                <input name=wkname type="hidden" value="">
-                <div id="mini-wk" class="row">
-                    <div class="col-md-2">
-                        <div class="panel panel-info">
-                            <div class="panel-heading"></div>
-                            <div class="panel-body">Input</div>
-                            <div class="panel-footer">
-                            </div>
+        <form id="wkform" action="" method="post">
+            {% csrf_token %}
+            <input name=wkname type="hidden" value="">
+            <div id="mini-wk" class="row">
+                <div class="col-md-2">
+                    <div class="panel panel-info">
+                        <div class="panel-heading"></div>
+                        <div class="panel-body">Input</div>
+                        <div class="panel-footer">
                         </div>
                     </div>
-                    {% for step in workflow|dictsort:"step" %}
-                    <div id='wk-display-{{ step.step }}' class="col-md-2" style="display:none"></div>
-                    {% endfor %}
                 </div>
-            </form>
-        </div>
+                {% for step in workflow|dictsort:"step" %}
+                <div id='wk-display-{{ step.step }}' class="col-md-2" style="display:none"></div>
+                {% endfor %}
+            </div>
+        </form>
     </div>
 </div>
 <div class="row">
