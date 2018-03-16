@@ -106,67 +106,49 @@ $(document).ready(function(){
     <strong>Success !</strong> The link is copied in you Clipboard!
 </div>
 
-<p class="pull-right">
-    <a onclick="refresh()" class="btn btn-primary">
-        <span class="glyphicon glyphicon-refresh"></span> Refresh
-    </a>
-</p>
 <div class="row">
-    <div class="col-md-3">
-        <div class="input-group">
-            <div class="input-group-addon">
-                ID
-            </div>
-            <span class="form-control " readonly>
-                  {{history_info.id}}
-            </span>
-        </div>
+  <div class="col-md-6">
+    <div class="input-group" onclick="$('#rename_history').focus();">
+      <div class="input-group-addon">
+        Name
+      </div>
+      <input id="rename_history" class="form-control input" onblur="renameHistory(this);"
+             value="{{ history_info.name }}​">
+      <a class="btn input-group-addon btn-sm"
+	 title="Rename your analyse"
+	 data-toggle="tooltip" data-placement="right">
+	<span class="glyphicon glyphicon-pencil text-primary"> </span>
+      </a>
+    </div>
     </div>
     <div class="col-md-6">
         <div class="input-group">
             <div class="input-group-addon">
-                URL
+                Url
             </div>
             <span class="form-control" readonly
                   value="{{ request.META.HTTP_HOST }}{% url 'history_detail' history_info.id  %}​">
                     {{ request.META.HTTP_HOST }}{% url 'history_detail' history_info.id  %}​
             </span>
-            <a id='clip' class="btn btn-default input-group-addon"
+            <a id='clip' class="btn btn-default input-group-addon btn-sm"
                data-clipboard-text="{{ request.META.HTTP_HOST }}{% url 'history_detail' history_info.id  %}"
                title="copy the url of analyse"
                data-toggle="tooltip" data-placement="right"
                onclick="copied()">
-                <span class="glyphicon glyphicon-copy text-primary"> Copy</span>
+                <span class="glyphicon glyphicon-copy text-primary"></span>
             </a>
         </div>
     </div>
 </div>
 <br>
-<br>
-<div class="row">
-    <div class="col-md-8 col-md-offset-2">
-        <div class="input-group" onclick="$('#rename_history').focus();">
-            <div class="input-group-addon">
-                TITLE
-            </div>
-            <input id="rename_history" class="form-control input-lg" onblur="renameHistory(this);"
-                   value="{{ history_info.name }}​"></span>
-            <a class="btn input-group-addon"
-               title="Rename your analyse"
-               data-toggle="tooltip" data-placement="right">
-                <span class="glyphicon glyphicon-pencil"> </span>
-            </a>
-        </div>
-    </div>
-</div>
 <hr>
 <div class="row">
     <div class="col-md-12">
         <table id="myTable" class="table table-striped ">
             <thead>
-            <th>Tool</th>
+            <th style="width: 10%;">Tool</th>
             <th>Step</th>
-            <th>File Name</th>
+            <th style="width: 40%;">File Name</th>
             <th>Status</th>
             <th></th>
             </thead>
@@ -227,14 +209,14 @@ $(document).ready(function(){
                 </td>
                 <td id="action_{{ file.id }}">
                     {% if 'ok' in file.state %}
-                    {# <a class="btn btn-default" title="Export big data in your personal outputs folder" #}
+                    {# <a class="btn btn-default btn-sm" title="Export big data in your personal outputs folder" #}
                           {# href="{% url 'export_file' file.id %}"> #}
                     {# <span class="glyphicon glyphicon-export text-primary" aria-hidden="true"></span></a>#}
-                    <a class="btn btn-default" title="Dowload the file"
+                    <a class="btn btn-default btn-sm" title="Dowload the file"
                        data-toggle="tooltip" data-placement="right"
                        href="{% url 'download_file' file.id %}">
                         <span class="glyphicon glyphicon-download-alt text-primary"></span></a>
-                    <a class="btn btn-default"
+                    <a class="btn btn-default btn-sm"
                        href="{% url 'display_file' file.id %}"
                        data-toggle="tooltip" data-placement="right"
                        title="Display this file in your web browser">
@@ -245,24 +227,24 @@ $(document).ready(function(){
                         </span> .{{ file.extension }}</a>
                     {% endif %}
                     {% if file.extension in "nhx,nwk" %}
-                    <a class="btn btn-success" title="Open Interactive Tree visualisation"
+                    <a class="btn btn-success btn-sm" title="Open Interactive Tree visualisation"
                        href="{% url 'display_tree' file.id %}"
                        data-toggle="tooltip" data-placement="right">
                         <span class="glyphicon text-success" aria-hidden="true">
                             <img src="{% static 'images/ptree.svg' %}">
                         </span>
-                        Interactive tree
+                        Viewer
                     </a>
-                    <a class="btn btn-warning" title="Export tree to iTOL: Interactive Tree Of Life"
+                    <a class="btn btn-warning btn-sm" title="Export tree to iTOL: Interactive Tree Of Life"
                        href="{% url 'export_to_itol' file.id %}" target="_blank"
                        data-toggle="tooltip" data-placement="right"
                        title="Export your newick tree into iTol, external tree viewer">
                         <span class="glyphicon glyphicon-export" aria-hidden="true"> </span>
-                        Export to iTol
+                        iTol
                     </a>
                     {% endif %}
                     {% if file.extension in "fasta,fsa,msa,fna" %}
-                    <a class="btn btn-info" title="MSAViewer"
+                    <a class="btn btn-info btn-sm" title="MSAViewer"
                        href="{% url 'display_msa' file.id %}"
                        data-toggle="tooltip" data-placement="right"
                        title="Multipe sequences viewer">
@@ -271,7 +253,7 @@ $(document).ready(function(){
                     </a>
                     {% endif %}
                     {% elif 'error' in file.state %}
-                    <a class="btn btn-default" title="shows error"
+                    <a class="btn btn-default btn-sm" title="shows error"
                        href="{% url 'galaxy_error_url' file.id %}">
                         <span class="glyphicon glyphicon-exclamation-sign text-danger"></span>
                     </a>
