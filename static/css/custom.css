@@ -43,6 +43,10 @@ input.form-control{
     width:100%;
 }
 
+.badge{
+    font-size:12px;
+}
+
 .title-bg {
     #background-color: rgb(0, 0, 0);
     #background-color: rgba(0, 0, 0, 0.6);

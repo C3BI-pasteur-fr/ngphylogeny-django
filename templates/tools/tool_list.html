@@ -31,9 +31,12 @@
                 <td><a class="btn btn-toolbar" href="{%  url 'tool_detail' tool.pk %}">
                     <span class="glyphicon glyphicon-info-sign"></span></a>
                 </td>
-                <td><a class="btn btn-toolbar" href="{%  url 'tool_form' tool.pk %}">{{ tool.name }}</a></td>
-                <td><a class="btn btn-toolbar" href="{%  url 'tool_form' tool.pk %}"><span
-                        class="badge">{{ tool.version }}</span></a></td>
+                <td><a class="btn btn-toolbar btn-sm" href="{%  url 'tool_form' tool.pk %}">{{ tool.name }}</a></td>
+                <td>
+		  <a class="btn btn-toolbar btn-sm" href="{%  url 'tool_form' tool.pk %}">
+		    <span class="badge">{{ tool.version }}</span>
+		  </a>
+		</td>
             </tr>
             {% endfor %}
             {% endfor %}
