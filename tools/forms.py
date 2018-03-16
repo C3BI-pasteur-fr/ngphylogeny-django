@@ -41,19 +41,15 @@ class ToolForm(forms.Form):
     n = 0
 
     def create_field(self, attrfield):
-
         self.n += 1
         field_id = str(self.n)
         fieldtype = attrfield.get("type", "")
-
         if fieldtype == "data":
             choices = attrfield.get("options", "").get('hda')
             self.input_file_ids.append(field_id)
-
             if choices:
                 self.fields[field_id] = forms.ChoiceField(**map_galaxy_tool_input(attrfield))
             else:
-
                 self.fields[field_id] = forms.FileField(**map_galaxy_tool_input(attrfield))
                 self.fields[field_id].widget.attrs = ({'data-ext': attrfield.get('extensions')})
                 self.fields[field_id].widget.attrs = ({'data-name': attrfield.get('name')})
@@ -93,7 +89,6 @@ class ToolForm(forms.Form):
         fields_created = []
 
         for input_tool in list_inputs:
-
             if input_tool.get('type') == 'section':
                 fields_created.append(Fieldset(input_tool.get('title'),
                                                *self.parse_galaxy_input_tool(input_tool.get('inputs'))))
@@ -144,10 +139,7 @@ class ToolForm(forms.Form):
         self.helper.form_class = 'blueForms'
         self.helper.form_tag = False
         self.formset = self.parse_galaxy_input_tool(self.tool_params, whitelist=self.visible_field)
-        self.helper.layout = Layout(FormActions(Field(*self.formset),
-                                                )
-                                    )
-
+        self.helper.layout = Layout(FormActions(Field(*self.formset)))
 
 class ToolFieldWhiteListForm(forms.ModelForm):
     _params = forms.MultipleChoiceField(label='Params')

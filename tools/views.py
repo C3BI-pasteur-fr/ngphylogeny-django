@@ -92,7 +92,6 @@ def tool_exec_view(request, pk, store_output=None):
                     outputs = gi.tools.upload_file(path=tmp_file.name,
                                                    file_name=uploaded_file.name,
                                                    history_id=history_id)
-
                 else:
                     # else paste content
                     content = request.POST.get(inputfile)
