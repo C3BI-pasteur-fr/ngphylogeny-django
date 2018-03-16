@@ -1,9 +1,15 @@
 @import 'https://fonts.googleapis.com/css?family=Bungee+Inline|Francois+One';
-
+@import 'https://fonts.googleapis.com/css?family=Permanent+Marker';
+@import 'https://fonts.googleapis.com/css?family=Amatic+SC';
+@import 'https://fonts.googleapis.com/css?family=Gloria+Hallelujah';
 /*font-family: 'Francois One', sans-serif;
 font-family: 'Fascinate Inline', cursive;
 font-family: 'Bungee Inline', cursive;*/
 
+#genie{
+    height:90px;
+    float:right;
+}
 
 div#page-wrapper {
     max-width: 1000px;
@@ -29,7 +35,10 @@ div#page-wrapper {
 }
 
 .title-cap {
-    font-family: 'Bungee Inline', cursive;
+    /* font-family: 'Amatic SC', cursive; */
+    font-family: 'Gloria Hallelujah', cursive;
+    font-weight:bold;
+    /* font-family: 'Permanent Marker', cursive; */
 }
 
 .title-page:before {
@@ -39,7 +48,6 @@ div#page-wrapper {
 
 .title-page {
     display: block;
-    //border:1px solid;
     margin:10px;
     font-size:25px;
 }

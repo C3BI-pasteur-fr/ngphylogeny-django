@@ -6,12 +6,13 @@
     {% block jumbotron %}
     <div class="jumbotron-home">
       <div class="jumbotron-layer">
-	<!-- <img alt="phylogeny.fr" src="{% static 'images/logo_phylogeny-fr.png' %}" class="center-block"> -->
+	{# <img alt="phylogeny.fr" src="{% static 'images/logo_phylogeny-fr.png' %}" class="center-block"> #}
         <p><strong><em>Robust phylogenetic analysis for everyone. </em></strong></p>
 	<p><span class="glyphicon glyphicon-chevron-right"></span>
         Free, simple to use web service dedicated to
         reconstructing and analysing phylogenetic relationships between
         molecular sequences.</p>
+	    <img id="genie" src="{% static 'images/genie.svg' %}"/>
         <p class="text-center"><a href="{% url 'get_started_workflow' %}" class="btn playbtn">
           <span class="glyphicon glyphicon-play"></span> <strong>Let's GO !</strong> with One Click Workflow
         </a></p>
@@ -19,7 +20,6 @@
 </div>
 {% endblock %}
 {% block content %}
-    <span class="h3 title-page">Phylogeny Analysis</span>
     <hr>
     {% include "include/phylogeny_analysis_list.html" %}
 {% endblock %}
