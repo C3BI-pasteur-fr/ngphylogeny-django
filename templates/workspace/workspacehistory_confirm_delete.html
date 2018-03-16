@@ -1,7 +1,11 @@
 {% extends "base.html" %}
 {% block content %}
-    <h3>Delete?</h3>
-<p class="lead">Are you sure you want to delete "{{ object.name }}" : {{ object.history }} create on {{ object.created_date }}?
+<p class="lead">Please confirm that you want to delete the following analysis:
+  <ul>
+    <li> Name : {{ object.name }}</li>
+    <li> History Id: {{ object.history }} </li>
+    <li> Creation date: {{ object.created_date }}</li>
+  </ul> 
 </p>
 <form method="post">{% csrf_token %}
     <div>
