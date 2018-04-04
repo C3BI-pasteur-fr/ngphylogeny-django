@@ -21,7 +21,8 @@ class Tool(models.Model):
     version = models.CharField(max_length=20, blank=True)
     description = models.CharField(max_length=250)
     toolshed_revision = models.CharField(max_length=250, null=True, blank=True)
-    visible = models.BooleanField(default=True, help_text="Display this tool on the user web interface")
+    visible = models.BooleanField(
+        default=True, help_text="Display this tool on the user web interface")
     oneclick = models.BooleanField(default=False)
 
     @property
@@ -72,7 +73,8 @@ class Tool(models.Model):
 
         galaxy_server = galaxy_server or self.galaxy_server.url
 
-        tools_url = '%s/%s/%s/%s' % (galaxy_server, 'api', 'tools', self.id_galaxy)
+        tools_url = '%s/%s/%s/%s' % (galaxy_server,
+                                     'api', 'tools', self.id_galaxy)
 
         tool_panels = requests.get(tools_url).json()
 
@@ -85,8 +87,10 @@ class Tool(models.Model):
         """
             fetch and store tool information
         """
-        tool_url = '%s/%s/%s/%s' % (self.galaxy_server.url, 'api', 'tools', self.id_galaxy)
-        tool_info_request = requests.get(tool_url, params={'io_details': "true"})
+        tool_url = '%s/%s/%s/%s' % (self.galaxy_server.url,
+                                    'api', 'tools', self.id_galaxy)
+        tool_info_request = requests.get(
+            tool_url, params={'io_details': "true"})
 
         return tool_info_request.json()
 
@@ -105,7 +109,8 @@ class Tool(models.Model):
 
         if toolshed:
             self.toolshed = self.toolshed or toolshed.get('tool_shed')
-            self.toolshed_revision = self.toolshed_revision or toolshed.get('changeset_revision')
+            self.toolshed_revision = self.toolshed_revision or toolshed.get(
+                'changeset_revision')
 
         return self
 
@@ -141,7 +146,8 @@ class Tool(models.Model):
                 inputs_list.append(input_d.get('name'))
 
         # create whitelist field for workflows
-        w, created_w = ToolFieldWhiteList.objects.get_or_create(tool_id=self.id, context='w')
+        w, created_w = ToolFieldWhiteList.objects.get_or_create(
+            tool_id=self.id, context='w')
         if created_w:
             w._params = ",".join(inputs_list)
             w.save()
@@ -208,7 +214,8 @@ class Tool(models.Model):
 
             id_tool = tools_ids.pop()
             try:
-                t, created = Tool.objects.get_or_create(id_galaxy=id_tool, galaxy_server=galaxy_server)
+                t, created = Tool.objects.get_or_create(
+                    id_galaxy=id_tool, galaxy_server=galaxy_server)
 
                 if force:
                     t.import_tool_io(t.tool_json)
