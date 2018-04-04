@@ -9,28 +9,28 @@
   pk: 2
   fields:
     name: clean
-    verbose_name: Alignment curation
+    verbose_name: Alignment Curation
     rank: 0
 
 - model: tools.toolflag
   pk: 3
   fields:
     name: tree
-    verbose_name: Phylogeny
+    verbose_name: Tree Inference
     rank: 0
 
 - model: tools.toolflag
   pk: 4
   fields:
     name: visu
-    verbose_name: Tree rendering
+    verbose_name: Tree Rendering
     rank: 0
 
 - model: tools.toolflag
   pk: 5
   fields:
     name: conve
-    verbose_name: Format conversion
+    verbose_name: Format Conversion
     rank: 0
 
 - model: tools.toolflag
