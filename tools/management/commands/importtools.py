@@ -4,11 +4,13 @@ from django.core.management.base import BaseCommand, CommandError
 from galaxy.models import Server
 from tools.models import Tool
 from tools.models import ToolFlag
+from tools.models import ToolInputData
 
 
 class Command(BaseCommand):
     help = 'Import Galaxy tools to NGPhylogeny'
     requires_system_checks = True
+    input_fields = []
     flags = []
 
     def add_arguments(self, parser):
@@ -24,6 +26,9 @@ class Command(BaseCommand):
         parser.add_argument(
             '--flags',
             help="Imports mapping between tools and flags using given file")
+        parser.add_argument(
+            '--inputfields',
+            help="Imports input fields from an input file")
 
     def read_flag_file(self, flagfile):
         with open(flagfile) as f:
@@ -31,17 +36,27 @@ class Command(BaseCommand):
                 link = line.strip().split("\t")
                 self.flags.append(link)
 
+    def read_input_fields_file(self, fieldfile):
+        with open(fieldfile) as f:
+            for line in f:
+                link = line.strip().split("\t")
+                self.input_fields.append(link)
+
     def handle(self, *args, **options):
         galaxy_url = options.get('galaxyurl')
         flagfile = options.get('flags')
+        fieldfile = options.get('inputfields')
         query = options.get('query')
         force = options.get('force')
         tool_id = options.get('id')
 
         self.read_flag_file(flagfile)
+        self.read_input_fields_file(fieldfile)
 
         self.import_tools(galaxy_url, query, tool_id, force)
-        self.associate_flags(flagfile)
+        self.associate_flags()
+        self.set_input_fields()
+        
 
     def import_tools(self, galaxy_url, query, tool_id, force):
         tools_found = []
@@ -111,7 +126,7 @@ class Command(BaseCommand):
         else:
             self.stdout.write("No result was found for query  %s" % (query))
 
-    def associate_flags(self, flagfile):
+    def associate_flags(self):
         for flaglink in self.flags:
             tool = Tool.objects.filter(
                 name=flaglink[0]).first()
@@ -121,3 +136,13 @@ class Command(BaseCommand):
                 flag = ToolFlag.objects.filter(
                     verbose_name=f).first()
                 flag.tool.add(tool)
+
+    def set_input_fields(self):
+        for input_field in self.input_fields:
+            field = ToolInputData.objects.filter(
+                tool__name=input_field[0], name=input_field[1]).first()
+            if field:
+                self.stdout.write(self.style.SUCCESS(
+                    "%s : %s" % (input_field[0],input_field[1])))
+                field.galaxy_input_data = True
+                field.save()

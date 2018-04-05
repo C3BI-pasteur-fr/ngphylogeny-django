@@ -277,7 +277,11 @@ class ToolInputData(ToolData):
     edam_formats = models.CharField(max_length=250, null=True, blank=True)
     extensions = models.CharField(max_length=100)
     examplefile = models.ForeignKey(ExampleFile, null=True, blank=True)
-
+    # Wether this field may be linked to the first input data step
+    # in the workflow maker.
+    # Avoids to link input data to all input file fields in PhyML for example
+    # (input alignment + user input tree...)
+    galaxy_input_data  = models.BooleanField(default=False)
     tool = models.ForeignKey(Tool, on_delete=models.CASCADE)
 
     def get_extensions(self):
