@@ -7,13 +7,13 @@ from .models import ToolFieldWhiteList
 
 def map_galaxy_tool_input(attr):
     """Convert Galaxy tool input information to django field attribute dict"""
-
+    required = not attr.get('optional', False)
     field_map = {'initial': attr.get('default_value', attr.get('value', "")),
-                 'required': attr.get('optional', ""),
+                 'required': required ,
                  'help_text': attr.get('help', ""),
                  'label': attr.get('label', ""),
                  }
-
+    print(field_map)
     if attr.get("type", "") == "select":
         field_map['choices'] = []
         for opt in attr.get("options", ""):
