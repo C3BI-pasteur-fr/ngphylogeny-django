@@ -3,21 +3,24 @@ from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Layout, Field, Div, Fieldset
 from django import forms
 from .models import ToolFieldWhiteList
+import json
 
 
 def map_galaxy_tool_input(attr):
     """Convert Galaxy tool input information to django field attribute dict"""
-    required = not attr.get('optional', False)
-    field_map = {'initial': attr.get('default_value', attr.get('value', "")),
-                 'required': required ,
+    optional = attr.get('optional', False)
+    field_map = {'initial': attr.get('default_value', attr.get('value', None)),
+                 # 'required': not optional,
+                 'required': False,
                  'help_text': attr.get('help', ""),
                  'label': attr.get('label', ""),
                  }
-    print(field_map)
     if attr.get("type", "") == "select":
         field_map['choices'] = []
         for opt in attr.get("options", ""):
-            field_map['choices'].append((opt[1], opt[0]))
+            # We filter configuration file in seqtype input
+            if opt[1] != 'cfg':
+                field_map['choices'].append((opt[1], opt[0]))
 
     if attr.get("type", "") == "data":
 
@@ -32,11 +35,18 @@ def map_galaxy_tool_input(attr):
 
 
 class ToolForm(forms.Form):
-    """"""
+    """
+    This class represents a Galaxy tool form.
+    The fields of the form are created automatically using
+    description of the tool given by Galaxy
+    via bioblend ToolClient.show_tool()
+    """
+
     tool_id = None
     tool_params = []
     # map field id to galaxy params name
     fields_ids_mapping = {}
+    fields_ext_mapping = {}
     visible_field = []
     n = 0
 
@@ -48,17 +58,24 @@ class ToolForm(forms.Form):
             choices = attrfield.get("options", "").get('hda')
             self.input_file_ids.append(field_id)
             if choices:
-                self.fields[field_id] = forms.ChoiceField(**map_galaxy_tool_input(attrfield))
+                self.fields[field_id] = forms.ChoiceField(
+                    **map_galaxy_tool_input(attrfield))
             else:
-                self.fields[field_id] = forms.FileField(**map_galaxy_tool_input(attrfield))
-                self.fields[field_id].widget.attrs = ({'data-ext': attrfield.get('extensions')})
-                self.fields[field_id].widget.attrs = ({'data-name': attrfield.get('name')})
-
+                self.fields[field_id] = forms.FileField(
+                    **map_galaxy_tool_input(attrfield))
+                self.fields[field_id].widget.attrs = (
+                    {'data-ext': attrfield.get('extensions')})
+                self.fields[field_id].widget.attrs = (
+                    {'data-name': attrfield.get('name')})
+                # Update extensions associated to field => used in tools/views
+                self.fields_ext_mapping[field_id] = attrfield.get('extensions')
         elif fieldtype == "select":
             if attrfield.get("display", "") == 'radio':
-                self.fields[field_id] = forms.ChoiceField(widget=forms.RadioSelect, **map_galaxy_tool_input(attrfield))
+                self.fields[field_id] = forms.ChoiceField(
+                    widget=forms.RadioSelect, **map_galaxy_tool_input(attrfield))
             else:
-                self.fields[field_id] = forms.ChoiceField(**map_galaxy_tool_input(attrfield))
+                self.fields[field_id] = forms.ChoiceField(
+                    **map_galaxy_tool_input(attrfield))
 
         elif fieldtype == "boolean":
             data_onvalue = attrfield.get("truevalue", None)
@@ -74,33 +91,35 @@ class ToolForm(forms.Form):
                 **map_galaxy_tool_input(attrfield))
 
         elif fieldtype == "text":
-            self.fields[field_id] = forms.CharField(**map_galaxy_tool_input(attrfield))
+            self.fields[field_id] = forms.CharField(
+                **map_galaxy_tool_input(attrfield))
 
         elif fieldtype == "integer":
-            self.fields[field_id] = forms.IntegerField(**map_galaxy_tool_input(attrfield))
+            self.fields[field_id] = forms.IntegerField(
+                **map_galaxy_tool_input(attrfield))
 
         else:
-            self.fields[field_id] = forms.CharField(**map_galaxy_tool_input(attrfield))
-
+            self.fields[field_id] = forms.CharField(
+                **map_galaxy_tool_input(attrfield))
+        print(attrfield)
+        print(field_id)
         return field_id
 
     def parse_galaxy_input_tool(self, list_inputs, cond_name='', whitelist=list()):
 
         fields_created = []
-
         for input_tool in list_inputs:
             if input_tool.get('type') == 'section':
                 fields_created.append(Fieldset(input_tool.get('title'),
                                                *self.parse_galaxy_input_tool(input_tool.get('inputs'))))
 
             elif input_tool.get('name') in whitelist or not whitelist:
-
                 cond_input = input_tool.get('test_param')
                 if cond_input:
-
                     cond_name = input_tool.get('name') + '|'
                     conditional_field = self.create_field(cond_input)
-                    self.fields_ids_mapping[conditional_field] = cond_name + cond_input['name']
+                    self.fields_ids_mapping[conditional_field] = cond_name + \
+                        cond_input['name']
 
                     nested_field = []
                     cases = input_tool.get('cases', '')
@@ -116,21 +135,21 @@ class ToolForm(forms.Form):
                                 nested_field.append(Div(data_test=data_test,
                                                         data_case=case_value,
                                                         css_class="well",
-                                        *self.parse_galaxy_input_tool(case_inputs, cond_name)))
+                                                        *self.parse_galaxy_input_tool(case_inputs, cond_name)))
 
-                    fields_created.append(Div(conditional_field, *nested_field))
+                    fields_created.append(
+                        Div(conditional_field, *nested_field))
                     cond_name = ''
 
-                else:
+                elif input_tool.get('label', '') != "Config file":
                     new_field = self.create_field(input_tool)
                     fields_created.append(Field(new_field))
-                    self.fields_ids_mapping[new_field] = cond_name + input_tool['name']
-
+                    self.fields_ids_mapping[new_field] = cond_name + \
+                        input_tool['name']
         return fields_created
 
-    def __init__(self, tool_params=None, tool_id=None, whitelist=None, *args, **kwargs):
-        super(ToolForm, self).__init__(*args, **kwargs)
-
+    def __init__(self, tool_params=None, tool_id=None, whitelist=None, data=None):
+        super(ToolForm, self).__init__(data=data)
         self.tool_params = tool_params or self.tool_params
         self.visible_field = whitelist or self.visible_field
         self.tool_id = tool_id or self.tool_id
@@ -138,8 +157,10 @@ class ToolForm(forms.Form):
         self.helper = FormHelper(self)
         self.helper.form_class = 'blueForms'
         self.helper.form_tag = False
-        self.formset = self.parse_galaxy_input_tool(self.tool_params, whitelist=self.visible_field)
+        self.formset = self.parse_galaxy_input_tool(
+            self.tool_params, whitelist=self.visible_field)
         self.helper.layout = Layout(FormActions(Field(*self.formset)))
+
 
 class ToolFieldWhiteListForm(forms.ModelForm):
     _params = forms.MultipleChoiceField(label='Params')
@@ -149,5 +170,6 @@ class ToolFieldWhiteListForm(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super(ToolFieldWhiteListForm, self).clean()
-        cleaned_data['_params'] = ",".join(self.cleaned_data.get('_params', []))
+        cleaned_data['_params'] = ",".join(
+            self.cleaned_data.get('_params', []))
         return cleaned_data
