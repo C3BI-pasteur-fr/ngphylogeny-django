@@ -94,7 +94,7 @@ docker build -t ngphylo .
 Note: The remote galaxy instance must contain all necessary tools (listed [here](toolflags.txt)).
 
 ```
-docker run -p 8080:8000 django_admin_username django_admin_password django_admin_email galaxy_url galaxy_api_key
+docker run -p 8080:8000 evolbioinfo/ngphylogeny django_admin_username django_admin_password django_admin_email galaxy_url galaxy_api_key
 ```
 
 ## Running NGPhylogeny.fr using a custom local galaxy instance
@@ -103,9 +103,9 @@ docker run -p 8080:8000 django_admin_username django_admin_password django_admin
 docker run --privileged=true  \
        -e GALAXY_CONFIG_TOOL_CONFIG_FILE=config/tool_conf.xml.sample,config/shed_tool_conf.xml.sample,/local_tools/tool_conf.xml \
        -e GALAXY_DOCKER_ENABLED=True -p 8080:80 -p 8121:21 -p 8122:22 \
-       ngphylogalaxy
+       evolbioinfo/ngphylogeny-galaxy
 # Starting Docker image of NGPhylogeny.fr (MacOS)
-docker run -p 8000:8000 ngphylo admin admin@admin http://host.docker.internal:8080 admin
+docker run -p 8000:8000 evolbioinfo/ngphylogeny admin admin@admin http://host.docker.internal:8080 admin
 # Starting Docker image of NGPhylogeny.fr (Linux)
-docker run -p 8000:8000 --net=host ngphylo admin admin@admin http://localhost:8080 admin
+docker run -p 8000:8000 --net=host evolbioinfo/ngphylogeny admin admin@admin http://localhost:8080 admin
 ```
