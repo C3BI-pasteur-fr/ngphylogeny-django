@@ -78,17 +78,19 @@ class WorkflowStepInformation(object):
                     'tool_idgalaxy': step.get('tool_id'),
                     'annotation': step.get('annotation'),
                     'params': step.get('tool_inputs')
-                                                }
+                }
 
         # update dict with known tool and remove steps with unknown tools
         self.update_dict_tools()
 
         # sort steps
-        ord_step = collections.OrderedDict.fromkeys(sorted(self.steps_tooldict.keys()))
+        ord_step = collections.OrderedDict.fromkeys(
+            sorted(self.steps_tooldict.keys()))
         ord_step.update(self.steps_tooldict)
 
         self.steps_tooldict = ord_step
-        self.sorted_tool_list = list((k, v.get('tool')) for k, v in ord_step.iteritems() if v and 'tool' in v)
+        self.sorted_tool_list = list(
+            (k, v.get('tool')) for k, v in ord_step.iteritems() if v and 'tool' in v)
 
 
 class WorkflowGalaxyFactory(object):
@@ -106,7 +108,7 @@ class WorkflowGalaxyFactory(object):
         self.name = "Imported workflow"
         self.steps = dict()
         self.valid = True
-        
+
         if gi and history_id:
             self.set_steps(list_tools, gi, history_id)
 
@@ -124,23 +126,33 @@ class WorkflowGalaxyFactory(object):
             wfi = WorkflowToolInformation(tool, gi, history_id)
             wfi.set_id(step)
             self.steps[str(step)] = wfi
+            valid = False
             # link output compatible from previous step
             for inputdata in tool.toolinputdata_set.all():
-                if previous_step :
-                    # i.e first step : We link input data only to fields marked as galaxy_input_data
-                    if previous_step.type == "data_input" and inputdata.galaxy_input_data :  
+                if previous_step:
+                    # i.e first step : We link input data only to
+                    # fields marked as galaxy_input_data
+                    if previous_step.type == "data_input" and inputdata.galaxy_input_data:
                         wfi.set_input_connections(
                             stepid=previous_step.id,
                             input_name=inputdata.name,
                             output_name="output"
                         )
                     if previous_step.type == 'tool':
-                        # find outputs of tool in step-1 compatible with current tool input
-                        compatible_outputs = ToolOutputData.objects.filter(compatible_inputs=inputdata,
-                                                                           # current tool input
-                                                                           tool__id_galaxy=previous_step.tool_id
-                                                                           # previous step output
-                                                                           )
+                        # find outputs of tool in step-1 compatible
+                        # with current tool input
+                        compatible_outputs = ToolOutputData.objects.filter(
+                            compatible_inputs=inputdata,
+                            # current tool input
+                            tool__id_galaxy=previous_step.tool_id
+                            # previous step output
+                        )
+                        print("in")
+                        print(inputdata)
+                        print("prev")
+                        print(previous_step.tool_id)
+                        print("out")
+                        print(compatible_outputs)
                         if compatible_outputs:
                             # set_input_connections
                             for o in compatible_outputs:
@@ -149,14 +161,13 @@ class WorkflowGalaxyFactory(object):
                                     input_name=inputdata.name,
                                     output_name=o.name
                                 )
+                                valid = True
                             i_extensions = inputdata.get_extensions()
                             if i_extensions and not (o.extension in i_extensions):
                                 first_ext = "".join(i_extensions[:1])
                                 previous_step.convert_action(o.name, first_ext)
-                        #if not find try to invoke convertor
-                        else:
-                            self.valid = False
-
+            if not valid:
+                self.valid = False
     def __repr__(self):
         return str(self.__dict__)
 
@@ -243,7 +254,7 @@ class WorkflowToolInformation(object):
                     'id': stepid,
                     'output_name': output_name
                 }
-            }
+             }
         )
 
     def set_tool_state(self, tool, gi, history_id):
@@ -268,7 +279,6 @@ class WorkflowToolInformation(object):
                 }
             }
         )
-
 
     def __repr__(self):
         return str(self.__dict__)
