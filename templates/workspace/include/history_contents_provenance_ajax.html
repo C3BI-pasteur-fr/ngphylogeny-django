@@ -212,6 +212,10 @@ $(document).ready(function(){
                     {# <a class="btn btn-default btn-sm" title="Export big data in your personal outputs folder" #}
                           {# href="{% url 'export_file' file.id %}"> #}
                     {# <span class="glyphicon glyphicon-export text-primary" aria-hidden="true"></span></a>#}
+                    <a class="btn btn-default btn-sm" title="Run parameters"
+                       data-toggle="tooltip" data-placement="right"
+                       href="{% url 'display_params' file.id %}">
+                        <span class="glyphicon glyphicon-cog text-primary"></span></a>
                     <a class="btn btn-default btn-sm" title="Dowload the file"
                        data-toggle="tooltip" data-placement="right"
                        href="{% url 'download_file' file.id %}">

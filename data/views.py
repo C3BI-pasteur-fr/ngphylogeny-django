@@ -1,4 +1,5 @@
 import urllib
+import json
 
 try:
     # Python 3:
@@ -11,6 +12,7 @@ except ImportError:
 import tempfile
 import requests
 from django.http import StreamingHttpResponse
+from django.http import JsonResponse
 from django.shortcuts import render, redirect
 from django.urls import reverse_lazy
 from django.utils.decorators import method_decorator
@@ -110,8 +112,20 @@ def display_file(request, file_id):
     if request.is_ajax():
         return display_raw(request, file_id)
     else:
-
         return render(request, 'display.html', {'history_id': data.get('history_id')})
+
+@connection_galaxy
+def display_params(request, file_id):
+    """Display tool run parameters """
+    gi = request.galaxy
+    data = gi.datasets.show_dataset(dataset_id=file_id)
+    job_id = data.get('creating_job')
+
+    if request.is_ajax():
+        job = gi.jobs.show_job(job_id)
+        return JsonResponse(job)
+    else:
+        return render(request, 'display_params.html', {'history_id': data.get('history_id')})
 
 
 @connection_galaxy
