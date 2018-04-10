@@ -41,7 +41,8 @@ class WorkflowStepInformation(object):
 
     def get_tools(self):
         # get known tools
-        return self.tool_queryset.filter(id_galaxy__in=self.toolset).prefetch_related('toolflag_set')
+        return self.tool_queryset.filter(
+            id_galaxy__in=self.toolset).prefetch_related('toolflag_set')
 
     def update_dict_tools(self):
 
@@ -126,7 +127,7 @@ class WorkflowGalaxyFactory(object):
             wfi = WorkflowToolInformation(tool, gi, history_id)
             wfi.set_id(step)
             self.steps[str(step)] = wfi
-            valid = False
+            tmpvalid = False
             # link output compatible from previous step
             for inputdata in tool.toolinputdata_set.all():
                 if previous_step:
@@ -147,13 +148,8 @@ class WorkflowGalaxyFactory(object):
                             tool__id_galaxy=previous_step.tool_id
                             # previous step output
                         )
-                        print("in")
-                        print(inputdata)
-                        print("prev")
-                        print(previous_step.tool_id)
-                        print("out")
-                        print(compatible_outputs)
                         if compatible_outputs:
+                            tmpvalid = True
                             # set_input_connections
                             for o in compatible_outputs:
                                 wfi.set_input_connections(
@@ -161,13 +157,13 @@ class WorkflowGalaxyFactory(object):
                                     input_name=inputdata.name,
                                     output_name=o.name
                                 )
-                                valid = True
                             i_extensions = inputdata.get_extensions()
                             if i_extensions and not (o.extension in i_extensions):
                                 first_ext = "".join(i_extensions[:1])
                                 previous_step.convert_action(o.name, first_ext)
-            if not valid:
+            if not tmpvalid and step > 1:
                 self.valid = False
+
     def __repr__(self):
         return str(self.__dict__)
 
@@ -259,8 +255,9 @@ class WorkflowToolInformation(object):
 
     def set_tool_state(self, tool, gi, history_id):
 
-        tool_build = gi.make_get_request(url=gi.tools.url + '/' + tool.id_galaxy + '/build',
-                                         params=dict(history_id=history_id))
+        tool_build = gi.make_get_request(
+            url=gi.tools.url + '/' + tool.id_galaxy + '/build',
+            params=dict(history_id=history_id))
 
         tool_state = tool_build.json()['state_inputs']
         tool_state.update(__page__=0)
