@@ -15,7 +15,8 @@ from workspace.views import create_history, delete_history
 
 from workflows.forms import tool_form_factory
 from workflows.views.generic import WorkflowWizard, WorkflowListView
-from workflows.views.viewmixing import WorkflowDuplicateMixin, WorkflowDetailMixin
+from workflows.views.viewmixing import WorkflowDuplicateMixin
+from workflows.views.viewmixing import WorkflowDetailMixin
 
 from bioblend.galaxy.tools.inputs import inputs
 from django.core.urlresolvers import reverse_lazy
@@ -81,7 +82,9 @@ class WorkflowAdvancedFormView(WorkflowDetailMixin, SingleObjectMixin):
 
 
 @method_decorator(connection_galaxy, name="dispatch")
-class WorkflowAdvancedSinglePageView(WorkflowDuplicateMixin, WorkflowAdvancedFormView, View):
+class WorkflowAdvancedSinglePageView(WorkflowDuplicateMixin,
+                                     WorkflowAdvancedFormView,
+                                     View):
     template_name = 'workflows/workflows_adv_singlepage_form.html'
 
     def get(self, request, *args, **kwargs):
@@ -114,14 +117,14 @@ class WorkflowAdvancedSinglePageView(WorkflowDuplicateMixin, WorkflowAdvancedFor
                 # if form is not valid
                 return self.get(request, *args, **kwargs)
             else:
-                #print (tool_form.cleaned_data)
+                # print (tool_form.cleaned_data)
                 tool_inputs = inputs()
                 # mapping between form id to galaxy params names
                 fields = tool_form.fields_ids_mapping
                 inputs_data = set(tool_form.input_file_ids)
                 # set the Galaxy parameter (name, value)
                 for key, value in tool_form.cleaned_data.items():
-                    if not key in inputs_data:
+                    if key not in inputs_data:
                         tool_inputs.set_param(fields.get(key), value)
                 for inputfile in inputs_data:
                     uploaded_file = ""
@@ -133,7 +136,8 @@ class WorkflowAdvancedSinglePageView(WorkflowDuplicateMixin, WorkflowAdvancedFor
                             tmp_file.write(chunk)
                         tmp_file.flush()
                         # send file to galaxy
-                        outputs = gi.tools.upload_file(path=tmp_file.name, file_name=uploaded_file.name,
+                        outputs = gi.tools.upload_file(path=tmp_file.name,
+                                                       file_name=uploaded_file.name,
                                                        history_id=history_id)
                         file_id = outputs.get('outputs')[0].get('id')
                         tool_inputs.set_dataset_param(

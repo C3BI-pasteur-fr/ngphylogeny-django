@@ -64,7 +64,6 @@ def workflows_alacarte_build(request):
             if select_tool_pk:
                 tools.append(select_tool_pk)
             previous_tool = select_tool_pk
-
         if form_is_valid:
             dict_tools = Tool.objects.in_bulk(tools)
             # sort tool
@@ -78,7 +77,10 @@ def workflows_alacarte_build(request):
                 if wkg.valid:
                     wkg.name = request.POST.get('wkname')
                     if not wkg.name:
-                        wkg.name = "Workflow["+"".join(random.sample(string.ascii_letters + string.digits, 8))+"]"
+                        wkg.name = "Workflow["+"".join(
+                            random.sample(
+                                string.ascii_letters + string.digits, 8
+                            ))+"]"
                     # create the JSON of generated workflow
                     # create new entry into Galaxy
                     wkgi = gi.workflows.import_workflow_json(wkg.to_json())

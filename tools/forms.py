@@ -148,8 +148,10 @@ class ToolForm(forms.Form):
                         input_tool['name']
         return fields_created
 
-    def __init__(self, tool_params=None, tool_id=None, whitelist=None, data=None):
-        super(ToolForm, self).__init__(data=data)
+    def __init__(self, tool_params=None,
+                 tool_id=None, whitelist=None,
+                 data=None, prefix=None):
+        super(ToolForm, self).__init__(data=data, prefix=prefix)
         self.tool_params = tool_params or self.tool_params
         self.visible_field = whitelist or self.visible_field
         self.tool_id = tool_id or self.tool_id
