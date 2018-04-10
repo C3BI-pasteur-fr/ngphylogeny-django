@@ -14,27 +14,30 @@
     </li>
 {% endblock %}
 {% block javascripts %}
-<script>
-        $(document).ready(function(){
-        $.ajax({
-        url: document.URL,
-        success: function(data) {
-	$('#view').html("");
-	$('#view').append("<h2>Parameters</h2>");
-	$('#view').append("<ul>");
-    par = data['params']
-    cli = data['command_line']
-    for(p in par){
-      if(p!="__workflow_invocation_uuid__" && p!="chromInfo" && p!="dbkey"){
-        var lidata="<li>"+p+" : "+ par[p]+"</li>";
-        $(lidata).appendTo('#view');
-      }
-    }
-    $('#view').append("</ul>");
-	$('#view').append("<h2>Command line</h2>");
-	$('#view').append("<pre>"+cli+"</pre>");
-        }});
-        });
+    <script src="https://cdn.datatables.net/1.10.16/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.10.16/js/dataTables.bootstrap.min.js"></script>
+    <script>
+      $(document).ready(function(){
+      $.ajax({
+      url: document.URL,
+      success: function(data) {
+      $('#view').html("");
+      $('#view').append("<h2>Parameters</h2>");
+      $('#view').append("<table id=\"paramtable\" style=\"margin-left:auto;margin-right:auto;\"></table>");
+      $('#paramtable').append("<thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody>");
+	  par = data['params']
+	  cli = data['command_line']
+	  for(p in par){
+	  if(p!="__workflow_invocation_uuid__" && p!="chromInfo" && p!="dbkey"){
+          $('#paramtable').append("<tr><td>"+p+"</td><td><pre>"+ par[p]+"</pre></td></tr>");
+	  }
+	  }
+	  $('#view').append("</tbody></table>");
+      $('#view').append("<h2>Command line</h2>");
+      $('#view').append("<pre style=\"background-color:black;color:lightgrey;white-space: pre-line;\">"+cli+"</pre>");
+
+      }});
+      });
 </script>
 {% endblock %}
 {% block goback %}
