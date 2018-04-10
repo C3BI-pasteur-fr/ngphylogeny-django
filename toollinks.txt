@@ -2,8 +2,7 @@ BMGE	out_align_fasta	FastME	input_align
 BMGE	out_align_fasta	FastTree	input_align
 BMGE	out_align_fasta	PhyML-SMS	input_align
 BMGE	out_align_fasta	TNT	input_align
-BMGE	out_align_fasta	PhyML 3.1	input_align
-BMGE	out_align_fasta	PhyML 3.0	input_align
+BMGE	out_align_fasta	PhyML	input_align
 BMGE	out_align_fasta	MrBayes	input_align
 Clustal Omega	out_align	BMGE	input_align
 Clustal Omega	out_align	Noisy	input_align
@@ -12,8 +11,7 @@ Clustal Omega	out_align	FastME	input_align
 Clustal Omega	out_align	FastTree	input_align
 Clustal Omega	out_align	PhyML-SMS	input_align
 Clustal Omega	out_align	TNT	input_align
-Clustal Omega	out_align	PhyML 3.1	input_align
-Clustal Omega	out_align	PhyML 3.0	input_align
+Clustal Omega	out_align	PhyML	input_align
 Clustal Omega	out_align	MrBayes	input_align
 FastME	out_tree	Newick Display	input_tree
 FastTree	out_tree	Newick Display	input_tree
@@ -21,8 +19,7 @@ Gblocks	out_align	FastME	input_align
 Gblocks	out_align	FastTree	input_align
 Gblocks	out_align	PhyML-SMS	input_align
 Gblocks	out_align	TNT	input_align
-Gblocks	out_align	PhyML 3.1	input_align
-Gblocks	out_align	PhyML 3.0	input_align
+Gblocks	out_align	PhyML	input_align
 Gblocks	out_align	MrBayes	input_align
 MAFFT	out_align	BMGE	input_align
 MAFFT	out_align	Noisy	input_align
@@ -31,8 +28,7 @@ MAFFT	out_align	FastME	input_align
 MAFFT	out_align	FastTree	input_align
 MAFFT	out_align	PhyML-SMS	input_align
 MAFFT	out_align	TNT	input_align
-MAFFT	out_align	PhyML 3.1	input_align
-MAFFT	out_align	PhyML 3.0	input_align
+MAFFT	out_align	PhyML	input_align
 MAFFT	out_align	MrBayes	input_align
 MUSCLE	out_align	BMGE	input_align
 MUSCLE	out_align	Noisy	input_align
@@ -41,8 +37,7 @@ MUSCLE	out_align	FastME	input_align
 MUSCLE	out_align	FastTree	input_align
 MUSCLE	out_align	PhyML-SMS	input_align
 MUSCLE	out_align	TNT	input_align
-MUSCLE	out_align	PhyML 3.1	input_align
-MUSCLE	out_align	PhyML 3.0	input_align
+MUSCLE	out_align	PhyML	input_align
 MUSCLE	out_align	MrBayes	input_align
 PhyML-SMS	out_tree	Newick Display	input_tree
 MrBayes	firstrun	Newick Display	input_tree
@@ -50,9 +45,7 @@ Noisy	out_align	FastME	input_align
 Noisy	out_align	FastTree	input_align
 Noisy	out_align	PhyML-SMS	input_align
 Noisy	out_align	TNT	input_align
-Noisy	out_align	PhyML 3.1	input_align
-Noisy	out_align	PhyML 3.0	input_align
+Noisy	out_align	PhyML	input_align
 Noisy	out_align	MrBayes	input_align
 TNT	out_tree	Newick Display	input_tree
-PhyML 3.0	out_tree	Newick Display	input_tree
-PhyML 3.1	out_tree	Newick Display	input_tree
+PhyML	out_tree	Newick Display	input_tree

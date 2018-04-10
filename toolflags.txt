@@ -8,8 +8,7 @@ FastME	Tree Inference,Tool display in OneClick Workflows,Tool display in Advance
 FastTree	Tree Inference,Tool display in OneClick Workflows,Tool display in Advanced Workflows,Tool display in Workflow Maker
 PhyML-SMS	Tree Inference,Tool display in OneClick Workflows,Tool display in Advanced Workflows,Tool display in Workflow Maker
 TNT	Tree Inference,Tool display in OneClick Workflows,Tool display in Advanced Workflows,Tool display in Workflow Maker
-PhyML 3.1	Tree Inference,Tool display in OneClick Workflows,Tool display in Advanced Workflows,Tool display in Workflow Maker
-PhyML 3.0	Tree Inference,Tool display in OneClick Workflows,Tool display in Advanced Workflows,Tool display in Workflow Maker
+PhyML	Tree Inference,Tool display in OneClick Workflows,Tool display in Advanced Workflows,Tool display in Workflow Maker
 MrBayes	Tree Inference,Tool display in OneClick Workflows,Tool display in Advanced Workflows,Tool display in Workflow Maker
 Newick Display	Tree Rendering,Tool display in OneClick Workflows,Tool display in Advanced Workflows,Tool display in Workflow Maker
 Fasta to Phylip	Format Conversion
