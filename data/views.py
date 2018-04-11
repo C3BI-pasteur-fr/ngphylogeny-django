@@ -85,15 +85,23 @@ def download_file(request, file_id):
     """permet a l'utilisateur de telecharger le fichier grace a l'api"""
     gi = request.galaxy
     data = gi.datasets.show_dataset(dataset_id=file_id)
-    url = urlparse.urljoin(gi.base_url, data['download_url'])
+    name = "error"
+    if isinstance(data, dict):
+        dlurl = data.get('download_url')
+        name = data.get('name')
+        if not name:
+            name = "download"
+        if dlurl:
+            url = urlparse.urljoin(gi.base_url, dlurl)
+            response = urllib.urlopen(url)
+            stream_response = StreamingHttpResponse(response.read())
+            stream_response['Content-Disposition'] = 'attachment; filename=' + name
+        else:
+            stream_response = StreamingHttpResponse("No file download URL corresponds to the given dataset id " + file_id)
 
-    response = urllib.urlopen(url)
-    stream_response = StreamingHttpResponse(response.read())
-    stream_response['Content-Disposition'] = 'attachment; filename=' + data["name"]
-
-    # TODO test if bigDATA
+    else:
+        stream_response = StreamingHttpResponse(data)
     return stream_response
-
 
 @connection_galaxy
 def display_raw(request, file_id):
@@ -108,36 +116,43 @@ def display_file(request, file_id):
     """Display file content to the web browser """
     gi = request.galaxy
     data = gi.datasets.show_dataset(dataset_id=file_id)
-
-    if request.is_ajax():
-        return display_raw(request, file_id)
-    else:
-        return render(request, 'display.html', {'history_id': data.get('history_id')})
+    if isinstance(data, dict):
+        historyid = data.get('history_id')
+        if historyid:
+            if request.is_ajax():
+                return display_raw(request, file_id)
+            else:
+                return render(request, 'display.html', {'history_id': historyid})
+    return render(request, 'error.html', {'errortitle': 'Error querying galaxy', 'errormessage': data})
 
 @connection_galaxy
 def display_params(request, file_id):
     """Display tool run parameters """
     gi = request.galaxy
     data = gi.datasets.show_dataset(dataset_id=file_id)
-    job_id = data.get('creating_job')
-
-    if request.is_ajax():
-        job = gi.jobs.show_job(job_id)
-        return JsonResponse(job)
-    else:
-        return render(request, 'display_params.html', {'history_id': data.get('history_id')})
-
+    if isinstance(data, dict):
+        job_id = data.get('creating_job')
+        if job_id:
+            if request.is_ajax():
+                job = gi.jobs.show_job(job_id)
+                return JsonResponse(job)
+            else:
+                return render(request, 'display_params.html', {'history_id': data.get('history_id')})
+    return render(request, 'error.html', {'errortitle': 'Error querying galaxy', 'errormessage': data})
 
 @connection_galaxy
 def display_msa(request, file_id):
     """Display multiple alignment file content to the web browser """
     gi = request.galaxy
     data = gi.datasets.show_dataset(dataset_id=file_id)
-
-    if request.is_ajax():
-        return display_raw(request, file_id)
-    else:
-        return render(request, 'msaviz/msa.html', {'history_id': data.get('history_id')})
+    if isinstance(data, dict):
+        historyid = data.get('history_id')
+        if historyid:
+            if request.is_ajax():
+                return display_raw(request, file_id)
+            else:
+                return render(request, 'msaviz/msa.html', {'history_id': historyid})
+    return render(request, 'error.html', {'errortitle': 'Error querying galaxy', 'errormessage': data})
 
 
 @connection_galaxy
@@ -145,12 +160,17 @@ def tree_visualization(request, file_id):
 
     gi = request.galaxy
     data = gi.datasets.show_dataset(dataset_id=file_id)
-
-    url = urlparse.urljoin(gi.base_url, data['download_url'])
-    response = urllib.urlopen(url)
-
-    return render(request, template_name='treeviz/tree.html', context={'newick_tree': response.read(),
-                                                                       'history_id': data.get('history_id')})
+    if isinstance(data, dict):
+        dlurl = data.get('download_url')
+        historyid = data.get('history_id')
+        if dlurl and historyid:
+            url = urlparse.urljoin(gi.base_url, dlurl)
+            response = urllib.urlopen(url)
+            return render(request,
+                          template_name='treeviz/tree.html',
+                          context={'newick_tree': response.read(),
+                                   'history_id': historyid})
+    return render(request, 'error.html', {'errortitle': 'Error querying galaxy', 'errormessage': data})
 
 
 @connection_galaxy
@@ -159,20 +179,20 @@ def export_to_itol(request, file_id):
     gi = request.galaxy
     data = gi.datasets.show_dataset(dataset_id=file_id)
 
-    url = urlparse.urljoin(gi.base_url, data['download_url'])
-    response = urllib.urlopen(url)
-
-    tmpfile = tempfile.NamedTemporaryFile()
-    tmpfile.write(response.read())
-    tmpfile.flush()
-
-    # send file to itol server
-    url_itol = 'http://itol.embl.de/upload.cgi'
-    payload = {'tname': "", 'tfile': open(tmpfile.name, 'rb'), }
-    r = requests.post(url_itol, files=payload)
-
-    return redirect(r.url)
-
+    if isinstance(data, dict):
+        dlurl = data.get('download_url')
+        if dlurl:
+            url = urlparse.urljoin(gi.base_url, dlurl)
+            response = urllib.urlopen(url)
+            tmpfile = tempfile.NamedTemporaryFile()
+            tmpfile.write(response.read())
+            tmpfile.flush()
+            # send file to itol server
+            url_itol = 'http://itol.embl.de/upload.cgi'
+            payload = {'tname': "", 'tfile': open(tmpfile.name, 'rb'), }
+            r = requests.post(url_itol, files=payload)
+            return redirect(r.url)
+    return render(request, 'error.html', {'errortitle': 'Error querying galaxy', 'errormessage': data})
 
 def get_example(request):
     """return example file according to ext_file found """
@@ -185,7 +205,6 @@ def get_example(request):
     if tool_id and tool_input:
         example_file = ExampleFile.objects.filter(toolinputdata__tool_id=tool_id,
                                                   toolinputdata__name=tool_input).first()
-
     else:
         ext_file = request.GET.get('ext_file')
         example_file = ExampleFile.objects.filter(ext=ext_file).first()
