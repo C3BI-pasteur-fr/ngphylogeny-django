@@ -8,20 +8,38 @@
 {% markdown %}
 
 ## Overview
+
 NGPhylogeny.fr is a webservice dedicated to phylogenetic analysis. It provides a  complete  set
 of  phylogenetic tools and workflows adapted  to  various  contexts and various levels of user
-expertise.
+expertise. It is built around the main steps of all phylogenetic analyses:
 
-NGPhylogeny.fr works together with a [Galaxy instance](https://galaxy.pasteur.fr/) to:
+1. Multiple alignment
+2. Alignment curation
+3. Tree Inference
+4. Tree rendering
 
-1. Manage tools and workflows;
-2. Run tools and workflows and the underlying cluster;
-3. Keep track of the history of runs.
+Integrated tools:
+
+* Multiple alignment:
+    * Clustal Omega
+    * MAFFT
+    * Muscle
+    * Noisy
+* Alignment curation:
+    * BMGE
+    * Gblocks
+* Tree inference:
+    * FastME
+    * FastTree
+    * MrBayes
+    * PhyML
+    * PhyML-SMS
+    * TNT
 
 Different ways of using NGPhylogeny.fr are offered, depending on the user needs or expertise:
 
-1. [Oneclick workflows]({% url 'workflow_oneclick_list' %}) are already preconfigured to work on the majority of usecases. The only required
-input is the sequence data file in Fasta format.
+1. [Oneclick workflows]({% url 'workflow_oneclick_list' %}) are already preconfigured with default options that should work on the majority of usecases. The only required
+input is the sequence data file in Fasta format, and the data type (dna or protein) is detected automatically;
 2. [Advanced workflows]({% url 'workflows_advanced' %}) have basically the same structure as oneclick workflows, but can be parametrized.
 It means that the user can customize the options of each step of the workflows: alignment, curation, tree inference.
 3. [Workflow maker]({% url 'workflows_alacarte' %}) allows the user to choose the combination of tools that suits best his/her needs, and to customize the parameters.
@@ -30,12 +48,26 @@ It means that the user can customize the options of each step of the workflows: 
 Finally, NGPhylogeny.fr provides a user-friendly visualization layer specific to the different
 kinds of data usually manipulated in phylogenetics (i.e. alignments, trees).
 
-All the workflows are variants around the following skeletton:
+### Branch supports
 
-1. Multiple alignment
-2. Alignment curation
-3. Tree Inference
-4. Tree rendering
+In addition to their respective bootstraps, almost all tree inference tools are proposed with the following branch support computations:
+
+1. Felsenstein Bootstrap Proportions (FBP);
+2. Transfer Bootstrap Expectation (TBE).
+
+For example, it is possible to compute FBP and TBE supports with FastTree.
+
+Bootstrap options are accessible at "Advanced workflows".
+
+### Computations
+
+NGPhylogeny.fr works together with Institut Pasteur [Galaxy instance](https://galaxy.pasteur.fr/) to:
+
+1. Manage tools and workflows;
+2. Run tools and workflows on the underlying computing cluster;
+3. Keep track of run histories.
+
+
 
 ## [Oneclick workflows]({% url 'workflow_oneclick_list' %})
 One click workflows are accessible via the "Phylogeny Analysis/One click workflow" link on the tool bar:
@@ -44,38 +76,103 @@ One click workflows are accessible via the "Phylogeny Analysis/One click workflo
 
 The 4 oneclick workflows implemented in NGPhylogeny.fr are:
 
-1. PhyML-SMS: Model selection + tree inference;
-2. PhyML: Tree inference using PhyML;
-3. FastME: Tree inference using FastME;
-4. FastTree: Tree inference using FastTree.
+1. PhyML-SMS: This workflow uses [PhyML-SMS](http://www.atgc-montpellier.fr/phyml-sms/) to select the best evolutionary model and to infer the trees. However, it may not handle very large datasets, as the tree inference may take a very long time;
+2. PhyML: This workflow uses [PhyML](http://www.atgc-montpellier.fr/phyml/) to infer trees. Default options depend on data type (dna, protein). Like PhyML-SMS, large datasets may not be analyzed with this workflow;
+3. FastME: This workflow infer trees using [FastME](http://www.atgc-montpellier.fr/fastme/). FastME provides distance algorithms to infer phylogenies and can work with large datasets;
+4. FastTree: This workflow runs [FastTree](http://www.microbesonline.org/fasttree/) to infer trees. "FastTree infers approximately-maximum-likelihood phylogenetic trees from alignments of nucleotide or protein sequences" and works very very large datasets.
 
-They are described below.
+Sections below describe these oneclick workflows and all the steps.
 
 ### PhyML-SMS
-This workflow runs MAFFT to align sequences, Noisy to curate the alignment, and PhyML-SMS to build the output tree. A diagram of the workflow is represented below.
 
-![One click workflows]({% static 'images/doc/menu_oc_phymlsms.png' %})
+![PhyML-SMS workflow]({% static 'images/doc/menu_oc_phymlsms.png' %})
+
+Workflow outputs:
+
+* MAFFT:
+  - Alignment (FASTA)
+  - Guide Tree (TXT)
+  - Output logs (TXT
+* Gblocks:
+  - Output logs (TXT)
+  - Gblocks Cleaned alignment (FASTA)
+  - Gblocks alignment informations (HTML)
+* PhyML-SMS:
+  - Output logs (TXT)
+  - Output tree (NEWICK)
+  - SMS model comparison (TXT)
+  - SMS best model (TXT)
+* Newick Display
+  - Tree image (SVG)
+
 
 ### PhyML
-This workflow runs MAFFT to align sequences, Noisy to curate the alignment, and PhyML to build the output tree. A diagram of the workflow is represented below.
 
 ![One click workflows]({% static 'images/doc/menu_oc_phyml.png' %})
 
+Workflow outputs:
+
+* MAFFT:
+  - Alignment (FASTA)
+  - Guide Tree (TXT)
+  - Output logs (TXT
+* Gblocks:
+  - Output logs (TXT)
+  - Gblocks Cleaned alignment (FASTA)
+  - Gblocks alignment informations (HTML)
+* PhyML:
+  - Output logs (TXT)
+  - PhyML statistics (TXT)
+  - Output tree (NEWICK)
+* Newick Display
+  - Tree image (SVG)
+
 ### FastME
-This workflow runs MAFFT to align sequences, Noisy to curate the alignment, and FastME to build the output tree. A diagram of the workflow is represented below.
 
 ![One click workflows]({% static 'images/doc/menu_oc_fastme.png' %})
 
+Workflow outputs:
+
+* MAFFT:
+  - Alignment (FASTA)
+  - Guide Tree (TXT)
+  - Output logs (TXT
+* Gblocks:
+  - Output logs (TXT)
+  - Gblocks Cleaned alignment (FASTA)
+  - Gblocks alignment informations (HTML)
+* FastME:
+  - Output logs (TXT)
+  - Distance Matrix (TXT)
+  - Output tree (NEWICK)
+* Newick Display
+  - Tree image (SVG)
+
 ### FastTree
-This workflow runs MAFFT to align sequences, Noisy to curate the alignment, and FastTree to build the output tree. A diagram of the workflow is represented below.
 
 ![One click workflows]({% static 'images/doc/menu_oc_fasttree.png' %})
+
+Workflow outputs:
+
+* MAFFT:
+  - Alignment (FASTA)
+  - Guide Tree (TXT)
+  - Output logs (TXT
+* Gblocks:
+  - Output logs (TXT)
+  - Gblocks Cleaned alignment (FASTA)
+  - Gblocks alignment informations (HTML)
+* FastTree:
+  - Output logs (TXT)
+  - Output tree (NEWICK)
+* Newick Display
+  - Tree image (SVG)
 
 ### Default options
 
 #### MAFFT
 
-- MAFFT flavour: `fftns`
+- MAFFT flavour: `auto`
 - Gap extension penalty: `0.123`
 - Gap opening penalty: `1.53`
 - Direction of nucleotide sequences : do not adjust direction
@@ -83,51 +180,50 @@ This workflow runs MAFFT to align sequences, Noisy to curate the alignment, and 
 - Reorder output: `No`
 - Output format: `FASTA`
 
-#### Noisy
+#### Gblocks
 
-- Cutoff: `0.8`
-- Distance method used by Neighbor-Net : `HAMMING`
-- Ordering method:  `NeighborNet`
-- Count gap symbol as character state: `Yes`
+- Minimum number of sequences for a conserved position : `50%+1`
+- Minimum number of sequences for a flank position : `85%`
+- Maximum number of contiguous non-conserved positions:  `8`
+- Minimum length of a block: `10`
 - Running average over X columns: `1`
-- Perform INT random shuffles per column of the MSA: `1000`
+- Allowed gap positions: `None`
 
 #### PhyML-SMS
 
 - Statistical criterion to select the model : `AIC`
-- Tree topology search : `NNI`
-- Branch support: `aLRT`
+- Tree topology search : `SPR`
+- Branch support: `No branch support`
 
 #### PhyML
 
 - Proportion of invariant sites : `Estimated`
 - Number of categories for the discrete gamma model : `4`
 - Parameters of the gamma model: `estimated`
-- Tree topology search: `NNI`
+- Tree topology search: `SPR`
 - Optimise parameters: `tlr`
-- Statistical test for branch support: `SH-like`
-
-If Nucleotide sequence:
-
-- Transition/transversion ratio: `estimated`
-- Substitution model: `HKY85`
-- Equilibrium frequencies: `Empirical`
-
-If amino-acid sequence:
-
-- Model: `LG`
-- Equilibrium frequencies : `ML model`
+- Statistical test for branch support: `No branch support`
+- If Nucleotide sequence:
+  - Transition/transversion ratio: `estimated`
+  - Substitution model: `GTR`
+  - Equilibrium frequencies: `Empirical`
+- If amino-acid sequence:
+  - Model: `LG`
+  - Equilibrium frequencies : `ML model`
 
 #### FastME
 
-- Model : if dna sequence: `TN93`, if amino-acid sequence: `LG`
+- Model :
+    - if dna: `TN93`,
+    - if protein: `LG`
+- Equilibrium frequencies: `estimated`
 - Gamma distributed rates across sites: `Yes`
-- Gamma distribution parameter: `1`
+- Gamma distribution parameter: `1.0`
 - Remove gap strategy: `Pairwise deletion of gaps`
 - Starting tree: `BioNJ`
 - Tree Refinement: `BalME SPR`
 - Bootstrap: `No`
-- Decimal precision for branch lengths: `12`
+- Decimal precision for branch lengths: `6`
 
 #### FastTree
 
@@ -140,14 +236,14 @@ Advanced workflows are accessible via the "Phylogeny Analysis/Advanced workflows
 
 ![Advanced workflows]({% static 'images/doc/menu_aw_1.png' %})
 
-Advanced workflows have the same structure as oneclick workflows, but all options can be customized.
+Advanced workflows have the same structure as oneclick workflows, but some options can be customized.
 
 In particular, it is possible to perform specific bootstrap analyses:
 
 - No bootstrap (default);
 - Classical bootstrap (Felsenstein Bootstrap Proportions: FBP);
 - Transfer Bootstrap Expectation (TBE);
-- Specific bootstrap supports depending on the tree inference program:
+- Specific branch supports depending on the tree inference program:
     * aLRT
     * SH-like
     * aBayes
@@ -184,7 +280,6 @@ Tools that make up the workflows can be configured and run independently. They a
 
 ![Workflow Maker]({% static 'images/doc/menu_tools_1.png' %})
 
-Additional tools that are hidden in the workflows maybe available in the tool list. It is the case of converters such as `FastaToPhlyip`.
 
 ## Typical analysis
 

@@ -157,6 +157,7 @@ CACHES = {
 MARKDOWN_DEUX_STYLES = { 'default': {
     "extras": {
         "code-friendly": None,
+        "tables": None,
     },
     "safe_mode": False, # << here's the change
 }}
