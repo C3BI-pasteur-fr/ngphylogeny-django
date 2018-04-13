@@ -50,7 +50,10 @@ python manage.py creategalaxyserver --url=http://url_galaxy:port --activate
 * Import existing tools from Galaxy to NGPhylogeny.fr
 
 ```
-python manage.py importtools --galaxyurl=http://url_galaxy:port --query="phylogeny" --flags=toolflags.txt
+python manage.py importtools --galaxyurl=http://url_galaxy:port \
+                             --query="phylogeny" \
+                             --flags=toolflags.txt \
+                             --inputfields=toolfields.txt
 ```
 
 * Two possibilities to link tools inputs and outputs
