@@ -1,6 +1,7 @@
 import ast
 import json
 import tempfile
+from os import system
 
 from bioblend.galaxy.tools.inputs import inputs
 from django.core.urlresolvers import reverse_lazy
@@ -33,7 +34,6 @@ class ToolListView(ListView):
         tool_list = Tool.objects.filter(galaxy_server__current=True,
                                         visible=True,
                                         toolflag__name__in=CATEGORY).prefetch_related('toolflag_set')
-
         return tool_list
 
 
@@ -126,8 +126,6 @@ def tool_exec_view(request, pk, store_output=None):
                         hid[inputfile] = file_id
 
                 for h, file_id in hid.items():
-                    print(h)
-                    print(file_id)
                     tool_inputs.set_dataset_param(fields.get(h), file_id)
 
                 tool_outputs = gi.tools.run_tool(history_id=history_id,
@@ -187,7 +185,6 @@ def detect_type(filename):
 
     Tests formats using biopython SeqIO or Phylo
     """
-
     # Check Fasta Format
     try:
         nbseq = 0
@@ -198,10 +195,20 @@ def detect_type(filename):
     except Exception:
         pass
 
-    # Check phylip
+    # Check phylip strict
     try:
         nbseq = 0
         for r in SeqIO.parse(filename, "phylip"):
+            nbseq += 1
+        if nbseq > 0:
+            return "phylip"
+    except Exception:
+        pass
+
+    # Check phylip relaxed
+    try:
+        nbseq = 0
+        for r in SeqIO.parse(filename, "phylip-relaxed"):
             nbseq += 1
         if nbseq > 0:
             return "phylip"
@@ -217,7 +224,6 @@ def detect_type(filename):
         if nbtrees > 0:
             return "nhx"
     except Exception as e:
-        print(e)
         pass
 
     return "txt"
