@@ -345,7 +345,7 @@ class Citation(models.Model):
     """
     Tool references
     """
-    reference = models.CharField(max_length=500, null=True, blank=True)
+    reference = models.CharField(max_length=1000, null=True, blank=True)
     tool = models.ForeignKey(Tool, on_delete=models.CASCADE)
 
     def format(self):
