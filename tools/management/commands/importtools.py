@@ -72,7 +72,6 @@ class Command(BaseCommand):
                     'Server Galaxy does not exist, please use --galaxyurl')
 
         tools_url = '%s/%s/%s/' % (galaxy_server.url, 'api', 'tools')
-
         if tool_id:
             # search specific tool
             tools_url_id = '%s/%s/' % (tools_url, tool_id)

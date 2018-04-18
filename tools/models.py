@@ -1,5 +1,6 @@
 import ast
 import requests
+import bibtexparser
 
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -28,6 +29,14 @@ class Tool(models.Model):
     @property
     def toolflags(self):
         return ",".join(self.toolflag_set.all().values_list('verbose_name', flat=True))
+
+    @property
+    def citations(self):
+        f = []
+        for c  in self.citation_set.all():
+            for d in c.format():
+                f.append( d )
+        return f
 
     @property
     def get_params_detail(self):
@@ -211,22 +220,26 @@ class Tool(models.Model):
                     tools_ids.append(tool.get('id'))
 
         while tools_ids:
-
             id_tool = tools_ids.pop()
             try:
                 t, created = Tool.objects.get_or_create(
                     id_galaxy=id_tool, galaxy_server=galaxy_server)
-
+                cite_url = '%s/%s/%s/%s/%s' % (galaxy_server.url, 'api', 'tools', id_tool, 'citations')
+                connection = requests.get(cite_url)
+                citations = connection.json()
+                for cite in citations:
+                    c = Citation(reference=cite.get('content',''), tool=t)
+                    c.save()
+                    print(c.format())
                 if force:
                     t.import_tool_io(t.tool_json)
                 if created or force:
                     tools_import_report['new'].append(t)
                 else:
                     tools_import_report['already_exist'].append(t)
-
             except (ValueError, ValidationError) as e:
+                print e
                 tools_import_report['error'].append(id_tool)
-
         return tools_import_report
 
     @property
@@ -328,6 +341,24 @@ class ToolOutputData(ToolData):
     class Meta:
         verbose_name_plural = "Tool output data"
 
+class Citation(models.Model):
+    """
+    Tool references
+    """
+    reference = models.CharField(max_length=500, null=True, blank=True)
+    tool = models.ForeignKey(Tool, on_delete=models.CASCADE)
+
+    def format(self):
+        bib_database = bibtexparser.loads(self.reference)
+        f = []
+        for k, v in bib_database.entries_dict.iteritems():
+            journal = v.get('journal')
+            title = v.get('title')
+            year = v.get('year')
+            authors = v.get('author')
+            doi = v.get('doi',"")
+            f.append(authors + "("+year+"). "+title+" . "+journal+" <a href=\"https://dx.doi.org/"+doi+"\">doi</a>\n")
+        return f
 
 class ToolFlag(models.Model):
     """

@@ -168,6 +168,7 @@
             {%  if message %}
             <div id="error-message">{{ message }}</div>
             {%  endif %}
+	    <div>
             <form action="" method="post" enctype="multipart/form-data">
                 <fieldset>
                     {% crispy toolform %}
@@ -175,7 +176,18 @@
                 <hr>
                 <input name="submit" value="Submit" class="btn btn-primary pull-right" id="submit" type="submit">
             </form>
+	    </div>
         </div>
+    </div>
+    <div class="row">
+      <div class="col-md-6 col-md-offset-2">
+	<h3> References </h3>
+	<ul>
+	  {% for c in tool.citations %}
+	  <li>{{ c | safe }}</li>
+	  {% endfor %}
+	</ul>
+      </div>
     </div>
     {% include "include/waiting_modal.html" %}
 {% endblock %}

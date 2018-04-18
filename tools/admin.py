@@ -3,7 +3,7 @@ from django.contrib import messages
 
 from .forms import ToolFieldWhiteListForm
 from .forms import ToolForm
-from .models import Tool, ToolInputData, ToolOutputData, ToolFlag, ToolFieldWhiteList
+from .models import Tool, ToolInputData, ToolOutputData, ToolFlag, ToolFieldWhiteList, Citation
 
 
 def make_actions_addflag(flag):
@@ -37,13 +37,16 @@ class ToolFlagInline(admin.TabularInline):
     model = ToolFlag.tool.through
     extra = 0
 
+class CitationInline(admin.TabularInline):
+    model = Citation
+    extra = 0
 
 class ToolAdmin(admin.ModelAdmin):
     """
 
     """
 
-    list_display = ['name', 'version', 'id_galaxy', 'galaxy_server', 'visible', 'toolflags']
+    list_display = ['name', 'version', 'id_galaxy', 'galaxy_server', 'visible', 'toolflags', 'citations']
     list_filter = ['galaxy_server', 'toolshed']
     search_fields = ('name',)
 
@@ -51,7 +54,8 @@ class ToolAdmin(admin.ModelAdmin):
     inlines = [
         ToolInputDataInline,
         ToolOutputDataInline,
-        ToolFlagInline
+        ToolFlagInline,
+        CitationInline,
     ]
     actions = ['search_more_tools_from_this_tool_server', 'hide_tools', 'display_tools']
 
