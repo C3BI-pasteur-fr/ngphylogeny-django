@@ -230,7 +230,6 @@ class Tool(models.Model):
                 for cite in citations:
                     c = Citation(reference=cite.get('content',''), tool=t)
                     c.save()
-                    print(c.format())
                 if force:
                     t.import_tool_io(t.tool_json)
                 if created or force:
