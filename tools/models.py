@@ -224,6 +224,7 @@ class Tool(models.Model):
             try:
                 t, created = Tool.objects.get_or_create(
                     id_galaxy=id_tool, galaxy_server=galaxy_server)
+                t.save()
                 cite_url = '%s/%s/%s/%s/%s' % (galaxy_server.url, 'api', 'tools', id_tool, 'citations')
                 connection = requests.get(cite_url)
                 citations = connection.json()
@@ -351,11 +352,11 @@ class Citation(models.Model):
         bib_database = bibtexparser.loads(self.reference)
         f = []
         for k, v in bib_database.entries_dict.iteritems():
-            journal = v.get('journal')
-            title = v.get('title')
-            year = v.get('year')
-            authors = v.get('author')
-            doi = v.get('doi',"")
+            journal = v.get('journal','')
+            title = v.get('title','')
+            year = v.get('year','')
+            authors = v.get('author','')
+            doi = v.get('doi','')
             f.append(authors + "("+year+"). "+title+" . "+journal+" <a href=\"https://dx.doi.org/"+doi+"\">doi</a>\n")
         return f
 
