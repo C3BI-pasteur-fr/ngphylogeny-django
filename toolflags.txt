@@ -12,3 +12,4 @@ PhyML	Tree Inference,Tool display in OneClick Workflows,Tool display in Advanced
 MrBayes	Tree Inference,Tool display in OneClick Workflows,Tool display in Advanced Workflows,Tool display in Workflow Maker
 Newick Display	Tree Rendering,Tool display in OneClick Workflows,Tool display in Advanced Workflows,Tool display in Workflow Maker
 Fasta to Phylip	Format Conversion
+Booster	Branch Support

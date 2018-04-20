@@ -14,4 +14,7 @@ echo "from django.contrib.auth.models import User; from galaxy.models import Ser
 python manage.py importtools --galaxyurl=$GALAXYSERVER --query="phylogeny" --flags=toolflags.txt --force --inputfields=toolfields.txt
 python manage.py import_links --linkfile=toollinks.txt
 python manage.py importworkflows --galaxyurl=$GALAXYSERVER
+
+export PYTHONPATH=$PWD:$PYTHONPATH
+celery --app=NGPhylogeny_fr.celery:app worker --loglevel=INFO &
 python manage.py runserver 0.0.0.0:8000

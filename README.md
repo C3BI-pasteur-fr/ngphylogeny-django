@@ -20,6 +20,7 @@ source activate ngphylo
 
 ```
 pip install -r requirements.txt
+apt-get install redis-server # Ubuntu / Debian
 ```
 
 * Create Django databases
@@ -76,6 +77,23 @@ It will import all workflows with name containing "oneclick" (case insensitive):
 python manage.py importworkflows --galaxyurl=http://url_galaxy:port
 ```
 
+* Run Celery task queue
+
+	1. Add following lines to `NGPhylogeny_fr/settings/local.py`:
+	```
+	EMAIL_HOST = 'smtp.server.url'
+	EMAIL_PORT = 587
+	EMAIL_HOST_USER = 'smtp.user'
+	EMAIL_HOST_PASSWORD = 'smtp.pass'
+	EMAIL_USE_TLS=<True|False>
+	```
+
+	2. Start celery
+	```
+	export PYTHONPATH=$PWD:$PYTHONPATH
+	celery --app=NGPhylogeny_fr.celery:app worker --loglevel=INFO &
+	```
+
 * Run the django server
 
 ```
@@ -84,15 +102,9 @@ python manage.py runserver
 
 # Docker
 
-You can run NGPhylogeny.fr using the docker image:
+You can run NGPhylogeny.fr via its [docker image](https://hub.docker.com/r/evolbioinfo/ngphylogeny/):
 
-## Building the docker image
-
-```
-docker build -t ngphylo .
-```
-
-## Running NGPhylogeny.fr using a remote galaxy instance:
+## Using a remote galaxy instance:
 
 Note: The remote galaxy instance must contain all necessary tools (listed [here](toolflags.txt)).
 
@@ -100,15 +112,17 @@ Note: The remote galaxy instance must contain all necessary tools (listed [here]
 docker run -p 8080:8000 evolbioinfo/ngphylogeny django_admin_username django_admin_password django_admin_email galaxy_url galaxy_api_key
 ```
 
-## Running NGPhylogeny.fr using a custom local galaxy instance
+## Using a custom local docker galaxy instance
+We provide a [galaxy docker image](https://hub.docker.com/r/evolbioinfo/ngphylogeny-galaxy/) with all tools and workflows already installed (see this [github repo](https://github.com/C3BI-pasteur-fr/ngphylogeny-galaxy)):
+
 ```
 # Starting Docker image of Galaxy
 docker run --privileged=true  \
        -e GALAXY_CONFIG_TOOL_CONFIG_FILE=config/tool_conf.xml.sample,config/shed_tool_conf.xml.sample,/local_tools/tool_conf.xml \
        -e GALAXY_DOCKER_ENABLED=True -p 8080:80 -p 8121:21 -p 8122:22 \
        evolbioinfo/ngphylogeny-galaxy
-# Starting Docker image of NGPhylogeny.fr (MacOS)
+# MacOS => Starting NGPhylogeny.fr 
 docker run -p 8000:8000 evolbioinfo/ngphylogeny admin admin@admin http://host.docker.internal:8080 admin
-# Starting Docker image of NGPhylogeny.fr (Linux)
+# Linux => Starting NGPhylogeny.fr
 docker run -p 8000:8000 --net=host evolbioinfo/ngphylogeny admin admin@admin http://localhost:8080 admin
 ```

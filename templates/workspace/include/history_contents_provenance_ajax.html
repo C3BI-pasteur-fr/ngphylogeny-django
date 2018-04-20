@@ -86,7 +86,14 @@ $(document).ready(function(){
                 }
             );
         }
-
+    function changeEmail(el){
+        $.post("{% url 'change_email' history_info.id %}",
+                {
+                    email: el.value,
+                    csrfmiddlewaretoken: '{{ csrf_token }}'
+                }
+            );
+        }
 
 </script>
 <script>
@@ -108,37 +115,55 @@ $(document).ready(function(){
 
 <div class="row">
   <div class="col-md-6">
+    <div class="input-group">
+      <div class="input-group-addon">
+        Url
+      </div>
+      <span class="form-control" readonly
+            value="{{ request.META.HTTP_HOST }}{% url 'history_detail' history_info.id  %}">
+        {{ request.META.HTTP_HOST }}{% url 'history_detail' history_info.id  %}
+      </span>
+      <a id='clip' class="btn btn-default input-group-addon btn-sm"
+         data-clipboard-text="{{ request.META.HTTP_HOST }}{% url 'history_detail' history_info.id  %}"
+         title="copy the url of analyse"
+         data-toggle="tooltip" data-placement="right"
+         onclick="copied()">
+        <span class="glyphicon glyphicon-copy text-primary"></span>
+      </a>
+    </div>
+  </div>
+</div>
+<div class="row">
+  <div class="col-md-6">
     <div class="input-group" onclick="$('#rename_history').focus();">
       <div class="input-group-addon">
         Name
       </div>
       <input id="rename_history" class="form-control input" onblur="renameHistory(this);"
-             value="{{ history_info.name }}​">
+             value="{{ history_info.name }}">
       <a class="btn input-group-addon btn-sm"
 	 title="Rename your analyse"
 	 data-toggle="tooltip" data-placement="right">
 	<span class="glyphicon glyphicon-pencil text-primary"> </span>
       </a>
     </div>
+  </div>
+</div>
+<div class="row">
+  <div class="col-md-6">
+    <div class="input-group" onclick="$('#change_email).focus();">
+      <div class="input-group-addon">
+        e-mail
+      </div>
+      <input id="change_email" class="form-control input" onblur="changeEmail(this);"
+             value="{{ contactemail }}" />
+      <a class="btn input-group-addon btn-sm"
+	 title="Change contact email if you want to be notified"
+	 data-toggle="tooltip" data-placement="right">
+	<span class="glyphicon glyphicon-send text-primary"> </span>
+      </a>
     </div>
-    <div class="col-md-6">
-        <div class="input-group">
-            <div class="input-group-addon">
-                Url
-            </div>
-            <span class="form-control" readonly
-                  value="{{ request.META.HTTP_HOST }}{% url 'history_detail' history_info.id  %}​">
-                    {{ request.META.HTTP_HOST }}{% url 'history_detail' history_info.id  %}​
-            </span>
-            <a id='clip' class="btn btn-default input-group-addon btn-sm"
-               data-clipboard-text="{{ request.META.HTTP_HOST }}{% url 'history_detail' history_info.id  %}"
-               title="copy the url of analyse"
-               data-toggle="tooltip" data-placement="right"
-               onclick="copied()">
-                <span class="glyphicon glyphicon-copy text-primary"></span>
-            </a>
-        </div>
-    </div>
+  </div>
 </div>
 <br>
 <hr>

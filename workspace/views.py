@@ -9,6 +9,7 @@ from django.views.generic.edit import SingleObjectMixin
 
 from galaxy.decorator import connection_galaxy
 from .models import WorkspaceHistory
+from tasks import monitorworkspace
 
 
 @connection_galaxy
@@ -127,12 +128,19 @@ class HistoryDetailView(WorkspaceHistoryObjectMixin, DetailView):
         if not history_id:
             return context
 
+        # Start monitoring 
+        w = WorkspaceHistory.objects.get(history=history_id)
+        if not w.monitored:
+            monitorworkspace.delay(history_id)
+            w.monitored = True
+            w.save()
+        
         gi = self.request.galaxy
         gi.nocache = True
         context['history_info'] = gi.histories.show_history(history_id)
         history_content = gi.histories.show_history(history_id, contents=True)
-
         context['history_content'] = history_content
+        context['contactemail'] = w.email
         return context
 
 
@@ -150,7 +158,6 @@ def get_dataset_toolprovenance(request, history_id, ):
             dataset_provenance = gi.histories.show_dataset_provenance(history_id,
                                                                       data_id,
                                                                       follow=False)
-
             context.update({'tool_id': dataset_provenance.get("tool_id"),
                             'dataset_id': data_id})
 
@@ -200,6 +207,19 @@ class WorkspaceRenameView(HistoryDetailView, UpdateView):
     Rename Workspace
     """
     fields = ['name']
+    template_name = 'workspace/history.html'
+
+    def get_success_url(self):
+        return reverse_lazy('history_detail', args=(self.get_object().history,))
+
+    
+@method_decorator(connection_galaxy, name="dispatch")
+class WorkspaceChangeEmailView(HistoryDetailView, UpdateView):
+    """
+    Change workspace contact Email
+    """
+    model = WorkspaceHistory
+    fields = ['email']
     template_name = 'workspace/history.html'
 
     def get_success_url(self):

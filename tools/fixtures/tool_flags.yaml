@@ -36,19 +36,26 @@
 - model: tools.toolflag
   pk: 6
   fields:
+    name: boot
+    verbose_name: Branch Support
+    rank: 0
+
+- model: tools.toolflag
+  pk: 7
+  fields:
     name: oclik
     verbose_name: Tool display in OneClick Workflows
     rank: 999
 
 - model: tools.toolflag
-  pk: 7
+  pk: 8
   fields:
     name: wadv
     verbose_name: Tool display in Advanced Workflows
     rank: 999
 
 - model: tools.toolflag
-  pk: 8
+  pk: 9
   fields:
     name: wmake
     verbose_name: Tool display in Workflow Maker

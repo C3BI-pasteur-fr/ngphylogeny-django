@@ -6,3 +6,4 @@ django-markdown-deux==1.0.5
 biopython==1.70
 python-slugify
 bibtexparser
+celery[redis]
