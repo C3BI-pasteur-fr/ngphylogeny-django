@@ -214,3 +214,39 @@ def get_example(request):
         return stream_response
 
     return StreamingHttpResponse()
+
+@connection_galaxy
+def add_file_to_session(request, file_id):
+    """
+    Adds a Galaxy result file to the session,
+    in order to use it in an other workflow
+    then redirects to the history detail page
+    """
+    gi = request.galaxy
+    data = gi.datasets.show_dataset(dataset_id=file_id)
+    if isinstance(data, dict):
+        if not request.session.get('files'):
+            request.session['files']={}
+        fdict = request.session['files']
+        if file_id not in fdict:
+            print "data:"
+            print json.dumps(data)
+            fdict[file_id]={'id': file_id, 'ext' : data.get('file_ext'), 'history' : data.get('history_id'), 'name': data.get('name')}
+        return redirect('history_detail', history_id=data.get('history_id'))
+    return render(request, 'error.html', {'errortitle': 'Error while adding file to session', 'errormessage': 'File id does not exist'})
+
+@connection_galaxy
+def remove_file_from_session(request, file_id):
+    """
+    Remove a Galaxy result file from the session
+    """
+    gi = request.galaxy
+    data = gi.datasets.show_dataset(dataset_id=file_id)
+    if isinstance(data, dict):
+        if not request.session.get('files'):
+            request.session.files={}
+        fdict = request.session['files']
+        if file_id in fdict:
+            del fdict[file_id]
+        return redirect('history_detail', history_id=data.get('history_id'))
+    return render(request, 'error.html', {'errortitle': 'Error while remove file from session', 'errormessage': 'File id does not exist'})

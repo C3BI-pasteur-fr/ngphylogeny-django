@@ -47,6 +47,7 @@ class ToolForm(forms.Form):
     # map field id to galaxy params name
     fields_ids_mapping = {}
     fields_ext_mapping = {}
+    session_files = []
     visible_field = []
     n = 0
 
@@ -64,9 +65,9 @@ class ToolForm(forms.Form):
                 self.fields[field_id] = forms.FileField(
                     **map_galaxy_tool_input(attrfield))
                 self.fields[field_id].widget.attrs = (
-                    {'data-ext': attrfield.get('extensions')})
-                self.fields[field_id].widget.attrs = (
-                    {'data-name': attrfield.get('name')})
+                    {'data-ext'  : json.dumps(attrfield.get('extensions')),
+                     'data-name' : json.dumps(attrfield.get('name')),
+                     'data-compatible-inputs' : json.dumps(self.compatibleInputs(attrfield.get('extensions')))})
                 # Update extensions associated to field => used in tools/views
                 self.fields_ext_mapping[field_id] = attrfield.get('extensions')
         elif fieldtype == "select":
@@ -148,14 +149,32 @@ class ToolForm(forms.Form):
                         input_tool['name']
         return fields_created
 
+    def compatibleInputs(self, extensions):
+        """
+        Returns a list of files [{ext:,history:,name:}] from self.session_files
+        that are compatible with the given list of extenstions
+        """
+        outlist = []
+        if self.session_files :
+            print "session:"
+            for key, sf in self.session_files.iteritems() :
+                print "File:"
+                print json.dumps(sf)
+                if sf.get('ext') in extensions:
+                    outlist.append(sf)
+        return outlist
+        
     def __init__(self, tool_params=None,
                  tool_id=None, whitelist=None,
-                 data=None, prefix=None):
+                 data=None, prefix=None, session_files=None):
         super(ToolForm, self).__init__(data=data, prefix=prefix)
         self.tool_params = tool_params or self.tool_params
         self.visible_field = whitelist or self.visible_field
         self.tool_id = tool_id or self.tool_id
         self.input_file_ids = []
+        # To propose compatible session files as input
+        if session_files:
+            self.session_files = session_files
         self.helper = FormHelper(self)
         self.helper.form_class = 'blueForms'
         self.helper.form_tag = False

@@ -63,7 +63,9 @@ def tool_exec_view(request, pk, store_output=None):
         tool_id=tool_obj.id_galaxy, io_details='true')
     tool_form = ToolForm(tool_params=tool_inputs_details['inputs'],
                          tool_id=pk, whitelist=tool_visible_field,
-                         data=request.POST or None)
+                         data=request.POST or None,
+                         session_files=request.session.get('files')
+    )
 
     hid = {}
     if request.method == 'POST':

@@ -237,6 +237,17 @@ $(document).ready(function(){
                     {# <a class="btn btn-default btn-sm" title="Export big data in your personal outputs folder" #}
                           {# href="{% url 'export_file' file.id %}"> #}
                     {# <span class="glyphicon glyphicon-export text-primary" aria-hidden="true"></span></a>#}
+		    {% if file.id in request.session.files %} 
+                    <a class="btn btn-default btn-sm" title="Remove file from session"
+                       data-toggle="tooltip" data-placement="right"
+                       href="{% url 'remove_file_from_session' file.id %}">
+                      <span class="glyphicon glyphicon-minus text-primary"></span></a>
+		    {% else %}
+                    <a class="btn btn-default btn-sm" title="Add file to session to use it as input of another tool or workflow"
+                       data-toggle="tooltip" data-placement="right"
+                       href="{% url 'add_file_to_session' file.id %}">
+                      <span class="glyphicon glyphicon-plus text-primary"></span></a>
+		    {% endif %}
                     <a class="btn btn-default btn-sm" title="Run parameters"
                        data-toggle="tooltip" data-placement="right"
                        href="{% url 'display_params' file.id %}">
