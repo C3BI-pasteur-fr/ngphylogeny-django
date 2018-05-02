@@ -41,13 +41,23 @@
             var parentFileDiv = fileInput.parent().parent();
             var ext = fileInput.data('ext');
             var input_name = fileInput.data('name');
-
+	    var compatible_inputs = fileInput.data('compatible-inputs')
             // read input file
             parentFileDiv.append("<textarea id='filecontent_" + fileInput.attr('name') + "'"
                                  + "class='textarea form-control' rows='10' cols='40' name='"
                                  + fileInput.attr('name') + "'  ></textarea>"
                                  );
-
+	    // We propose to use a galaxy file (stored in the session)
+	    // as input of the tool
+	    if(compatible_inputs.length > 0){
+                var selectField = "<select id=galaxyfile_" + fileInput.attr('name')+" name=galaxyfile_" + fileInput.attr('name')+">";
+                selectField += "<option value=none>--</option>";    
+                for(var i in compatible_inputs){
+	           selectField += "<option value="+compatible_inputs[i].id+">"+compatible_inputs[i].name+"</option>";
+	        }
+                selectField += "</select>";
+	        parentFileDiv.append(selectField);
+	    }
 
             //fileInput.attr('required', false);
             //read file

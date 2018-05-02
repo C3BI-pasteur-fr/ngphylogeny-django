@@ -106,9 +106,14 @@ def tool_exec_view(request, pk, store_output=None):
                         else:
                             raise ValueError('File format of file %s is not allowed for field %s' % (uploaded_file.name,fields.get(inputfile)))
                     else:
+                        print "input file:"
+                        print inputfile
                         # else paste content
                         content = request.POST.get(inputfile)
-                        if content:
+                        galaxyfile = request.POST.get("galaxyfile_"+inputfile)
+                        print content
+                        print galaxyfile
+                        if content :
                             tmp_file = tempfile.NamedTemporaryFile()
                             tmp_file.write(content)
                             tmp_file.flush()
@@ -123,6 +128,12 @@ def tool_exec_view(request, pk, store_output=None):
                                                                file_type=type)
                             else:
                                 raise ValueError('This file format is not allowed for field %s' % (input_fieldname))
+                        # Else we look at galaxy file ids
+                        else:
+                            if galaxyfile:
+                                file_id = galaxyfile
+                                hid[inputfile] = file_id
+                            
                     if outputs:
                         file_id = outputs.get('outputs')[0].get('id')
                         hid[inputfile] = file_id
