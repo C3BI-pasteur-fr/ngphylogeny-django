@@ -46,9 +46,11 @@ INSTALLED_APPS = [
     'galaxy.apps.GalaxyConfig',
     'data.apps.DataConfig',
     'tools.apps.ToolsConfig',
+    'workspace',
     'surveys.apps.SurveysConfig',
     'workflows.apps.WorkflowsConfig',
-    'workspace.apps.WorkspaceConfig',
+    # 'workspace.apps.WorkspaceConfig',
+    'markdown_deux',
 ]
 
 MIDDLEWARE = [
@@ -152,3 +154,24 @@ CACHES = {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
     }
 }
+
+MARKDOWN_DEUX_STYLES = { 'default': {
+    "extras": {
+        "code-friendly": None,
+        "tables": None,
+    },
+    "safe_mode": False, # << here's the change
+}}
+
+# EMAIL_HOST = '<smtp>'
+# EMAIL_PORT = port
+# EMAIL_HOST_USER = '<user>'
+# EMAIL_HOST_PASSWORD = '<pass>'
+# EMAIL_USE_TLS=<True|False>
+
+# CELERY SETTINGS
+BROKER_URL = 'redis://localhost:6379/0'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERYD_CONCURRENCY = 100

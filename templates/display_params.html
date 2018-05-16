@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% load static %}
+{% block nav-workspace %}
+    {{ block.super }}
+    <li>
+        <a href="{% url 'history_detail' history_id %}">
+            <span class="glyphicon glyphicon-list-alt"></span> {{ history_id |truncatechars:9 }}
+        </a>
+    </li>
+    <li class="active">
+        <a>
+            <span class="glyphicon glyphicon-eye-open"></span> Display
+        </a>
+    </li>
+{% endblock %}
+{% block javascripts %}
+    <script src="https://cdn.datatables.net/1.10.16/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.10.16/js/dataTables.bootstrap.min.js"></script>
+    <script>
+      $(document).ready(function(){
+      $.ajax({
+      url: document.URL,
+      success: function(data) {
+      $('#view').html("");
+      $('#view').append("<h2>Parameters</h2>");
+      $('#view').append("<table id=\"paramtable\" style=\"margin-left:auto;margin-right:auto;\"></table>");
+      $('#paramtable').append("<thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody>");
+	  par = data['params']
+	  cli = data['command_line']
+	  for(p in par){
+	  if(p!="__workflow_invocation_uuid__" && p!="chromInfo" && p!="dbkey"){
+          $('#paramtable').append("<tr><td>"+p+"</td><td><pre>"+ par[p]+"</pre></td></tr>");
+	  }
+	  }
+	  $('#view').append("</tbody></table>");
+      $('#view').append("<h2>Command line</h2>");
+      $('#view').append("<pre style=\"background-color:black;color:lightgrey;white-space: pre-line;\">"+cli+"</pre>");
+
+      }});
+      });
+</script>
+{% endblock %}
+{% block goback %}
+<div class="row">
+    <a href="{% url 'history_detail' history_id %}" class="btn btn-default">
+        <span class="glyphicon glyphicon-arrow-left"></span> Go back</a>
+</div>
+<br>
+{% endblock %}
+{% block content %}
+<div id="view" class="row">
+    <h4><span class="glyphicon glyphicon-refresh spin"></span> Loading ...</h4>
+</div>
+{% endblock %}

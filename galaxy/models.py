@@ -10,7 +10,7 @@ from .galaxylib import GalaxyInstance
 
 class Server(models.Model):
     """
-    Galaxy Server Informations
+    Galaxy Server Information
     """
     name = models.CharField(max_length=80)
     url = models.URLField(max_length=254, unique=True, null=False)

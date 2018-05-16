@@ -1,5 +1,6 @@
 import ast
 import requests
+import bibtexparser
 
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -21,12 +22,21 @@ class Tool(models.Model):
     version = models.CharField(max_length=20, blank=True)
     description = models.CharField(max_length=250)
     toolshed_revision = models.CharField(max_length=250, null=True, blank=True)
-    visible = models.BooleanField(default=True, help_text="Display this tool on the user web interface")
+    visible = models.BooleanField(
+        default=True, help_text="Display this tool on the user web interface")
     oneclick = models.BooleanField(default=False)
 
     @property
     def toolflags(self):
         return ",".join(self.toolflag_set.all().values_list('verbose_name', flat=True))
+
+    @property
+    def citations(self):
+        f = []
+        for c  in self.citation_set.all():
+            for d in c.format():
+                f.append( d )
+        return f
 
     @property
     def get_params_detail(self):
@@ -72,7 +82,8 @@ class Tool(models.Model):
 
         galaxy_server = galaxy_server or self.galaxy_server.url
 
-        tools_url = '%s/%s/%s/%s' % (galaxy_server, 'api', 'tools', self.id_galaxy)
+        tools_url = '%s/%s/%s/%s' % (galaxy_server,
+                                     'api', 'tools', self.id_galaxy)
 
         tool_panels = requests.get(tools_url).json()
 
@@ -85,8 +96,10 @@ class Tool(models.Model):
         """
             fetch and store tool information
         """
-        tool_url = '%s/%s/%s/%s' % (self.galaxy_server.url, 'api', 'tools', self.id_galaxy)
-        tool_info_request = requests.get(tool_url, params={'io_details': "true"})
+        tool_url = '%s/%s/%s/%s' % (self.galaxy_server.url,
+                                    'api', 'tools', self.id_galaxy)
+        tool_info_request = requests.get(
+            tool_url, params={'io_details': "true"})
 
         return tool_info_request.json()
 
@@ -105,7 +118,8 @@ class Tool(models.Model):
 
         if toolshed:
             self.toolshed = self.toolshed or toolshed.get('tool_shed')
-            self.toolshed_revision = self.toolshed_revision or toolshed.get('changeset_revision')
+            self.toolshed_revision = self.toolshed_revision or toolshed.get(
+                'changeset_revision')
 
         return self
 
@@ -141,7 +155,8 @@ class Tool(models.Model):
                 inputs_list.append(input_d.get('name'))
 
         # create whitelist field for workflows
-        w, created_w = ToolFieldWhiteList.objects.get_or_create(tool_id=self.id, context='w')
+        w, created_w = ToolFieldWhiteList.objects.get_or_create(
+            tool_id=self.id, context='w')
         if created_w:
             w._params = ",".join(inputs_list)
             w.save()
@@ -205,21 +220,26 @@ class Tool(models.Model):
                     tools_ids.append(tool.get('id'))
 
         while tools_ids:
-
             id_tool = tools_ids.pop()
             try:
-                t, created = Tool.objects.get_or_create(id_galaxy=id_tool, galaxy_server=galaxy_server)
-
+                t, created = Tool.objects.get_or_create(
+                    id_galaxy=id_tool, galaxy_server=galaxy_server)
+                t.save()
+                cite_url = '%s/%s/%s/%s/%s' % (galaxy_server.url, 'api', 'tools', id_tool, 'citations')
+                connection = requests.get(cite_url)
+                citations = connection.json()
+                for cite in citations:
+                    c = Citation(reference=cite.get('content',''), tool=t)
+                    c.save()
                 if force:
                     t.import_tool_io(t.tool_json)
                 if created or force:
                     tools_import_report['new'].append(t)
                 else:
                     tools_import_report['already_exist'].append(t)
-
             except (ValueError, ValidationError) as e:
+                print e
                 tools_import_report['error'].append(id_tool)
-
         return tools_import_report
 
     @property
@@ -270,7 +290,11 @@ class ToolInputData(ToolData):
     edam_formats = models.CharField(max_length=250, null=True, blank=True)
     extensions = models.CharField(max_length=100)
     examplefile = models.ForeignKey(ExampleFile, null=True, blank=True)
-
+    # Wether this field may be linked to the first input data step
+    # in the workflow maker.
+    # Avoids to link input data to all input file fields in PhyML for example
+    # (input alignment + user input tree...)
+    galaxy_input_data  = models.BooleanField(default=False)
     tool = models.ForeignKey(Tool, on_delete=models.CASCADE)
 
     def get_extensions(self):
@@ -317,6 +341,24 @@ class ToolOutputData(ToolData):
     class Meta:
         verbose_name_plural = "Tool output data"
 
+class Citation(models.Model):
+    """
+    Tool references
+    """
+    reference = models.CharField(max_length=1000, null=True, blank=True)
+    tool = models.ForeignKey(Tool, on_delete=models.CASCADE)
+
+    def format(self):
+        bib_database = bibtexparser.loads(self.reference)
+        f = []
+        for k, v in bib_database.entries_dict.iteritems():
+            journal = v.get('journal','')
+            title = v.get('title','')
+            year = v.get('year','')
+            authors = v.get('author','')
+            doi = v.get('doi','')
+            f.append(authors + "("+year+"). "+title+" . "+journal+" <a href=\"https://dx.doi.org/"+doi+"\">doi</a>\n")
+        return f
 
 class ToolFlag(models.Model):
     """

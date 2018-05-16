@@ -1,0 +1,15 @@
+BMGE	Alignment Curation,Tool display in OneClick Workflows,Tool display in Advanced Workflows,Tool display in Workflow Maker
+Gblocks	Alignment Curation,Tool display in OneClick Workflows,Tool display in Advanced Workflows,Tool display in Workflow Maker
+Noisy	Alignment Curation,Tool display in OneClick Workflows,Tool display in Advanced Workflows,Tool display in Workflow Maker
+Clustal Omega	Multiple Alignment,Tool display in OneClick Workflows,Tool display in Advanced Workflows,Tool display in Workflow Maker
+MAFFT	Multiple Alignment,Tool display in OneClick Workflows,Tool display in Advanced Workflows,Tool display in Workflow Maker
+MUSCLE	Multiple Alignment,Tool display in OneClick Workflows,Tool display in Advanced Workflows,Tool display in Workflow Maker
+FastME	Tree Inference,Tool display in OneClick Workflows,Tool display in Advanced Workflows,Tool display in Workflow Maker
+FastTree	Tree Inference,Tool display in OneClick Workflows,Tool display in Advanced Workflows,Tool display in Workflow Maker
+PhyML-SMS	Tree Inference,Tool display in OneClick Workflows,Tool display in Advanced Workflows,Tool display in Workflow Maker
+TNT	Tree Inference,Tool display in OneClick Workflows,Tool display in Advanced Workflows,Tool display in Workflow Maker
+PhyML	Tree Inference,Tool display in OneClick Workflows,Tool display in Advanced Workflows,Tool display in Workflow Maker
+MrBayes	Tree Inference,Tool display in OneClick Workflows,Tool display in Advanced Workflows,Tool display in Workflow Maker
+Newick Display	Tree Rendering,Tool display in OneClick Workflows,Tool display in Advanced Workflows,Tool display in Workflow Maker
+Fasta to Phylip	Format Conversion
+Booster	Branch Support

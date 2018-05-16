@@ -1,0 +1,14 @@
+BMGE	input_align
+Gblocks	input_align
+Noisy	input_align
+Clustal Omega	input_seqs
+MAFFT	input_seqs
+MUSCLE	input_seqs
+FastME	input_align
+FastTree	input_align
+PhyML-SMS	input_align
+TNT	input_align
+PhyML	input_align
+MrBayes	input_align
+Newick Display	input_tree
+Fasta to Phylip	input_tree

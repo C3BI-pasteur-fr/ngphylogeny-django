@@ -6,6 +6,8 @@ from django.db import models
 from galaxy.models import Server, GalaxyUser
 
 import uuid
+
+
 class WorkspaceHistory(models.Model):
     """
     Galaxy history information
@@ -16,7 +18,9 @@ class WorkspaceHistory(models.Model):
     name = models.CharField(max_length=100)
     created_date = models.DateTimeField(auto_now=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
-
+    email = models.CharField(max_length=100)
+    monitored = models.BooleanField(default=False)
+    
     def get_galaxy_user(self):
         if self.user:
             return GalaxyUser.objects.get(user=self.user, galaxy_server=self.galaxy_server)

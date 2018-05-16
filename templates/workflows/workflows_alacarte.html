@@ -33,8 +33,8 @@
 
 {% endblock %}
 {% block title %}
-    Workflows Maker
-    <span class="small">Select tools following step to build your own workflow</span>
+    Workflow Maker
+    <span class="small">Build your own workflow by selecting the right tools</span>
 {% endblock %}
 {% block xl-content %}
 <br>
@@ -52,21 +52,43 @@
 </ul>
 {% endif %}
 <div class="row">
+    <div class="col-md-11 col-md-offset-1">
+        <h3 class="text-justify"><span class="glyphicon glyphicon-chevron-right small"></span> Workflow name:</h3>
+    </div>
+</div>
+<div class="row">
     <div class="col-md-10 col-md-offset-2">
+        <div class="input-group">
+            <span class="btn input-group-addon">
+                <span class="glyphicon glyphicon-pencil"></span>
+            </span>
+            <input id='wkname' class="form-control input-lg" placeholder="Workflow name.." type="text">
+        </div>
+        <hr>
+    </div>
+</div>
+<div class="row">
+    <div class="col-md-11 col-md-offset-1">
+        <h3 class="text-justify"><span class="glyphicon glyphicon-chevron-right small"></span> Choose tools:</h3>
+    </div>
+</div>
+<div class="row">
+    <div class="col-md-1"></div>
+    <div class="col-md-10">
         {% for step in workflow|dictsort:"step" %}
-        <div class="col-md-2 text-center">
+        <div class="col-md-3 text-center">
             {% for e in step.group %}
             {% if forloop.first %}
             <span class="badge info">{{ forloop.parentloop.counter }}</span><img
                 src="{% static 'images/wmaker/' %}{{e.flag.name}}.png ">
             {% endif %}
             <hr>
-            <span class="h4 text-center">{{ e.flag.verbose_name }}</span>
+            <span class="workflow-step text-center">{{ e.flag.verbose_name }}</span>
             <hr>
             <div class="row"></div>
             <div class="btn-group-vertical" role="group">
                 {% for tool in e.tools %}
-                <label class="btn btn-default" type="button" for="radio-{{ tool.pk }}">{{ tool.name }}
+                <label class="btn btn-default workflow-tool" type="button" for="radio-{{ tool.pk }}">
                     <input type="radio"
                            id="radio-{{ tool.pk }}"
                            name="radio-{{ step.step }}"
@@ -83,60 +105,49 @@
                         {% include 'tools/tool_panel.html' %}
                     </div>
                     {# end tool panel #}
-                </label>
+                    {{ tool.name }}
+		</label>
                 {% endfor %}
             </div>
             {% endfor %}
         </div>
         {% endfor %}
     </div>
+    <div class="col-md-1"></div>
 </div>
-<div style="background-color:#f6f6f6; margin-top: 20px;">
-    <div class="row">
-        <div class="col-md-11 col-md-offset-1">
-            <h3><span class="glyphicon glyphicon-chevron-right small"></span>
-                Workflow overview:
-            </h3></div>
-    </div>
-    <div class="row">
-        <div class="col-md-10 col-md-offset-1">
+<div class="row">
+    <div class="col-md-11 col-md-offset-1">
+        <h3><span class="glyphicon glyphicon-chevron-right small"></span>
+            Workflow overview:
+        </h3></div>
+</div>
+<div class="row">
+    <div class="col-md-10 col-md-offset-1">
 
-            <form id="wkform" action="" method="post">
-                {% csrf_token %}
-                <input name=wkname type="hidden" value="">
-                <div id="mini-wk" class="row">
-                    <div class="col-md-2">
-                        <div class="panel panel-info">
-                            <div class="panel-heading"></div>
-                            <div class="panel-body">Input</div>
-                            <div class="panel-footer">
-                            </div>
+        <form id="wkform" action="" method="post">
+            {% csrf_token %}
+            <input name=wkname type="hidden" value="">
+            <div id="mini-wk" class="row">
+                <div class="col-md-2">
+                    <div class="panel panel-info">
+                        <div class="panel-heading"></div>
+                        <div class="panel-body">Input</div>
+                        <div class="panel-footer">
                         </div>
                     </div>
-                    {% for step in workflow|dictsort:"step" %}
-                    <div id='wk-display-{{ step.step }}' class="col-md-2" style="display:none"></div>
-                    {% endfor %}
                 </div>
-            </form>
-        </div>
+                {% for step in workflow|dictsort:"step" %}
+                <div id='wk-display-{{ step.step }}' class="col-md-2" style="display:none"></div>
+                {% endfor %}
+            </div>
+        </form>
     </div>
 </div>
 <div class="row">
     <div class="col-md-11 col-md-offset-1">
-        <h3 class="text-justify"><span class="glyphicon glyphicon-chevron-right small"></span> Workflow name:</h3>
-    </div>
-</div>
-<div class="row">
-    <div class="col-md-6 col-md-offset-2">
-        <div class="input-group">
-            <span class="btn input-group-addon">
-                <span class="glyphicon glyphicon-pencil"></span>
-            </span>
-            <input id='wkname' class="form-control input-lg" placeholder="Workflow name.." type="text">
-        </div>
-        <hr>
         <button id="submit1" type="submit" class="btn btn-primary" name="run" value="Build workflow">
             <span class="glyphicon glyphicon-play-circle"></span> Create workflow
         </button>
+    </div>
 </div>
 {% endblock xl-content %}

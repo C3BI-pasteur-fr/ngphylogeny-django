@@ -1,0 +1,10 @@
+db.sqlite3
+*/migrations
+*~
+.git
+Dockerfile
+*.pyc
+*.pyo
+*.pyd
+.Python
+env

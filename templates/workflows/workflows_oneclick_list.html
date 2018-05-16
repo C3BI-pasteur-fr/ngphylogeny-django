@@ -16,9 +16,6 @@
             });
             var f = $('form');
             f.attr('action', "{{ workflow_list.0.slug }}");
-            f.submit(function (event) {
-                $('#wait').modal('show');
-            });
         });
     </script>
 {% endblock %}
@@ -26,7 +23,7 @@
 {% block workflow-form %}
     <div class="row">
         <div class="col-md-8">
-            <h4>Select an input data file</h4>
+          <h4>Choose input data</h4>
             {% load crispy_forms_tags %}
             <div class="panel panel-info">
                 <div class="panel-heading">Input Data (Fasta format)</div>
@@ -36,40 +33,8 @@
                     </div>
                 </div>
             </div>
-            <h4>OR</h4>
-            {% load crispy_forms_tags %}
-            <div class="panel panel-info">
-                <div class="panel-heading">Paste yours sequences (Fasta format)</div>
-                <div class="panel-body">
-                    <div class="form-group">
-                        {% crispy textarea_form %}
-                    </div>
-                </div>
-            </div>
         </div>
-    </div>
-    <!-- Modal -->
-    <!-- The Modal -->
-    <div id="wait" class="modal fade in" style="" role="dialog">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-title">
-                    <span class="h3">Please wait...</span>
-                </div>
-                <div>
-                    <div class="modal-body">
-                        <div class="circle-loader load-complete">
-                            <div class="checkmark draw"></div>
-                        </div>
-                    </div>
+	<div class="col-md-4"></div>
 
-                    <div class="modal-footer">
-                        <h4>Your request has been submitted</h4>
-                        <h4>You will be redirected in a few moment</h4>
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
-
 {% endblock %}

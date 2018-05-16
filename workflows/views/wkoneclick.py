@@ -2,12 +2,11 @@ from __future__ import absolute_import
 
 from django.utils.decorators import method_decorator
 
-from data.views import UploadView, ImportPastedContentView
+from data.views import UploadView
 from galaxy.decorator import connection_galaxy
 from tools.models import Tool
 from workflows.views.generic import WorkflowFormView, WorkflowListView
 from workflows.views.viewmixing import WorkflowDuplicateMixin
-
 
 @method_decorator(connection_galaxy, name="dispatch")
 class WorkflowOneClickListView(WorkflowListView):
@@ -22,8 +21,8 @@ class WorkflowOneClickListView(WorkflowListView):
 
     def get_context_data(self, **kwargs):
         context = super(WorkflowListView, self).get_context_data(**kwargs)
-        context['form'] = UploadView.form_class()
-        context['textarea_form'] = ImportPastedContentView.form_class()
+        if context.get('form') is None:
+            context['form'] = UploadView.form_class()
 
         return context
 
@@ -46,7 +45,6 @@ class WorkflowOneClickFormView(WorkflowDuplicateMixin, WorkflowFormView):
         finally:
             self.clean_copy()
         return render
-
 
 @method_decorator(connection_galaxy, name="dispatch")
 class WorkflowStartedView(WorkflowOneClickFormView):

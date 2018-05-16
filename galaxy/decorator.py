@@ -87,3 +87,20 @@ def connection_galaxy(view_function):
         return view_function(request, *args, **kwargs)
 
     return wrapper
+
+def galaxy_connection():
+    """Initiating Galaxy connection"""
+    galaxy_instance = None
+    try:
+        galaxy_server = Server.objects.get(current=True)
+        gu = GalaxyUser.objects.get(anonymous=True, galaxy_server=galaxy_server)
+        galaxy_instance = gu.get_galaxy_instance
+    except Server.DoesNotExist as s:
+        msg = "NGPhylogeny server is not properly configured, " \
+              "please ensure that the Galaxy server is correctly set up"
+        logger.exception(msg)
+        raise s
+    except Exception as e:
+        logger.exception(e)
+        raise e
+    return galaxy_instance

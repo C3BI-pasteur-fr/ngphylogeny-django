@@ -9,46 +9,53 @@
   pk: 2
   fields:
     name: clean
-    verbose_name: Alignment curation
+    verbose_name: Alignment Curation
     rank: 0
 
 - model: tools.toolflag
   pk: 3
   fields:
     name: tree
-    verbose_name: Phylogeny
+    verbose_name: Tree Inference
     rank: 0
 
 - model: tools.toolflag
   pk: 4
   fields:
     name: visu
-    verbose_name: Tree rendering
+    verbose_name: Tree Rendering
     rank: 0
 
 - model: tools.toolflag
   pk: 5
   fields:
     name: conve
-    verbose_name: Format conversion
+    verbose_name: Format Conversion
     rank: 0
 
 - model: tools.toolflag
   pk: 6
+  fields:
+    name: boot
+    verbose_name: Branch Support
+    rank: 0
+
+- model: tools.toolflag
+  pk: 7
   fields:
     name: oclik
     verbose_name: Tool display in OneClick Workflows
     rank: 999
 
 - model: tools.toolflag
-  pk: 7
+  pk: 8
   fields:
     name: wadv
     verbose_name: Tool display in Advanced Workflows
     rank: 999
 
 - model: tools.toolflag
-  pk: 8
+  pk: 9
   fields:
     name: wmake
     verbose_name: Tool display in Workflow Maker

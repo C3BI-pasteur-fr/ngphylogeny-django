@@ -19,36 +19,25 @@
         {{ workflow.name }}
     </h3>
     <br>
-    <div class="row row-eq-height">
-        <div class="col-md-6 ">
+    <div class="row">
+        <div class="col-md-2"></div>
+        <div class="col-md-8">
             <h4>Select an input data file</h4>
             {% load crispy_forms_tags %}
             <div class="panel panel-info">
                 <div class="panel-heading">Input Data (Fasta format)</div>
                 <div class="panel-body">
-                    <div class="form-group">
-                        {% crispy form %}
+                  <div class="form-group">
+                    {% crispy form %}
                     </div>
                 </div>
             </div>
         </div>
-        <div class="col-md-6 ">
-            {% load crispy_forms_tags %}
-            <div class="panel panel-info">
-                <div class="panel-heading">
-                    <span class="h4">... OR</span> Paste yours sequences (Fasta format)</span>
-                </div>
-                <div class="panel-body">
-                    <div class="form-group">
-                        {% crispy textarea_form %}
-                    </div>
-                </div>
-            </div>
-        </div>
+	<div class="col-md-9"></div>
     </div>
 
     <div class="row">
-        <div class="col-md-2"></div>
+      <div class="col-md-2"></div>
         <div class="col-md-8">
             <table id="{{ workflow.slug }}" class="table-responsive center">
                 {% for nbstep, step in steps.items %}
@@ -87,5 +76,6 @@
 
         </div>
     </div>
-    </div>
+
+    {% include "include/waiting_modal.html" %}
 {% endblock content %}

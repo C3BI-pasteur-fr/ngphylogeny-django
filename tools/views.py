@@ -1,6 +1,7 @@
 import ast
 import json
 import tempfile
+from os import system
 
 from bioblend.galaxy.tools.inputs import inputs
 from django.core.urlresolvers import reverse_lazy
@@ -14,6 +15,8 @@ from workspace.views import create_history, delete_history
 from .forms import ToolForm
 from .models import Tool, ToolFieldWhiteList, ToolFlag
 
+from Bio import SeqIO, Phylo
+
 
 class ToolListView(ListView):
     """
@@ -26,11 +29,11 @@ class ToolListView(ListView):
                 ]
 
     def get_queryset(self):
-        CATEGORY = ToolFlag.objects.filter(rank=0).values_list('name', flat=True) or self.CATEGORY
+        CATEGORY = ToolFlag.objects.filter(rank=0).values_list(
+            'name', flat=True) or self.CATEGORY
         tool_list = Tool.objects.filter(galaxy_server__current=True,
                                         visible=True,
                                         toolflag__name__in=CATEGORY).prefetch_related('toolflag_set')
-
         return tool_list
 
 
@@ -52,97 +55,120 @@ def tool_exec_view(request, pk, store_output=None):
 
     tool_obj = get_object_or_404(Tool, pk=pk)
 
-    toolfield, created = ToolFieldWhiteList.objects.get_or_create(tool=tool_obj, context='t')
+    toolfield, created = ToolFieldWhiteList.objects.get_or_create(
+        tool=tool_obj, context='t')
     tool_visible_field = toolfield.saved_params
 
-    tool_inputs_details = gi.tools.show_tool(tool_id=tool_obj.id_galaxy, io_details='true')
-    tool_form = ToolForm(tool_params=tool_inputs_details['inputs'], tool_id=pk, whitelist=tool_visible_field,
-                         data=request.POST or None)
+    tool_inputs_details = gi.tools.show_tool(
+        tool_id=tool_obj.id_galaxy, io_details='true')
+    tool_form = ToolForm(tool_params=tool_inputs_details['inputs'],
+                         tool_id=pk, whitelist=tool_visible_field,
+                         data=request.POST or None,
+                         session_files=request.session.get('files')
+    )
 
+    hid = {}
     if request.method == 'POST':
-
         if tool_form.is_valid():
-
-            history_id = create_history(request, name="Analyse with " + tool_obj.name)
-            tool_inputs = inputs()
-
-            # mapping between form id to galaxy params names
-            fields = tool_form.fields_ids_mapping
-            inputs_data = set(tool_form.input_file_ids)
-
-            for key, value in request.POST.items():
-                if not key in inputs_data:
-                    tool_inputs.set_param(fields.get(key), value)
-
-            for inputfile in inputs_data:
-
-                uploaded_file = ""
-                if request.FILES:
-                    uploaded_file = request.FILES.get(inputfile, '')
-
-                if uploaded_file:
-                    tmp_file = tempfile.NamedTemporaryFile()
-                    for chunk in uploaded_file.chunks():
-                        tmp_file.write(chunk)
-                    tmp_file.flush()
-
-                    # send file to galaxy
-                    outputs = gi.tools.upload_file(path=tmp_file.name,
-                                                   file_name=uploaded_file.name + " (as fasta)",
-                                                   history_id=history_id)
-                    file_id = outputs.get('outputs')[0].get('id')
-
-                    tool_inputs.set_dataset_param(fields.get(inputfile), file_id)
-
-                else:
-                    # else paste content
-                    content = request.POST.get(inputfile)
-                    if content:
-                        tmp_file = tempfile.NamedTemporaryFile()
-                        tmp_file.write(content)
-                        tmp_file.flush()
-
-                        # send file to galaxy
-                        input_fieldname = tool_form.fields_ids_mapping.get(inputfile)
-                        outputs = gi.tools.upload_file(path=tmp_file.name,
-                                                       file_name=input_fieldname + " pasted_sequence",
-                                                       history_id=history_id)
-                        file_id = outputs.get('outputs')[0].get('id')
-                        tool_inputs.set_dataset_param(fields.get(inputfile),
-                                                      file_id)
-
-
-
             try:
+                history_id = create_history(
+                    request, name="Analyse with " + tool_obj.name)
+                tool_inputs = inputs()
+
+                # mapping between form id to galaxy params names
+                fields = tool_form.fields_ids_mapping
+                exts = tool_form.fields_ext_mapping
+
+                inputs_data = set(tool_form.input_file_ids)
+
+                for key, value in request.POST.items():
+                    if not key in inputs_data:
+                        tool_inputs.set_param(fields.get(key), value)
+
+                for inputfile in inputs_data:
+                    outputs = ""
+                    uploaded_file = ""
+                    if request.FILES:
+                        uploaded_file = request.FILES.get(inputfile, '')
+                    if uploaded_file:
+                        tmp_file = tempfile.NamedTemporaryFile()
+                        for chunk in uploaded_file.chunks():
+                            tmp_file.write(chunk)
+                        tmp_file.flush()
+                        # send file to galaxy after verifying the
+                        # allowed extensions
+                        type = detect_type(tmp_file.name)
+                        if type in exts.get(inputfile, ""):
+                            outputs = gi.tools.upload_file(path=tmp_file.name,
+                                                           file_name=uploaded_file.name,
+                                                           history_id=history_id,
+                                                           file_type=type)
+                        else:
+                            raise ValueError('File format of file %s is not allowed for field %s' % (uploaded_file.name,fields.get(inputfile)))
+                    else:
+                        print "input file:"
+                        print inputfile
+                        # else paste content
+                        content = request.POST.get(inputfile)
+                        galaxyfile = request.POST.get("galaxyfile_"+inputfile)
+                        print content
+                        print galaxyfile
+                        if content :
+                            tmp_file = tempfile.NamedTemporaryFile()
+                            tmp_file.write(content)
+                            tmp_file.flush()
+                            # send file to galaxy after verifying the
+                            # allowed extensions
+                            input_fieldname = fields.get(inputfile)
+                            type = detect_type(tmp_file.name)
+                            if type in exts.get(inputfile,""):
+                                outputs = gi.tools.upload_file(path=tmp_file.name,
+                                                               file_name=input_fieldname + " pasted_sequence",
+                                                               history_id=history_id,
+                                                               file_type=type)
+                            else:
+                                raise ValueError('This file format is not allowed for field %s' % (input_fieldname))
+                        # Else we look at galaxy file ids
+                        else:
+                            if galaxyfile:
+                                file_id = galaxyfile
+                                hid[inputfile] = file_id
+                            
+                    if outputs:
+                        file_id = outputs.get('outputs')[0].get('id')
+                        hid[inputfile] = file_id
+
+                for h, file_id in hid.items():
+                    tool_inputs.set_dataset_param(fields.get(h), file_id)
 
                 tool_outputs = gi.tools.run_tool(history_id=history_id,
                                                  tool_id=tool_obj.id_galaxy,
                                                  tool_inputs=tool_inputs)
-
                 if store_output:
                     request.session['output'] = tool_outputs
 
                 return redirect(reverse_lazy("history_detail", kwargs={'history_id': history_id}))
 
+            except ValueError as ve:
+                message = str(ve)
             except Exception as e:
-
                 raw_message = ast.literal_eval(e.body)
-                reverse_dict_field = {v: k for k, v in tool_form.fields_ids_mapping.items()}
+                reverse_dict_field = {
+                    v: k for k, v in tool_form.fields_ids_mapping.items()}
                 err_data = raw_message.get('err_data')
 
                 if err_data:
                     for field, err_msg in err_data.items():
                         tool_form.add_error(reverse_dict_field.get(field),
-                                        ValidationError(err_msg, code='invalid'))
+                                            ValidationError(err_msg, code='invalid'))
                 else:
-                    raise e
+                    message=raw_message
 
                 delete_history(request, history_id)
 
     context = {"toolform": tool_form,
                "tool": tool_obj,
-               "message": message,
-               }
+               "message": message}
 
     return render(request, 'tools/tool_form.html', context)
 
@@ -163,3 +189,54 @@ def get_tool_name(request):
             context.update({'tool_id': toolid, 'name': tool.get('name')})
 
     return HttpResponse(json.dumps(context), content_type='application/json')
+
+
+def detect_type(filename):
+    """
+    :param filename: File to read and detect the format
+    :return: detected type, in [fasta, phylip, newick, N/A]
+
+    Tests formats using biopython SeqIO or Phylo
+    """
+    # Check Fasta Format
+    try:
+        nbseq = 0
+        for r in SeqIO.parse(filename, "fasta"):
+            nbseq += 1
+        if nbseq > 0:
+            return "fasta"
+    except Exception:
+        pass
+
+    # Check phylip strict
+    try:
+        nbseq = 0
+        for r in SeqIO.parse(filename, "phylip"):
+            nbseq += 1
+        if nbseq > 0:
+            return "phylip"
+    except Exception:
+        pass
+
+    # Check phylip relaxed
+    try:
+        nbseq = 0
+        for r in SeqIO.parse(filename, "phylip-relaxed"):
+            nbseq += 1
+        if nbseq > 0:
+            return "phylip"
+    except Exception:
+        pass
+
+    # Check Newick
+    try:
+        nbtrees = 0
+        trees = Phylo.parse(filename, 'newick')
+        for t in trees:
+            nbtrees += 1
+        if nbtrees > 0:
+            return "nhx"
+    except Exception as e:
+        pass
+
+    return "txt"

@@ -3,7 +3,7 @@ from django.contrib import messages
 
 from .forms import ToolFieldWhiteListForm
 from .forms import ToolForm
-from .models import Tool, ToolInputData, ToolOutputData, ToolFlag, ToolFieldWhiteList
+from .models import Tool, ToolInputData, ToolOutputData, ToolFlag, ToolFieldWhiteList, Citation
 
 
 def make_actions_addflag(flag):
@@ -37,19 +37,25 @@ class ToolFlagInline(admin.TabularInline):
     model = ToolFlag.tool.through
     extra = 0
 
+class CitationInline(admin.TabularInline):
+    model = Citation
+    extra = 0
 
 class ToolAdmin(admin.ModelAdmin):
     """
 
     """
 
-    list_display = ['name', 'galaxy_server', 'toolshed', 'version', 'visible', 'toolflags']
+    list_display = ['name', 'version', 'id_galaxy', 'galaxy_server', 'visible', 'toolflags', 'citations']
     list_filter = ['galaxy_server', 'toolshed']
+    search_fields = ('name',)
+
     fields = ('name', 'version', 'oneclick', 'galaxy_server', 'toolshed', 'id_galaxy',)
     inlines = [
         ToolInputDataInline,
         ToolOutputDataInline,
-        ToolFlagInline
+        ToolFlagInline,
+        CitationInline,
     ]
     actions = ['search_more_tools_from_this_tool_server', 'hide_tools', 'display_tools']
 
@@ -97,6 +103,7 @@ class ToolOutputDataAdmin(admin.ModelAdmin):
 class ToolInputOutputLinkAdmin(admin.ModelAdmin):
     list_display = ['pk', 'tooloutputdata', 'toolinputdata']
     list_filter = ['tooloutputdata__tool__galaxy_server', 'tooloutputdata__tool', ]
+    search_fields = ('tooloutputdata__tool__name', 'toolinputdata__tool__name')
 
 
 class ToolFlagAdmin(admin.ModelAdmin):
