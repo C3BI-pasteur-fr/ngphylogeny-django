@@ -5,6 +5,7 @@ import json
 import re
 
 from celery import shared_task
+from smtplib import SMTPException
 from workspace.models import WorkspaceHistory
 from galaxy.decorator import galaxy_connection
 from django.core.mail import send_mail
@@ -70,6 +71,7 @@ def monitorworkspace(historyid):
                 fail_silently=False,
             )
             print(message)
-        except:
-            print("Unexpected error:", sys.exc_info()[0])
-    
+        except SMTPException as e:
+            print("Problem with smtp server : ", e)
+        except Exception as e:
+            print("Unknown Problem while sending e-mail: ", e)
