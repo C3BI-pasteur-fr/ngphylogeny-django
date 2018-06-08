@@ -303,3 +303,19 @@
   </div>
 </div>
 <h4>Files stored in session</h4>
+<table  class="table table-striped ">
+  <tr><th>File ID</th><th>File Name</th><th>History ID</th><th>Remove</th></tr>
+  {% for id, values in request.session.files.items %}
+  <tr>
+  <td>{{id}}</td>
+  <td>{{values.name}}</td>
+  <td>{{values.history}}</td>
+  <td>
+    <a class="btn btn-default btn-sm" title="Remove file from session"
+       data-toggle="tooltip" data-placement="right"
+       href="{% url 'remove_file_from_session' id %}">
+      <span class="glyphicon glyphicon-minus text-primary"></span></a>
+  </td>
+  </tr>
+  {% endfor %}
+</table>
