@@ -1,116 +1,113 @@
 {% load static %}
 {% block stylesheet %}
 <script src="https://cdn.rawgit.com/zenorocha/clipboard.js/v1.7.1/dist/clipboard.min.js"></script>
-    <script src="https://cdn.datatables.net/1.10.16/js/jquery.dataTables.min.js"></script>
-    <script src="https://cdn.datatables.net/1.10.16/js/dataTables.bootstrap.min.js"></script>
-    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.16/css/dataTables.bootstrap.min.css">
+<script src="https://cdn.datatables.net/1.10.16/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.10.16/js/dataTables.bootstrap.min.js"></script>
+<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.16/css/dataTables.bootstrap.min.css">
 {% endblock %}
-<script>
-$(document).ready(function(){
-    $('[data-toggle="tooltip"]').tooltip();
-});
+<script  type="text/javascript">
+    $(document).ready(function(){
+	$('[data-toggle="tooltip"]').tooltip();
+    });
 </script>
-<script>
+<script >
     $(function () {
-        var deferreds = [];
-        // Loop using .each
-        $("[data]").each(function (index, value) {
-            var ajax = $.post("{% url 'get_dataset_tool' history_info.id %}",
-                {
-                    'dataset_id': $(this).attr('id'),
-                    'csrfmiddlewaretoken': '{{ csrf_token }}'
-                },
-                function (response) {
-                    var result = response;
-                    $('#' + result.dataset_id).attr('data', result.tool_id)
-                });
-            // Push promise to 'deferreds' array
-            deferreds.push(ajax);
-        });
-        // Use .apply onto array from deferreds
-        $.when.apply($, deferreds).then(function () {
-            // group dataset by tool
-            var id_tool = '';
-            var first_dataset = '';
-            var cmpt = 1;
-
-            $("[data]").each(function (index, el) {
-
-                if (id_tool == $(el).attr('data')) {
-                    cmpt++;
-                    $(el).remove();
-                } else {
-                    cmpt = 1;
-                    first_dataset = $(el).attr('id');
-                    id_tool = $(el).attr('data');
-                    $.post("{% url 'get_tool_name' %}",
-                        {
-                            'tool_id': $(this).attr('data'),
-                            'csrfmiddlewaretoken': '{{ csrf_token }}'
-                        },
-                        function (response) {
-                            var result = response;
-                            $(el).text(result.name);
-                        });
-                }
-                $('#' + first_dataset).attr('rowspan', cmpt);
-            });
-        });
-
+	var deferreds = [];
+	// Loop using .each
+	$("[data]").each(function (index, value) {
+	    var ajax = $.post("{% url 'get_dataset_tool' history_info.id %}",
+			      {
+				  'dataset_id': $(this).attr('id'),
+				  'csrfmiddlewaretoken': '{{ csrf_token }}'
+			      },
+			      function (response) {
+				  var result = response;
+				  $('#' + result.dataset_id).attr('data', result.tool_id)
+			      });
+	    // Push promise to 'deferreds' array
+	    deferreds.push(ajax);
+	});
+	// Use .apply onto array from deferreds
+	$.when.apply($, deferreds).then(function () {
+	    // group dataset by tool
+	    var id_tool = '';
+	    var first_dataset = '';
+	    var cmpt = 1;
+	    
+	    $("[data]").each(function (index, el) {
+		if (id_tool == $(el).attr('data')) {
+		    cmpt++;
+		    $(el).remove();
+		} else {
+		    cmpt = 1;
+		    first_dataset = $(el).attr('id');
+		    id_tool = $(el).attr('data');
+		    $.post("{% url 'get_tool_name' %}",
+			   {
+			       'tool_id': $(this).attr('data'),
+			       'csrfmiddlewaretoken': '{{ csrf_token }}'
+			   },
+			   function (response) {
+			       var result = response;
+			       $(el).text(result.name);
+			   });
+		}
+		$('#' + first_dataset).attr('rowspan', cmpt);
+	    });
+	});
     });
 </script>
 
 <script>
     function refresh() {
-        $.get('{% url 'history_detail' history_info.id %}',
-            function (data) {
-                var html = $.parseHTML(data);
-                var nbstate = $(html).find('[id^=state_]').length;
-                if ($('[id^=state_]').length != nbstate )
-                { location.reload();}
-                $(html).find('[id^=state_]').each(function (index, el) {
-                    $('#' + $(el).attr('id')).replaceWith($(el));
-                });
-                $(html).find('[id^=action_]').each(function (index, el) {
-                    $('#' + $(el).attr('id')).replaceWith($(el));
-                });
-                $('[data-toggle="tooltip"]').tooltip();
-            }
-        );
+	$.get('{% url 'history_detail' history_info.id %}',
+	      function (data) {
+		  var html = $.parseHTML(data);
+		  var nbstate = $(html).find('[id^=state_]').length;
+		  if ($('[id^=state_]').length != nbstate )
+		  { location.reload();}
+		  $(html).find('[id^=state_]').each(function (index, el) {
+		      $('#' + $(el).attr('id')).replaceWith($(el));
+		  });
+		  $(html).find('[id^=action_]').each(function (index, el) {
+		      $('#' + $(el).attr('id')).replaceWith($(el));
+		  });
+		  $('[data-toggle="tooltip"]').tooltip();
+	      }
+	     );
     }
-    function renameHistory(el){
-        $.post("{% url 'history_rename' history_info.id %}",
-                {
-                    name: el.value,
-                    csrfmiddlewaretoken: '{{ csrf_token }}'
-                }
-            );
-        }
-    function changeEmail(el){
-        $.post("{% url 'change_email' history_info.id %}",
-                {
-                    email: el.value,
-                    csrfmiddlewaretoken: '{{ csrf_token }}'
-                }
-            );
-        }
-
+  function renameHistory(el){
+      $.post("{% url 'history_rename' history_info.id %}",
+	     {
+		 name: el.value,
+		 csrfmiddlewaretoken: '{{ csrf_token }}'
+	     }
+	    );
+  }
+  function changeEmail(el){
+      $.post("{% url 'change_email' history_info.id %}",
+	     {
+		 email: el.value,
+		 csrfmiddlewaretoken: '{{ csrf_token }}'
+	     }
+	    );
+  }
 </script>
 <script>
     new Clipboard('#clip');
-    function copied() {
-        $("#success-copy").fadeIn();
-        setTimeout(function(){ $("#success-copy").fadeOut("slow"); }, 2000);
-    }
+  function copied() {
+      $("#success-copy").fadeIn();
+      setTimeout(function(){ $("#success-copy").fadeOut("slow"); }, 2000);
+  }
 </script>
 
 <div id="info-refresh" class="alert alert-info alert-dismissable fade in">
-    <a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
-    <strong>Info !</strong> This page is will be refreshed in <span id="countdown_span">5</span> sec.
+  <a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
+  <strong>Info !</strong> This page is will be refreshed in <span id="countdown_span">5</span> sec.
 </div>
 <div id="success-copy" class="alert alert-success" style="display:none;">
-    <a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
-    <strong>Success !</strong> The link is copied in you Clipboard!
+  <a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
+  <strong>Success !</strong> The link is copied in you Clipboard!
 </div>
 
 <div class="row">
@@ -168,140 +165,141 @@ $(document).ready(function(){
 <br>
 <hr>
 <div class="row">
-    <div class="col-md-12">
-        <table id="myTable" class="table table-striped ">
-            <thead>
-            <th style="width: 10%;">Tool</th>
-            <th>Step</th>
-            <th style="width: 40%;">File Name</th>
-            <th>Status</th>
-            <th></th>
-            </thead>
-            <tbody>
-            <tr></tr>
-            {% for file in history_content|dictsortreversed:"hid" %}
-            <tr {% if not file.visible %}class='hidden' {% endif %}>
-                {% if forloop.first %}
-                    <script>
-                        var interval = 5000;
-                        var autorefresh = setInterval(refresh, interval);
-                        var elt = $('#countdown_span');
-                        elt.html(interval / 1000);
-
-                        function countdown() {
-                            elt.html(elt.html() - 1);
-                            if (elt.html() < 0) {
-                                elt.html(interval / 1000);
-
-                            }
-                        }
-
-                        setInterval(countdown, 1000);
-                        {% if 'ok' in file.state %}
-                            $('#info-refresh').hide();
-                            clearInterval(autorefresh);
-                        {% endif %}
-                    </script>
-                {% endif %}
-                <td id="{{ file.id }}" data=''></td>
-                <td>{{ file.hid }}.</td>
-                <td>{{ file.name }}</td>
-                <td id="state_{{ file.id }}">
-                    {% if 'ok' in file.state %}
-                    <span class="glyphicon glyphicon-ok  text-success"
-                          data-toggle="tooltip" data-placement="right"
-                          title="Success!">
-                    </span>
-                    {% elif 'queued' in file.state or 'new' in file.state %}
-                        <span class="loading-dot"
-                              data-toggle="tooltip" data-placement="right"
-                              title="Waiting to be launch">
-                        <span class="h2 loader-dot">.</span>
-                        <span class="h2 loader-dot">.</span>
-                        <span class="h2 loader-dot">.</span>
-                    </span>
-                    {% elif "running" in file.state %}
-                    <span class="glyphicon glyphicon-refresh spin"
-                          data-toggle="tooltip" data-placement="right"
-                          title="Your job is running">
-                    </span>
-                    {% else %}
-                    <span class="glyphicon glyphicon-remove text-danger"
-                          data-toggle="tooltip" data-placement="right"
-                          title="Your job fail">
-                    </span>
-                    {% endif %}
-                </td>
-                <td id="action_{{ file.id }}">
-                    {% if 'ok' in file.state %}
-                    {# <a class="btn btn-default btn-sm" title="Export big data in your personal outputs folder" #}
-                          {# href="{% url 'export_file' file.id %}"> #}
-                    {# <span class="glyphicon glyphicon-export text-primary" aria-hidden="true"></span></a>#}
-		    {% if file.id in request.session.files %} 
-                    <a class="btn btn-default btn-sm" title="Remove file from session"
-                       data-toggle="tooltip" data-placement="right"
-                       href="{% url 'remove_file_from_session' file.id %}">
-                      <span class="glyphicon glyphicon-minus text-primary"></span></a>
-		    {% else %}
-                    <a class="btn btn-default btn-sm" title="Add file to session to use it as input of another tool or workflow"
-                       data-toggle="tooltip" data-placement="right"
-                       href="{% url 'add_file_to_session' file.id %}">
-                      <span class="glyphicon glyphicon-plus text-primary"></span></a>
-		    {% endif %}
-                    <a class="btn btn-default btn-sm" title="Run parameters"
-                       data-toggle="tooltip" data-placement="right"
-                       href="{% url 'display_params' file.id %}">
-                        <span class="glyphicon glyphicon-cog text-primary"></span></a>
-                    <a class="btn btn-default btn-sm" title="Dowload the file"
-                       data-toggle="tooltip" data-placement="right"
-                       href="{% url 'download_file' file.id %}">
-                        <span class="glyphicon glyphicon-download-alt text-primary"></span></a>
-                    <a class="btn btn-default btn-sm"
-                       href="{% url 'display_file' file.id %}"
-                       data-toggle="tooltip" data-placement="right"
-                       title="Display this file in your web browser">
-                        {% if file.extension in "svg" %}
-                        <span class="glyphicon glyphicon-picture"></span> .SVG</a>
-                    {% else %}
-                    <span class="glyphicon glyphicon-eye-open text-primary">
-                        </span> .{{ file.extension }}</a>
-                    {% endif %}
-                    {% if file.extension in "nhx,nwk" %}
-                    <a class="btn btn-success btn-sm" title="Open Interactive Tree visualisation"
-                       href="{% url 'display_tree' file.id %}"
-                       data-toggle="tooltip" data-placement="right">
-                        <span class="glyphicon text-success" aria-hidden="true">
-                            <img src="{% static 'images/ptree.svg' %}">
-                        </span>
-                        Viewer
-                    </a>
-                    <a class="btn btn-warning btn-sm" title="Export tree to iTOL: Interactive Tree Of Life"
-                       href="{% url 'export_to_itol' file.id %}" target="_blank"
-                       data-toggle="tooltip" data-placement="right"
-                       title="Export your newick tree into iTol, external tree viewer">
-                        <span class="glyphicon glyphicon-export" aria-hidden="true"> </span>
-                        iTol
-                    </a>
-                    {% endif %}
-                    {% if file.extension in "fasta,fsa,msa,fna" %}
-                    <a class="btn btn-info btn-sm" title="MSAViewer"
-                       href="{% url 'display_msa' file.id %}"
-                       data-toggle="tooltip" data-placement="right"
-                       title="Multipe sequences viewer">
-                        <span class="glyphicon glyphicon-align-justify" aria-hidden="true"></span>
-                        MSAViewer
-                    </a>
-                    {% endif %}
-                    {% elif 'error' in file.state %}
-                    <a class="btn btn-default btn-sm" title="shows error"
-                       href="{% url 'galaxy_error_url' file.id %}">
-                        <span class="glyphicon glyphicon-exclamation-sign text-danger"></span>
-                    </a>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
+  <div class="col-md-12">
+    <table id="myTable" class="table table-striped ">
+      <thead>
+        <th style="width: 10%;">Tool</th>
+        <th>Step</th>
+        <th style="width: 40%;">File Name</th>
+        <th>Status</th>
+        <th></th>
+      </thead>
+      <tbody>
+        <tr></tr>
+        {% for file in history_content|dictsortreversed:"hid" %}
+        <tr {% if not file.visible %}class='hidden' {% endif %}>
+          {% if forloop.first %}
+          <script>
+    	    var interval = 5000;
+	    var autorefresh = setInterval(refresh, interval);
+	    var elt = $('#countdown_span');
+	    elt.html(interval / 1000);
+	    
+	    function countdown() {
+		elt.html(elt.html() - 1);
+		if (elt.html() < 0) {
+		    elt.html(interval / 1000);
+		    
+		}
+	    }
+	    
+	    setInterval(countdown, 1000);
+	    {% if 'ok' in file.state %}
+	    $('#info-refresh').hide();
+	    clearInterval(autorefresh);
+	    {% endif %}
+	  </script>
+          {% endif %}
+          <td id="{{ file.id }}" data=''></td>
+          <td>{{ file.hid }}.</td>
+          <td>{{ file.name }}</td>
+          <td id="state_{{ file.id }}">
+            {% if 'ok' in file.state %}
+            <span class="glyphicon glyphicon-ok  text-success"
+                  data-toggle="tooltip" data-placement="right"
+                  title="Success!">
+            </span>
+            {% elif 'queued' in file.state or 'new' in file.state %}
+            <span class="loading-dot"
+                  data-toggle="tooltip" data-placement="right"
+                  title="Waiting to be launch">
+              <span class="h2 loader-dot">.</span>
+              <span class="h2 loader-dot">.</span>
+              <span class="h2 loader-dot">.</span>
+            </span>
+            {% elif "running" in file.state %}
+            <span class="glyphicon glyphicon-refresh spin"
+                  data-toggle="tooltip" data-placement="right"
+                  title="Your job is running">
+            </span>
+            {% else %}
+            <span class="glyphicon glyphicon-remove text-danger"
+                  data-toggle="tooltip" data-placement="right"
+                  title="Your job fail">
+            </span>
+            {% endif %}
+          </td>
+          <td id="action_{{ file.id }}">
+            {% if 'ok' in file.state %}
+            {# <a class="btn btn-default btn-sm" title="Export big data in your personal outputs folder" #}
+                  {# href="{% url 'export_file' file.id %}"> #}
+              {# <span class="glyphicon glyphicon-export text-primary" aria-hidden="true"></span></a>#}
+	    {% if file.id in request.session.files %} 
+            <a class="btn btn-default btn-sm" title="Remove file from session"
+               data-toggle="tooltip" data-placement="right"
+               href="{% url 'remove_file_from_session' file.id %}">
+              <span class="glyphicon glyphicon-minus text-primary"></span></a>
+	    {% else %}
+            <a class="btn btn-default btn-sm" title="Add file to session to use it as input of another tool or workflow"
+               data-toggle="tooltip" data-placement="right"
+               href="{% url 'add_file_to_session' file.id %}">
+              <span class="glyphicon glyphicon-plus text-primary"></span></a>
+	    {% endif %}
+            <a class="btn btn-default btn-sm" title="Run parameters"
+               data-toggle="tooltip" data-placement="right"
+               href="{% url 'display_params' file.id %}">
+              <span class="glyphicon glyphicon-cog text-primary"></span></a>
+            <a class="btn btn-default btn-sm" title="Dowload the file"
+               data-toggle="tooltip" data-placement="right"
+               href="{% url 'download_file' file.id %}">
+              <span class="glyphicon glyphicon-download-alt text-primary"></span></a>
+            <a class="btn btn-default btn-sm"
+               href="{% url 'display_file' file.id %}"
+               data-toggle="tooltip" data-placement="right"
+               title="Display this file in your web browser">
+              {% if file.extension in "svg" %}
+              <span class="glyphicon glyphicon-picture"></span>.svg
+              {% else %}
+              <span class="glyphicon glyphicon-eye-open text-primary"></span>.{{ file.extension }}
+	      {% endif %}
+	    </a>
+	    {% if file.extension in "nhx,nwk" %}
+	    <a class="btn btn-success btn-sm" title="Open Interactive Tree visualisation"
+	       href="{% url 'display_tree' file.id %}"
+	       data-toggle="tooltip" data-placement="right">
+	      <span class="glyphicon text-success" aria-hidden="true">
+		<img src="{% static 'images/ptree.svg' %}">
+	      </span>
+	      Viewer
+	    </a>
+	    <a class="btn btn-warning btn-sm" title="Export tree to iTOL: Interactive Tree Of Life"
+	       href="{% url 'export_to_itol' file.id %}" target="_blank"
+	       data-toggle="tooltip" data-placement="right"
+	       title="Export your newick tree into iTol, external tree viewer">
+	      <span class="glyphicon glyphicon-export" aria-hidden="true"> </span>
+	      iTol
+	    </a>
+	    {% endif %}
+	    {% if file.extension in "fasta,fsa,msa,fna" %}
+	    <a class="btn btn-info btn-sm" title="MSAViewer"
+	       href="{% url 'display_msa' file.id %}"
+	       data-toggle="tooltip" data-placement="right"
+	       title="Multipe sequences viewer">
+	      <span class="glyphicon glyphicon-align-justify" aria-hidden="true"></span>
+	      MSAViewer
+	    </a>
+	    {% endif %}
+	    {% elif 'error' in file.state %}
+	    <a class="btn btn-default btn-sm" title="shows error"
+	       href="{% url 'galaxy_error_url' file.id %}">
+	      <span class="glyphicon glyphicon-exclamation-sign text-danger"></span>
+	    </a>
+	    {% endif %}
+	  </td>
+	</tr>
+	{% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
+<h4>Files stored in session</h4>
