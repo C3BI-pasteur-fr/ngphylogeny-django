@@ -8,6 +8,8 @@ from tools.models import Tool
 from workflows.views.generic import WorkflowFormView, WorkflowListView
 from workflows.views.viewmixing import WorkflowDuplicateMixin
 
+from workspace.tasks import monitorworkspace
+
 @method_decorator(connection_galaxy, name="dispatch")
 class WorkflowOneClickListView(WorkflowListView):
     """

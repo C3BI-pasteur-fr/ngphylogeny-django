@@ -3,6 +3,7 @@ from __future__ import absolute_import
 import time
 import json
 import re
+import logging
 
 from celery import shared_task
 from smtplib import SMTPException
@@ -19,6 +20,9 @@ def flush_transaction():
 def monitorworkspace(historyid):
     """
     Celery task that will monitor galaxy workspace
+
+    It will update content of the workspace django model every 10 seconds
+
     It will wait for end of execution of all jobs
     and send a mail at the end, if the mail has been
     given by the user.
@@ -34,26 +38,37 @@ def monitorworkspace(historyid):
     email = None
 
     while not finished:
-        hi = galaxycon.histories.show_history(historyid, contents=True)
-        finished = True
-        for file in hi:
-            if ( 'running' in file.get('state','') or
-                 'queued' in file.get('state','') or
-                 'new' in file.get('state','')):
-                finished = False
-            if 'error' in file.get('state',''):
-                error = True
-                finished = True
-        if not finished:
-            time.sleep(2)
+        try:
+            hc = galaxycon.histories.show_history(historyid, contents=True)
+            hi = galaxycon.histories.show_history(historyid)
+            w = WorkspaceHistory.objects.get(history=historyid)
+            w.history_content_json = json.dumps(hc)
+            w.history_info_json =  json.dumps(hi)
+            w.save()
 
-    w = WorkspaceHistory.objects.get(history=historyid)
+            finished = True
+            for file in hc:
+                if ( 'running' in file.get('state','') or
+                     'queued' in file.get('state','') or
+                     'new' in file.get('state','')):
+                    finished = False
+                if 'error' in file.get('state',''):
+                    error = True
+                    finished = True
+        except:
+            logging.warning('Problem with Galaxy server, waiting 1 minute')
+            time.sleep(60)
+        
+        if not finished:
+            time.sleep(10)
+            
+    w.finished = True
+    w.save()
+    logging.warning("history finished? %r" % (w.finished))
+
+    
     if w and w.email and re.match(r"[^@]+@[^@]+\.[^@]+", w.email):
         try:
-            print "worspace informations"
-            print w.history
-            print w.email
-            print w.name
             message = "Dear NGPhylogeny user, \n\n"
             if error:
                 message= message + "Your NGPhylogeny job finished with errors.\n\n"

@@ -6,11 +6,10 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.generic import RedirectView, ListView, DeleteView, UpdateView, DetailView
 from django.views.generic.edit import SingleObjectMixin
+from bioblend.galaxy.client import ConnectionError
 
 from galaxy.decorator import connection_galaxy
 from .models import WorkspaceHistory
-from tasks import monitorworkspace
-
 
 @connection_galaxy
 def create_history(request, name=''):
@@ -35,7 +34,9 @@ def create_history(request, name=''):
     wsph = WorkspaceHistory(history=history.get("id"),
                             name=history.get('name'),
                             user=current_user,
-                            galaxy_server=server
+                            galaxy_server=server,
+                            history_content_json = json.dumps(history),
+                            history_info_json = json.dumps(history),
                             )
     wsph.save()
 
@@ -44,7 +45,7 @@ def create_history(request, name=''):
     request.session['histories'].append(wsph.history)
     request.session["last_history"] = wsph.history
     request.session.modified = True
-    return wsph.history
+    return wsph
 
 
 @connection_galaxy
@@ -87,7 +88,6 @@ def delete_history(request, history_id=None):
 
     WorkspaceHistory.objects.get(history=history_id).delete()
 
-
 class WorkspaceHistoryObjectMixin(SingleObjectMixin):
     model = WorkspaceHistory
     pk_url_kwarg = 'history_id'
@@ -95,16 +95,16 @@ class WorkspaceHistoryObjectMixin(SingleObjectMixin):
     def get_object(self, queryset=None):
         if queryset is None:
             queryset = self.get_queryset()
-
         server = self.request.galaxy_server
         hist_id = self.kwargs.get(self.pk_url_kwarg)
-
         if not hist_id:
             hist_id = self.request.session["last_history"]
+        w = queryset.get(history=hist_id,
+                         galaxy_server=server)
 
-        return queryset.get(history=hist_id,
-                            galaxy_server=server)
-
+        w.history_content = json.loads(w.history_content_json)
+        w.history_info = json.loads(w.history_info_json)
+        return w
 
 @method_decorator(ensure_csrf_cookie, name="dispatch")
 @method_decorator(connection_galaxy, name="dispatch")
@@ -113,36 +113,7 @@ class HistoryDetailView(WorkspaceHistoryObjectMixin, DetailView):
         Display Galaxy like history information
     """
     template_name = 'workspace/history.html'
-
-    def get_context_data(self, **kwargs):
-        # Call the base implementation first to get a context
-        context = super(HistoryDetailView, self).get_context_data(**kwargs)
-
-        # first display history with id history contained in the url
-        history_id = context.get('history_id', None) or self.kwargs.get('history_id', None)
-
-        # if no history id try to retrieve
-        if not history_id:
-            history_id = get_history(self.request)
-
-        if not history_id:
-            return context
-
-        # Start monitoring 
-        w = WorkspaceHistory.objects.get(history=history_id)
-        if not w.monitored:
-            monitorworkspace.delay(history_id)
-            w.monitored = True
-            w.save()
-        
-        gi = self.request.galaxy
-        gi.nocache = True
-        context['history_info'] = gi.histories.show_history(history_id)
-        history_content = gi.histories.show_history(history_id, contents=True)
-        context['history_content'] = history_content
-        context['contactemail'] = w.email
-        return context
-
+    #template_name = 'error.html'
 
 @connection_galaxy
 def get_dataset_toolprovenance(request, history_id, ):

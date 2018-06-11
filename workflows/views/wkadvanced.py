@@ -17,6 +17,7 @@ from workflows.forms import tool_form_factory
 from workflows.views.generic import WorkflowWizard, WorkflowListView
 from workflows.views.viewmixing import WorkflowDuplicateMixin
 from workflows.views.viewmixing import WorkflowDetailMixin
+from workspace.tasks import monitorworkspace
 
 from bioblend.galaxy.tools.inputs import inputs
 from django.core.urlresolvers import reverse_lazy
@@ -108,7 +109,7 @@ class WorkflowAdvancedSinglePageView(WorkflowDuplicateMixin,
         steps = workflow.json['steps']
         step_id = u'0'
 
-        history_id = create_history(
+        wksph = create_history(
             self.request, name="NGPhylogeny Analyse - " + workflow.name)
 
         for form in context['form_list']:
@@ -138,7 +139,7 @@ class WorkflowAdvancedSinglePageView(WorkflowDuplicateMixin,
                         # send file to galaxy
                         outputs = gi.tools.upload_file(path=tmp_file.name,
                                                        file_name=uploaded_file.name,
-                                                       history_id=history_id)
+                                                       history_id=wksph.history)
                         file_id = outputs.get('outputs')[0].get('id')
                         tool_inputs.set_dataset_param(
                             fields.get(inputfile), file_id)
@@ -154,7 +155,7 @@ class WorkflowAdvancedSinglePageView(WorkflowDuplicateMixin,
                                 inputfile)
                             outputs = gi.tools.upload_file(path=tmp_file.name,
                                                            file_name=input_fieldname + " pasted_sequence",
-                                                           history_id=history_id)
+                                                           history_id=wksph.history)
                             file_id = outputs.get('outputs')[0].get('id')
                             tool_inputs.set_dataset_param(fields.get(inputfile),
                                                           file_id)
@@ -196,24 +197,29 @@ class WorkflowAdvancedSinglePageView(WorkflowDuplicateMixin,
             # send file to galaxy
             output = gi.tools.upload_file(path=tmp_file.name,
                                           file_name=uploadfile_name,
-                                          history_id=history_id)
+                                          history_id=wksph.history)
             galaxy_file = output.get('outputs')[0].get('id')
             dataset_map[i_input] = {'id': galaxy_file, 'src': 'hda'}
 
         try:
             output = self.request.galaxy.workflows.invoke_workflow(workflow_id=workflow.id_galaxy,
-                                                                   history_id=history_id,
+                                                                   history_id=wksph.history,
                                                                    inputs=dataset_map,
                                                                    params=params,
                                                                    allow_tool_state_corrections=True,
                                                                    )
 
             self.succes_url = reverse_lazy("history_detail", kwargs={
-                                           'history_id': history_id})
+                                           'history_id': wksph.history})
+            # Start monitoring (for sending emails)
+            monitorworkspace.delay(wksph.history)
+            wksph.monitored = True
+            wksph.save()
+
             return HttpResponseRedirect(self.succes_url)
 
         except Exception:
-            delete_history(history_id)
+            delete_history(wksph.history)
             raise
         finally:
             # delete the workflow copy of oneclick workflow when the workflow has been run

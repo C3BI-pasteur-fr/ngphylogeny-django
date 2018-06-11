@@ -11,6 +11,7 @@ from data.views import UploadView
 from galaxy.decorator import connection_galaxy
 from workflows.models import Workflow, WorkflowStepInformation
 from workspace.views import create_history
+from workspace.tasks import monitorworkspace
 from .viewmixing import WorkflowDetailMixin
 from django.shortcuts import render
 
@@ -78,14 +79,14 @@ class WorkflowFormView(WorkflowDetailMixin, UploadView, DetailView):
         gi = self.request.galaxy
         workflow = self.get_workflow()
         # create new history
-        history_id = create_history(
+        wksph = create_history(
             self.request,
             name="NGPhylogeny Analyse - " + workflow.name,
         )
         # upload user file or pasted content
         submitted_file = form.cleaned_data.get('input_file')
         if submitted_file:
-            u_file = self.upload_file(submitted_file, history_id)
+            u_file = self.upload_file(submitted_file, wksph.history)
         # or upload user pasted content
         else:
             u_file = self.upload_content(form.cleaned_data['pasted_text'])
@@ -98,15 +99,19 @@ class WorkflowFormView(WorkflowDetailMixin, UploadView, DetailView):
         try:
             # run workflow
             self.outputs = gi.workflows.run_workflow(workflow_id=workflow.id_galaxy,
-                                                     history_id=history_id,
+                                                     history_id=wksph.history,
                                                      dataset_map=dataset_map,
                                                      # inputs=dataset_map
-                                                     )  # ,params=wk_galaxy.params)
+            )  # ,params=wk_galaxy.params)
+            
         except Exception as galaxy_exception:
             raise galaxy_exception
         self.success_url = reverse_lazy("history_detail", kwargs={
-                                        'history_id': history_id}, )
-
+                                        'history_id': wksph.history}, )
+        # Start monitoring
+        wksph.monitored = True
+        monitorworkspace.delay(wksph.history)
+        wksph.save()
         return HttpResponseRedirect(self.get_success_url())
 
     
@@ -121,7 +126,7 @@ class WorkflowWizard(SessionWizardView):
     def done(self, form_list, **kwargs):
 
         workflow = self.get_workflow()
-        history_id = create_history(
+        wksph = create_history(
             self.request, name="NGPhylogeny Analyse - " + workflow.name)
 
         i_input = workflow.json['inputs'].keys()[0]
@@ -151,7 +156,7 @@ class WorkflowWizard(SessionWizardView):
                     output = self.request.galaxy.tools.upload_file(path=str(form.file),
                                                                    file_name=str(
                                                                        form.name),
-                                                                   history_id=history_id
+                                                                   history_id=wksph.history
                                                                    )
                     galaxy_file = output.get('outputs')[0]
                     dataset_map[i_input] = {
@@ -173,14 +178,18 @@ class WorkflowWizard(SessionWizardView):
 
         try:
             output = self.request.galaxy.workflows.invoke_workflow(workflow_id=workflow.id_galaxy,
-                                                                   history_id=history_id,
+                                                                   history_id=wksph.history,
                                                                    inputs=dataset_map,
                                                                    params=params,
                                                                    allow_tool_state_corrections=True,
                                                                    )
 
             self.succes_url = reverse_lazy("history_detail", kwargs={
-                                           'history_id': history_id})
+                                           'history_id': wksph.history})
+            # Start monitoring (for sending emails)
+            wksph.monitored = True
+            monitorworkspace.delay(wksph.history)
+            wksph.save()
 
         except Exception as galaxy_exception:
 

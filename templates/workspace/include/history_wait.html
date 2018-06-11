@@ -1,0 +1,119 @@
+{% load static %}
+{% block stylesheet %}
+<script src="https://cdn.rawgit.com/zenorocha/clipboard.js/v1.7.1/dist/clipboard.min.js"></script>
+<script src="https://cdn.datatables.net/1.10.16/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.10.16/js/dataTables.bootstrap.min.js"></script>
+<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.16/css/dataTables.bootstrap.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+
+{% endblock %}
+<script  type="text/javascript">
+    $(document).ready(function(){
+	var interval = 10000;
+	var autorefresh = setInterval(refresh, interval);
+	var elt = $('#countdown_span');
+	elt.html(interval / 1000);
+	function refresh() {
+	    location.reload();
+	}
+	function renameHistory(el){
+	    $.post("{% url 'history_rename' object.history_info.id %}",
+		   {
+		       name: el.value,
+		       csrfmiddlewaretoken: '{{ csrf_token }}'
+		   }
+		  );
+	}
+	function changeEmail(el){
+	    $.post("{% url 'change_email' object.history_info.id %}",
+		   {
+		       email: el.value,
+		       csrfmiddlewaretoken: '{{ csrf_token }}'
+		   }
+		  );
+	}
+	function countdown() {
+	    elt.html(elt.html() - 1);
+	    if (elt.html() < 0) {
+		elt.html(interval / 1000);
+	    }
+	}
+	setInterval(countdown, 1000);
+    });
+</script>
+
+<div id="info-refresh" class="alert alert-info alert-dismissable fade in">
+  <a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
+  <strong>Info !</strong> This page is will be refreshed in <span id="countdown_span">5</span> sec.
+</div>
+<div id="success-copy" class="alert alert-success" style="display:none;">
+  <a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
+  <strong>Success !</strong> The link is copied in you Clipboard!
+</div>
+
+<div class="row">
+  <div class="col-md-6">
+    <div class="input-group">
+      <div class="input-group-addon">
+        Url
+      </div>
+      <span class="form-control" readonly
+            value="{{ request.META.HTTP_HOST }}{% url 'history_detail' object.history_info.id  %}">
+        {{ request.META.HTTP_HOST }}{% url 'history_detail' object.history_info.id  %}
+      </span>
+      <a id='clip' class="btn btn-default input-group-addon btn-sm"
+         data-clipboard-text="{{ request.META.HTTP_HOST }}{% url 'history_detail' object.history_info.id  %}"
+         title="copy the url of analyse"
+         data-toggle="tooltip" data-placement="right"
+         onclick="copied()">
+        <span class="glyphicon glyphicon-copy text-primary"></span>
+      </a>
+    </div>
+  </div>
+</div>
+<div class="row">
+  <div class="col-md-6">
+    <div class="input-group" onclick="$('#rename_history').focus();">
+      <div class="input-group-addon">
+        Name
+      </div>
+      <input id="rename_history" class="form-control input" onblur="renameHistory(this);"
+             value="{{ object.history_info.name }}">
+      <a class="btn input-group-addon btn-sm"
+	 title="Rename your analyse"
+	 data-toggle="tooltip" data-placement="right">
+	<span class="glyphicon glyphicon-pencil text-primary"> </span>
+      </a>
+    </div>
+  </div>
+</div>
+<div class="row">
+  <div class="col-md-6">
+    <div class="input-group" onclick="$('#change_email).focus();">
+      <div class="input-group-addon">
+        e-mail
+      </div>
+      <input id="change_email" class="form-control input" onblur="changeEmail(this);"
+             value="{{ object.email }}" />
+      <a class="btn input-group-addon btn-sm"
+	 title="Change contact email if you want to be notified"
+	 data-toggle="tooltip" data-placement="right">
+	<span class="glyphicon glyphicon-send text-primary"> </span>
+      </a>
+    </div>
+  </div>
+</div>
+<br>
+<hr>
+<div class="row">
+  <div class="col-md-12">
+    <div class="form-group">
+      <div class="col-md-12 text-center">
+	<h4>Analysis is being initialized on the Galaxy server, please wait a few seconds</h4>
+	<i class="fa fa-circle-o-notch fa-spin" style="font-size:24px"></i>
+      </div>
+    </div>
+    <!-- <img src=""/> -->
+  </div>
+</div>
+</table>

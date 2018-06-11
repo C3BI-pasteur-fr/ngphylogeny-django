@@ -9,11 +9,13 @@ from django.forms import ValidationError
 from django.http import HttpResponse
 from django.shortcuts import render, get_object_or_404, redirect
 from django.views.generic import DetailView, ListView
+from bioblend.galaxyclient import ConnectionError
 
 from galaxy.decorator import connection_galaxy
 from workspace.views import create_history, delete_history
 from .forms import ToolForm
 from .models import Tool, ToolFieldWhiteList, ToolFlag
+from workspace.tasks import monitorworkspace
 
 from Bio import SeqIO, Phylo
 
@@ -71,7 +73,7 @@ def tool_exec_view(request, pk, store_output=None):
     if request.method == 'POST':
         if tool_form.is_valid():
             try:
-                history_id = create_history(
+                wksph = create_history(
                     request, name="Analyse with " + tool_obj.name)
                 tool_inputs = inputs()
 
@@ -101,7 +103,7 @@ def tool_exec_view(request, pk, store_output=None):
                         if type in exts.get(inputfile, ""):
                             outputs = gi.tools.upload_file(path=tmp_file.name,
                                                            file_name=uploaded_file.name,
-                                                           history_id=history_id,
+                                                           history_id=wksph.history,
                                                            file_type=type)
                         else:
                             raise ValueError('File format of file %s is not allowed for field %s' % (uploaded_file.name,fields.get(inputfile)))
@@ -124,7 +126,7 @@ def tool_exec_view(request, pk, store_output=None):
                             if type in exts.get(inputfile,""):
                                 outputs = gi.tools.upload_file(path=tmp_file.name,
                                                                file_name=input_fieldname + " pasted_sequence",
-                                                               history_id=history_id,
+                                                               history_id=wksph.history,
                                                                file_type=type)
                             else:
                                 raise ValueError('This file format is not allowed for field %s' % (input_fieldname))
@@ -141,16 +143,25 @@ def tool_exec_view(request, pk, store_output=None):
                 for h, file_id in hid.items():
                     tool_inputs.set_dataset_param(fields.get(h), file_id)
 
-                tool_outputs = gi.tools.run_tool(history_id=history_id,
+                tool_outputs = gi.tools.run_tool(history_id=wksph.history,
                                                  tool_id=tool_obj.id_galaxy,
                                                  tool_inputs=tool_inputs)
+                # Start monitoring (for sending emails)
+                monitorworkspace.delay(wksph.history)
+                wksph.monitored = True
+                wksph.save()
+                
                 if store_output:
                     request.session['output'] = tool_outputs
 
-                return redirect(reverse_lazy("history_detail", kwargs={'history_id': history_id}))
+                return redirect(reverse_lazy("history_detail", kwargs={'history_id': wksph.history}))
 
             except ValueError as ve:
                 message = str(ve)
+            except ConnectionError as ce:
+                message = str(ce)
+            except NameError as ne:
+                message = str(ne)
             except Exception as e:
                 raw_message = ast.literal_eval(e.body)
                 reverse_dict_field = {
@@ -164,7 +175,7 @@ def tool_exec_view(request, pk, store_output=None):
                 else:
                     message=raw_message
 
-                delete_history(request, history_id)
+                delete_history(request, wksph.history)
 
     context = {"toolform": tool_form,
                "tool": tool_obj,

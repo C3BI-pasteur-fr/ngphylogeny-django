@@ -8,14 +8,32 @@
 <script  type="text/javascript">
     $(document).ready(function(){
 	$('[data-toggle="tooltip"]').tooltip();
+	var interval = 10000;
+	var autorefresh = setInterval(refresh, interval);
+	var elt = $('#countdown_span');
+	elt.html(interval / 1000);
+	
+	function countdown() {
+	    elt.html(elt.html() - 1);
+	    if (elt.html() < 0) {
+		elt.html(interval / 1000);
+	    }
+	}
+	
+	setInterval(countdown, 1000);
+	{% if object.finished %}
+	$('#info-refresh').hide();
+	clearInterval(autorefresh);
+	{% endif %}
     });
 </script>
+
 <script >
     $(function () {
 	var deferreds = [];
 	// Loop using .each
 	$("[data]").each(function (index, value) {
-	    var ajax = $.post("{% url 'get_dataset_tool' history_info.id %}",
+	    var ajax = $.post("{% url 'get_dataset_tool' object.history_info.id %}",
 			      {
 				  'dataset_id': $(this).attr('id'),
 				  'csrfmiddlewaretoken': '{{ csrf_token }}'
@@ -58,26 +76,12 @@
     });
 </script>
 
-<script>
+  <script>
     function refresh() {
-	$.get('{% url 'history_detail' history_info.id %}',
-	      function (data) {
-		  var html = $.parseHTML(data);
-		  var nbstate = $(html).find('[id^=state_]').length;
-		  if ($('[id^=state_]').length != nbstate )
-		  { location.reload();}
-		  $(html).find('[id^=state_]').each(function (index, el) {
-		      $('#' + $(el).attr('id')).replaceWith($(el));
-		  });
-		  $(html).find('[id^=action_]').each(function (index, el) {
-		      $('#' + $(el).attr('id')).replaceWith($(el));
-		  });
-		  $('[data-toggle="tooltip"]').tooltip();
-	      }
-	     );
+	location.reload();
     }
   function renameHistory(el){
-      $.post("{% url 'history_rename' history_info.id %}",
+      $.post("{% url 'history_rename' object.history_info.id %}",
 	     {
 		 name: el.value,
 		 csrfmiddlewaretoken: '{{ csrf_token }}'
@@ -85,7 +89,7 @@
 	    );
   }
   function changeEmail(el){
-      $.post("{% url 'change_email' history_info.id %}",
+      $.post("{% url 'change_email' object.history_info.id %}",
 	     {
 		 email: el.value,
 		 csrfmiddlewaretoken: '{{ csrf_token }}'
@@ -100,7 +104,6 @@
       setTimeout(function(){ $("#success-copy").fadeOut("slow"); }, 2000);
   }
 </script>
-
 <div id="info-refresh" class="alert alert-info alert-dismissable fade in">
   <a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
   <strong>Info !</strong> This page is will be refreshed in <span id="countdown_span">5</span> sec.
@@ -117,11 +120,11 @@
         Url
       </div>
       <span class="form-control" readonly
-            value="{{ request.META.HTTP_HOST }}{% url 'history_detail' history_info.id  %}">
-        {{ request.META.HTTP_HOST }}{% url 'history_detail' history_info.id  %}
+            value="{{ request.META.HTTP_HOST }}{% url 'history_detail' object.history_info.id  %}">
+        {{ request.META.HTTP_HOST }}{% url 'history_detail' object.history_info.id  %}
       </span>
       <a id='clip' class="btn btn-default input-group-addon btn-sm"
-         data-clipboard-text="{{ request.META.HTTP_HOST }}{% url 'history_detail' history_info.id  %}"
+         data-clipboard-text="{{ request.META.HTTP_HOST }}{% url 'history_detail' object.history_info.id  %}"
          title="copy the url of analyse"
          data-toggle="tooltip" data-placement="right"
          onclick="copied()">
@@ -137,7 +140,7 @@
         Name
       </div>
       <input id="rename_history" class="form-control input" onblur="renameHistory(this);"
-             value="{{ history_info.name }}">
+             value="{{ object.history_info.name }}">
       <a class="btn input-group-addon btn-sm"
 	 title="Rename your analyse"
 	 data-toggle="tooltip" data-placement="right">
@@ -153,7 +156,7 @@
         e-mail
       </div>
       <input id="change_email" class="form-control input" onblur="changeEmail(this);"
-             value="{{ contactemail }}" />
+             value="{{ object.email }}" />
       <a class="btn input-group-addon btn-sm"
 	 title="Change contact email if you want to be notified"
 	 data-toggle="tooltip" data-placement="right">
@@ -176,30 +179,9 @@
       </thead>
       <tbody>
         <tr></tr>
-        {% for file in history_content|dictsortreversed:"hid" %}
+
+        {% for file in object.history_content|dictsortreversed:"hid" %}
         <tr {% if not file.visible %}class='hidden' {% endif %}>
-          {% if forloop.first %}
-          <script>
-    	    var interval = 5000;
-	    var autorefresh = setInterval(refresh, interval);
-	    var elt = $('#countdown_span');
-	    elt.html(interval / 1000);
-	    
-	    function countdown() {
-		elt.html(elt.html() - 1);
-		if (elt.html() < 0) {
-		    elt.html(interval / 1000);
-		    
-		}
-	    }
-	    
-	    setInterval(countdown, 1000);
-	    {% if 'ok' in file.state %}
-	    $('#info-refresh').hide();
-	    clearInterval(autorefresh);
-	    {% endif %}
-	  </script>
-          {% endif %}
           <td id="{{ file.id }}" data=''></td>
           <td>{{ file.hid }}.</td>
           <td>{{ file.name }}</td>

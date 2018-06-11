@@ -20,6 +20,14 @@ class WorkspaceHistory(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
     email = models.CharField(max_length=100)
     monitored = models.BooleanField(default=False)
+    finished = models.BooleanField(default=False)
+    
+    # history Json coming from galaxy server: stored in the database 
+    history_content_json = models.TextField(default="{}")
+    history_info_json  = models.TextField(default="{}")
+    # Deserialized json, not stored in the django database 
+    history_content = None
+    history_info = None
     
     def get_galaxy_user(self):
         if self.user:
