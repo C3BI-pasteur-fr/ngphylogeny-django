@@ -73,7 +73,7 @@ def monitorworkspace(historyid):
             if error:
                 message= message + "Your NGPhylogeny job finished with errors.\n\n"
             else:
-                message="Your NGPhylogeny job finished successfuly.\n"
+                message=message + "Your NGPhylogeny job finished successfuly.\n"
             please = 'Please visit http://%s%s to check results\n\n' % ("ngphylogeny.fr", reverse('history_detail', kwargs={'history_id':historyid}))
             message = message + please
             message = message + "Thank you for using ngphylogeny.fr\n\n"
