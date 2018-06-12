@@ -1,6 +1,6 @@
 {% extends "base_site.html" %}
 {% load static %}
-{% block title %}Previous analysis{% endblock %}
+{% block title %}Previous analyses{% endblock %}
 {% block content %}
         <div class="col-md-offset-1">
             <ul class="nav histories-nav nav-pills">
@@ -25,11 +25,13 @@
                         </a>
                     </li>
                 {% empty %}
-                    <div class="jumbotron">
-                        You haven't any recent analyses in progress
-                    </div>
+		<div class="panel panel-info">
+		  <div class="panel-heading">Analyses in Session</div>
+		  <div class="panel-body">You have no analyses in the session</div>
+		</div>
                 {% endfor %}
             </ul>
+	    <a class="btn btn-danger" role="button" href="{% url 'history_delete_all' %}">Delete all histories</a>
         </div>
     </div>
 {% endblock %}

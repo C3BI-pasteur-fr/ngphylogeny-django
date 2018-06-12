@@ -87,6 +87,19 @@ def monitorworkspace(historyid):
             )
             print(message)
         except SMTPException as e:
-            print("Problem with smtp server : ", e)
+            logging.warning("Problem with smtp server : %s" % (e))
         except Exception as e:
-            print("Unknown Problem while sending e-mail: ", e)
+            logging.warning("Unknown Problem while sending e-mail: %s" % (e))
+
+@shared_task
+def deletegalaxyhistory(historyid):
+    """
+    Celery task that will delete an history on the galaxy server in background
+    """
+    logging.info("Deleting history %s" % (historyid))
+    try:
+        galaxycon = galaxy_connection()
+        galaxycon.nocache = True
+        galaxycon.histories.delete_history(historyid, purge=True)
+    except Exception as e:
+        logging.warning("Problem while deleting history: %s" % (e))

@@ -4,9 +4,10 @@ from django.http import HttpResponse
 from django.urls import reverse_lazy
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
-from django.views.generic import RedirectView, ListView, DeleteView, UpdateView, DetailView
+from django.views.generic import RedirectView, ListView, DeleteView, UpdateView, DetailView, View
 from django.views.generic.edit import SingleObjectMixin
 from bioblend.galaxy.client import ConnectionError
+from django.shortcuts import render, redirect
 
 from galaxy.decorator import connection_galaxy
 from .models import WorkspaceHistory
@@ -113,7 +114,6 @@ class HistoryDetailView(WorkspaceHistoryObjectMixin, DetailView):
         Display Galaxy like history information
     """
     template_name = 'workspace/history.html'
-    #template_name = 'error.html'
 
 @connection_galaxy
 def get_dataset_toolprovenance(request, history_id, ):
@@ -171,6 +171,16 @@ class WorkspaceDeleteView(WorkspaceHistoryObjectMixin, DeleteView):
     """
     success_url = reverse_lazy('previous_analyses')
 
+class DeleteAllHistories(View):
+    template_name = 'workspace/delete_all_histories_confirm.html'
+    
+    def get(self,request):
+        return render(request, self.template_name, {})
+
+    def post(self,request):
+        if "yes" in request.POST:
+            qs = WorkspaceHistory.objects.filter(history__in=request.session.get('histories', [])).delete()
+        return redirect('previous_analyses')
 
 @method_decorator(connection_galaxy, name="dispatch")
 class WorkspaceRenameView(HistoryDetailView, UpdateView):
@@ -195,3 +205,4 @@ class WorkspaceChangeEmailView(HistoryDetailView, UpdateView):
 
     def get_success_url(self):
         return reverse_lazy('history_detail', args=(self.get_object().history,))
+

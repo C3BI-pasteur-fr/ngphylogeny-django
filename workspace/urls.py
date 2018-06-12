@@ -16,7 +16,7 @@ Including another URLconf
 from django.conf.urls import url
 
 from .views import HistoryDetailView, PreviousHistoryListView, get_dataset_toolprovenance, GalaxyErrorView, \
-    WorkspaceDeleteView, WorkspaceRenameView, WorkspaceChangeEmailView
+    WorkspaceDeleteView, WorkspaceRenameView, WorkspaceChangeEmailView, DeleteAllHistories
 
 urlpatterns = [
     url(r'^history$', HistoryDetailView.as_view(), name="history_current_detail"),
@@ -26,8 +26,8 @@ urlpatterns = [
     url(r'^history/(?P<history_id>[\w-]+)/rename$', WorkspaceRenameView.as_view(), name="history_rename"),
     url(r'^history/(?P<history_id>[\w-]+)/email$', WorkspaceChangeEmailView.as_view(), name="change_email"),
     url(r'^history/(?P<history_id>[\w-]+)/delete$', WorkspaceDeleteView.as_view(), name="history_delete"),
+    url(r'^histories/deleteall$', DeleteAllHistories.as_view(), name="history_delete_all"),
     url(r'^history/provenance/(?P<history_id>[\w-]+)$', get_dataset_toolprovenance, name="get_dataset_tool"),
     url(r'^history/galaxyerror/(?P<id>[\w-]+)$', GalaxyErrorView.as_view(url='/dataset/errors?id=%(id)s'),
         name="galaxy_error_url"),
-
 ]

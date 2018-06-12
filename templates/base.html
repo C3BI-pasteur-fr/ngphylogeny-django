@@ -49,10 +49,8 @@
             {% endblock %}
             {% block nav-workspace %}
                 <li>
-                <a {% if request.session.histories|length > 1 %}
+                <a {% if request.session.histories|length >= 1 %}
                     href="{% url 'previous_analyses' %}"
-                    {% elif request.session.histories|length is 1%}
-                    href="{% url 'history_current_detail' %}"
                     {% else %}
                     class="text-muted"
                     {% endif %}

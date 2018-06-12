@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">Do you really want to delete all previous analyses?</p>
+<form method="post">{% csrf_token %}
+  <div>
+    <input type="submit" name="yes" class="btn btn-danger" value="Yes, I'm sure"/>
+    <input type="submit" name="no" class="btn btn-outline-info" value="No, take me back"/>
+  </div>
+</form>
+{% endblock %}
