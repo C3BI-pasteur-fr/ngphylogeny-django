@@ -229,7 +229,7 @@ class Tool(models.Model):
                 connection = requests.get(cite_url)
                 citations = connection.json()
                 for cite in citations:
-                    c = Citation(reference=cite.get('content',''), tool=t)
+                    c = Citation(reference=cite.get('content','').encode('iso-8859-1').decode('utf8'), tool=t)
                     c.save()
                 if force:
                     t.import_tool_io(t.tool_json)
