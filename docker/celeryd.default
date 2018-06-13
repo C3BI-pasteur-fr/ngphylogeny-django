@@ -1,0 +1,20 @@
+CELERYD_NODES="worker1"
+CELERY_BIN="python -m celery"
+CELERY_APP="NGPhylogeny_fr.celery:app"
+CELERYD_CHDIR="/home/ngphylo"
+#CELERYD_OPTS="--time-limit=300 --concurrency=1"
+CELERYD_OPTS="--concurrency=30"
+CELERYD_LOG_FILE="/var/log/celery/%N.log"
+CELERYD_PID_FILE="/var/log/celery/%N.pid"
+CELERYD_USER="root"
+CELERYD_GROUP="root"
+CELERYD_LOG_LEVEL='INFO'
+CELERY_CREATE_DIRS=1
+
+CELERYBEAT_CHDIR="/home/ngphylo"
+CELERYBEAT_OPTS="--schedule=/var/run/celery/celerybeat-schedule"
+CELERYBEAT_LOG_FILE="/var/log/celery/celerybeat.log"
+CELERYBEAT_PID_FILE="/var/log/celery/celerybeat.pid"
+CELERYBEAT_USER="root"
+CELERYBEAT_GROUP="root"
+CELERYBEAT_LOG_LEVEL='INFO'

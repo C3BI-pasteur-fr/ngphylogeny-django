@@ -6,6 +6,12 @@ import re
 import logging
 
 from celery import shared_task
+from celery.schedules import crontab
+from celery.decorators import periodic_task
+from datetime import date, timedelta, datetime
+
+from celery.utils.log import get_task_logger
+
 from smtplib import SMTPException
 from workspace.models import WorkspaceHistory
 from galaxy.decorator import galaxy_connection
@@ -15,6 +21,8 @@ from django.core.urlresolvers import reverse
 
 def flush_transaction():
     transaction.commit()
+    
+logger = get_task_logger(__name__)
 
 @shared_task
 def monitorworkspace(historyid):
@@ -103,3 +111,14 @@ def deletegalaxyhistory(historyid):
         galaxycon.histories.delete_history(historyid, purge=True)
     except Exception as e:
         logging.warning("Problem while deleting history: %s" % (e))
+
+# Every day at 2am, clears analyses older than 14 days
+@periodic_task(run_every=(crontab(hour="02", minute="*", day_of_week="*")))
+def deleteoldgalaxyhistory():
+    logger.info("Start old workspace deletion task")
+    datecutoff = datetime.now() - timedelta(days=14)
+    for e in WorkspaceHistory.objects.filter(deleted=False).filter(finished=True).filter(created_date__lte=datecutoff):
+        e.deleted = True
+        e.save()
+        deletegalaxyhistory(e.history)
+    logger.info("Old workspace deletion task finished")

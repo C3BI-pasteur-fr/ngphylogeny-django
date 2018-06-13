@@ -8,6 +8,8 @@ from django.views.generic import RedirectView, ListView, DeleteView, UpdateView,
 from django.views.generic.edit import SingleObjectMixin
 from bioblend.galaxy.client import ConnectionError
 from django.shortcuts import render, redirect
+from django.http import HttpResponseRedirect
+from tasks import deletegalaxyhistory
 
 from galaxy.decorator import connection_galaxy
 from .models import WorkspaceHistory
@@ -155,8 +157,7 @@ class PreviousHistoryListView(ListView):
     context_object_name = 'histories'
 
     def get_queryset(self):
-        self.queryset = WorkspaceHistory.objects.filter(history__in=self.request.session.get('histories', [])
-                                                        ).order_by("-created_date")
+        self.queryset = WorkspaceHistory.objects.filter(history__in=self.request.session.get('histories', [])).filter(deleted=False).order_by("-created_date")
 
         # update session history
         self.request.session['histories'] = list(self.queryset.values_list('history', flat=True))
@@ -171,6 +172,20 @@ class WorkspaceDeleteView(WorkspaceHistoryObjectMixin, DeleteView):
     """
     success_url = reverse_lazy('previous_analyses')
 
+    # Overrides the DeletionMixin delete method to prevent actual
+    # deletion, but instead mark it as deleted and delete the
+   # galaxy history asyynchronously
+    def delete(self, request, *args, **kwargs):
+        """
+        Calls the delete() method on the fetched object and then
+        redirects to the success URL.
+        """
+        self.object = self.get_object()
+        self.object.deleted = True
+        self.object.save()
+        deletegalaxyhistory.delay(self.object.history)
+        return HttpResponseRedirect(self.get_success_url())
+
 class DeleteAllHistories(View):
     template_name = 'workspace/delete_all_histories_confirm.html'
     
@@ -179,7 +194,10 @@ class DeleteAllHistories(View):
 
     def post(self,request):
         if "yes" in request.POST:
-            qs = WorkspaceHistory.objects.filter(history__in=request.session.get('histories', [])).delete()
+            for e in WorkspaceHistory.objects.filter(history__in=request.session.get('histories', [])).filter(deleted=False):
+                e.deleted = True
+                e.save()
+                deletegalaxyhistory.delay(e.history)
         return redirect('previous_analyses')
 
 @method_decorator(connection_galaxy, name="dispatch")

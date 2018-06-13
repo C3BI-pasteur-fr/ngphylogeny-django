@@ -10,6 +10,7 @@ from django.http import HttpResponse
 from django.shortcuts import render, get_object_or_404, redirect
 from django.views.generic import DetailView, ListView
 from bioblend.galaxyclient import ConnectionError
+from django.db.utils import OperationalError
 
 from galaxy.decorator import connection_galaxy
 from workspace.views import create_history, delete_history
@@ -162,6 +163,8 @@ def tool_exec_view(request, pk, store_output=None):
                 message = str(ce)
             except NameError as ne:
                 message = str(ne)
+            except OperationalError as oe:
+                message = str(oe)
             except Exception as e:
                 raw_message = ast.literal_eval(e.body)
                 reverse_dict_field = {

@@ -7,7 +7,6 @@ FROM python:2.7.14-jessie
 # File Author / Maintainer
 MAINTAINER Frederic Lemoine <frederic.lemoine@pasteur.fr>
 
-RUN useradd -m ngphylo
 COPY . /home/ngphylo
 
 # Install REDIS-SERVER
@@ -28,11 +27,15 @@ RUN pip install -r /home/ngphylo/requirement.txt
 
 RUN touch /var/log/redis_6379.log
 RUN /etc/init.d/redis_6379 start
-RUN chown -R ngphylo:ngphylo /home/ngphylo \
-    && chmod 755 /home/ngphylo/startup.sh
-USER ngphylo
 WORKDIR /home/ngphylo/
 RUN python manage.py makemigrations
 RUN python manage.py migrate --run-syncdb
+
+COPY docker/celeryd /etc/init.d/celeryd
+COPY docker/celerybeat /etc/init.d/celerybeat
+COPY docker/celeryd.default /etc/default/celeryd
+RUN chmod 640  /etc/default/celeryd
+RUN chmod +x /etc/init.d/celery*
+RUN mkdir /var/run/celery
 
 ENTRYPOINT ["/home/ngphylo/startup.sh"]
