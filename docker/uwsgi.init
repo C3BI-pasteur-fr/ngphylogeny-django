@@ -1,0 +1,9 @@
+# simple uWSGI script
+
+description "uwsgi tiny instance"
+start on runlevel [2345]
+stop on runlevel [06]
+
+respawn
+
+exec uwsgi --init /home/ngphylo/docker/ngphylogeny_uwsgi.ini

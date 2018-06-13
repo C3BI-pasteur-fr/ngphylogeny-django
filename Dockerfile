@@ -42,6 +42,8 @@ RUN mkdir /var/run/celery
 COPY docker/nginx /etc/init.d/nginx
 COPY docker/nginx.default /etc/default/nginx
 COPY docker/ngphylogeny_nginx.conf /etc/nginx/nginx.conf
+COPY docker/ngphylogeny_nginx.conf /etc/nginx/nginx.conf
+COPY docker/uwsgi.init /etc/init/uwsgi.conf
 
 RUN wget http://nginx.org/download/nginx-1.15.0.tar.gz \
     && tar -xzvf nginx-1.15.0.tar.gz \

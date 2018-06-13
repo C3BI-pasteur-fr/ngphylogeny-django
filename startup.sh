@@ -24,4 +24,6 @@ python manage.py importworkflows --galaxyurl=$GALAXYSERVER
 export PYTHONPATH=$PWD:$PYTHONPATH
 #celery --app=NGPhylogeny_fr.celery:app worker --loglevel=INFO
 #celery beat --app=NGPhylogeny_fr.celery:app --loglevel=DEBUG
-python manage.py runserver 0.0.0.0:8000
+#python manage.py runserver 0.0.0.0:8000
+
+nginx -g 'daemon off;'
