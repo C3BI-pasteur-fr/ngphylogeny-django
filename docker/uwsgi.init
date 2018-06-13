@@ -6,4 +6,4 @@ stop on runlevel [06]
 
 respawn
 
-exec uwsgi --init /home/ngphylo/docker/ngphylogeny_uwsgi.ini
+exec uwsgi --ini /home/ngphylo/docker/ngphylogeny_uwsgi.ini
