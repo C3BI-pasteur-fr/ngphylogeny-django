@@ -7,3 +7,5 @@ biopython==1.70
 python-slugify
 bibtexparser
 celery[redis]
+uwsgi
+

@@ -38,4 +38,35 @@ RUN chmod 640  /etc/default/celeryd
 RUN chmod +x /etc/init.d/celery*
 RUN mkdir /var/run/celery
 
+# INSTALL NGINX
+COPY docker/nginx /etc/init.d/nginx
+COPY docker/nginx.default /etc/default/nginx
+COPY docker/ngphylogeny_nginx.conf /etc/nginx/nginx.conf
+
+RUN wget http://nginx.org/download/nginx-1.15.0.tar.gz \
+    && tar -xzvf nginx-1.15.0.tar.gz \
+    && cd nginx-1.15.0 \
+    && ./configure \
+    --prefix=/usr/share/nginx \
+    --sbin-path=/usr/sbin/nginx \
+    --conf-path=/etc/nginx/nginx.conf \
+    --pid-path=/var/run/nginx.pid \
+    --lock-path=/var/lock/nginx.lock \
+    --error-log-path=/var/log/nginx/error.log \
+    --http-log-path=/var/log/access.log \
+    --user=root \
+    --group=root \
+    --without-mail_pop3_module \
+    --without-mail_imap_module \
+    --without-mail_smtp_module \
+    --without-http_scgi_module \
+    --without-http_memcached_module \
+    --with-ipv6 \
+    --with-http_ssl_module \
+    --with-http_stub_status_module \
+    --with-http_gzip_static_module \
+    && make && make install \
+    && chmod +x /etc/init.d/nginx \
+    && chmod 640  /etc/default/nginx
+
 ENTRYPOINT ["/home/ngphylo/startup.sh"]
