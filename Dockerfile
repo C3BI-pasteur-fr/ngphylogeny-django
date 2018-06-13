@@ -69,6 +69,7 @@ RUN wget http://nginx.org/download/nginx-1.15.0.tar.gz \
     --with-http_gzip_static_module \
     && make && make install \
     && chmod +x /etc/init.d/nginx \
-    && chmod 640  /etc/default/nginx
+    && chmod 640  /etc/default/nginx \
+    && chmod +x /etc/init/uwsgi.conf
 
 ENTRYPOINT ["/home/ngphylo/startup.sh"]

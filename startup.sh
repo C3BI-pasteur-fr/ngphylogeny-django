@@ -26,4 +26,5 @@ export PYTHONPATH=$PWD:$PYTHONPATH
 #celery beat --app=NGPhylogeny_fr.celery:app --loglevel=DEBUG
 #python manage.py runserver 0.0.0.0:8000
 
+exec uwsgi --ini /home/ngphylo/docker/ngphylogeny_uwsgi.ini &
 nginx -g 'daemon off;'
