@@ -357,7 +357,7 @@ class Citation(models.Model):
             year = v.get('year','')
             authors = v.get('author','')
             doi = v.get('doi','')
-            f.append(authors + "("+year+"). "+title+" . "+journal+" <a href=\"https://dx.doi.org/"+doi+"\">doi</a>\n")
+            f.append(authors + "("+year+"). "+title+" . "+journal+" <a href=\"https://doi.org/"+doi+"\">doi</a>\n")
         return f
 
 class ToolFlag(models.Model):
