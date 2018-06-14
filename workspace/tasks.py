@@ -113,7 +113,7 @@ def deletegalaxyhistory(historyid):
         logging.warning("Problem while deleting history: %s" % (e))
 
 # Every day at 2am, clears analyses older than 14 days
-@periodic_task(run_every=(crontab(hour="02", minute="*", day_of_week="*")))
+@periodic_task(run_every=(crontab(hour="02", minute="00", day_of_week="*")))
 def deleteoldgalaxyhistory():
     logger.info("Start old workspace deletion task")
     datecutoff = datetime.now() - timedelta(days=14)
