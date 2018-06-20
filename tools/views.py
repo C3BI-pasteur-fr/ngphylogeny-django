@@ -108,6 +108,8 @@ def tool_exec_view(request, pk, store_output=None):
                                                            file_type=type)
                         else:
                             raise ValueError('File format of file %s is not allowed for field %s' % (uploaded_file.name,fields.get(inputfile)))
+                        if type in ["fasta","phylip"] and nb_sequences(tmp_file.name,type) <= 3:
+                            raise ValueError('Sequence file %s should contain more than 3 sequences for field %s' % (uploaded_file.name,fields.get(inputfile)))
                     else:
                         print "input file:"
                         print inputfile
@@ -165,6 +167,10 @@ def tool_exec_view(request, pk, store_output=None):
                 message = str(ne)
             except OperationalError as oe:
                 message = str(oe)
+            except AttributeError as ae:
+                message = str(ae)
+            except TypeError as te:
+                message = str(te)
             except Exception as e:
                 raw_message = ast.literal_eval(e.body)
                 reverse_dict_field = {
@@ -208,7 +214,7 @@ def get_tool_name(request):
 def detect_type(filename):
     """
     :param filename: File to read and detect the format
-    :return: detected type, in [fasta, phylip, newick, N/A]
+    :return: detected type, in [fasta, phylip, phylip-relaxed, newick, N/A]
 
     Tests formats using biopython SeqIO or Phylo
     """
@@ -254,3 +260,20 @@ def detect_type(filename):
         pass
 
     return "txt"
+
+def nb_sequences(filename, format):
+    nbseq = 0
+    if format == 'fasta':
+        try:
+            for r in SeqIO.parse(filename, "fasta"):
+                nbseq += 1
+        except Exception:
+            pass
+    elif format == 'phylip':
+        try:
+            for r in SeqIO.parse(filename, "phylip"):
+                nbseq += 1
+        except Exception:
+            pass
+
+    return nbseq

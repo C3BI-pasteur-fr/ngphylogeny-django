@@ -190,7 +190,7 @@ class WorkflowAdvancedSinglePageView(WorkflowDuplicateMixin,
         if not valid_fasta(tmp_file.name):
             # Uploaded file is not valid
             context = self.get_context_data(object=self.object)
-            context['fileerror']="Input data is malformed or empty"
+            context['fileerror']="Input data is malformed or contain less than 4 sequences"
             return render(request, self.template_name, context)
 
         if uploaded_file:
@@ -231,6 +231,4 @@ def valid_fasta(fasta_file):
     print fasta_file
     for r in SeqIO.parse(fasta_file, "fasta"):
         nbseq += 1
-    print "Number of sequences:"
-    print nbseq
-    return nbseq>0
+    return nbseq>3

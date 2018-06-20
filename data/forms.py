@@ -43,14 +43,23 @@ class UploadForm(forms.Form):
                 self.add_error(
                     'input_file', "Input file format is not FASTA or file is empty")
                 valid = False
+            elif nbseq <= 3:
+                self.add_error(
+                    'input_file',"Input file should contain more than 3 sequences")
+                valid = False
         elif submitted_text:
             nbseq = 0
             for r in SeqIO.parse(StringIO.StringIO(submitted_text), "fasta"):
                 nbseq += 1
             if nbseq == 0:
                 self.add_error(
-                    'pasted_text', "Input file format is not FASTA or file is empty")
+                    'pasted_text', "Input data format is not FASTA or file is empty")
                 valid = False
+            elif nbseq <= 3:
+                self.add_error(
+                    'pasted_text',"Input data should contain more than 3 sequences")
+                valid = False
+
         else:
             self.add_error(
                 None, "No input data has been provided")
