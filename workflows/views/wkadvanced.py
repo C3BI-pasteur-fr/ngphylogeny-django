@@ -95,7 +95,6 @@ class WorkflowAdvancedSinglePageView(WorkflowDuplicateMixin,
     def post(self, request, *args, **kwargs):
 
         gi = request.galaxy
-        message = ""
 
         workflow = self.get_workflow()
         context = self.get_context_data(object=self.object)
@@ -109,6 +108,41 @@ class WorkflowAdvancedSinglePageView(WorkflowDuplicateMixin,
         steps = workflow.json['steps']
         step_id = u'0'
 
+        # Handle workflow main input file
+        # before creating the workspace etc.
+        uploaded_file = request.FILES.get("file") or request.POST.get("file")
+
+        if isinstance(uploaded_file, InMemoryUploadedFile):
+            tmp_file = tempfile.NamedTemporaryFile()
+            for chunk in uploaded_file.chunks():
+                tmp_file.write(chunk)
+            tmp_file.flush()
+            uploadfile_name = str(uploaded_file.name)
+        else:
+            uploadfile_name = "Upload File"
+            tmp_file = tempfile.NamedTemporaryFile()
+            tmp_file.write(uploaded_file)
+            tmp_file.flush()
+
+            # Check that input file is Fasta and is not empty
+        if not valid_fasta(tmp_file.name):
+            # Uploaded file is not valid
+            context = self.get_context_data(object=self.object)
+            context['fileerror'] = "Input data is malformed or contain less than 4 sequences"
+            return render(request, self.template_name, context)
+
+        if uploaded_file:
+            # send file to galaxy
+            output = gi.tools.upload_file(path=tmp_file.name,
+                                          file_name=uploadfile_name,
+                                          history_id=wksph.history)
+            galaxy_file = output.get('outputs')[0].get('id')
+            dataset_map[i_input] = {'id': galaxy_file, 'src': 'hda'}
+        else:
+            context = self.get_context_data(object=self.object)
+            context['fileerror'] = "No input file given"
+            return render(request, self.template_name, context)
+        
         wksph = create_history(
             self.request, name="NGPhylogeny Analyse - " + workflow.name)
 
@@ -171,43 +205,14 @@ class WorkflowAdvancedSinglePageView(WorkflowDuplicateMixin,
                     del params[step_id]
                 print (params)
 
-        # main input file worklfow
-        uploaded_file = request.FILES.get("file") or request.POST.get("file")
-
-        if isinstance(uploaded_file, InMemoryUploadedFile):
-            tmp_file = tempfile.NamedTemporaryFile()
-            for chunk in uploaded_file.chunks():
-                tmp_file.write(chunk)
-            tmp_file.flush()
-            uploadfile_name = str(uploaded_file.name)
-        else:
-            uploadfile_name = "Upload File"
-            tmp_file = tempfile.NamedTemporaryFile()
-            tmp_file.write(uploaded_file)
-            tmp_file.flush()
-
-            # Check that input file is Fasta and is not empty
-        if not valid_fasta(tmp_file.name):
-            # Uploaded file is not valid
-            context = self.get_context_data(object=self.object)
-            context['fileerror']="Input data is malformed or contain less than 4 sequences"
-            return render(request, self.template_name, context)
-
-        if uploaded_file:
-            # send file to galaxy
-            output = gi.tools.upload_file(path=tmp_file.name,
-                                          file_name=uploadfile_name,
-                                          history_id=wksph.history)
-            galaxy_file = output.get('outputs')[0].get('id')
-            dataset_map[i_input] = {'id': galaxy_file, 'src': 'hda'}
-
         try:
-            output = self.request.galaxy.workflows.invoke_workflow(workflow_id=workflow.id_galaxy,
-                                                                   history_id=wksph.history,
-                                                                   inputs=dataset_map,
-                                                                   params=params,
-                                                                   allow_tool_state_corrections=True,
-                                                                   )
+            output = self.request.galaxy.workflows.invoke_workflow(
+                workflow_id=workflow.id_galaxy,
+                history_id=wksph.history,
+                inputs=dataset_map,
+                params=params,
+                allow_tool_state_corrections=True,
+            )
 
             self.succes_url = reverse_lazy("history_detail", kwargs={
                                            'history_id': wksph.history})
@@ -222,13 +227,14 @@ class WorkflowAdvancedSinglePageView(WorkflowDuplicateMixin,
             delete_history(wksph.history)
             raise
         finally:
-            # delete the workflow copy of oneclick workflow when the workflow has been run
-            print (self.clean_copy())
+            # delete the workflow copy of oneclick workflow when
+            # the workflow has been run
+            print(self.clean_copy())
+
 
 def valid_fasta(fasta_file):
     # Check uploaded file or pasted content
     nbseq = 0
-    print fasta_file
     for r in SeqIO.parse(fasta_file, "fasta"):
         nbseq += 1
-    return nbseq>3
+    return nbseq > 3
