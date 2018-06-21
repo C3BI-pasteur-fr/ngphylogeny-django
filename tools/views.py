@@ -68,14 +68,13 @@ def tool_exec_view(request, pk, store_output=None):
                          tool_id=pk, whitelist=tool_visible_field,
                          data=request.POST or None,
                          session_files=request.session.get('files')
-    )
+                         )
 
     hid = {}
     if request.method == 'POST':
         if tool_form.is_valid():
             try:
-                wksph = create_history(
-                    request, name="Analyse with " + tool_obj.name)
+                wksph = None 
                 tool_inputs = inputs()
 
                 # mapping between form id to galaxy params names
@@ -101,24 +100,25 @@ def tool_exec_view(request, pk, store_output=None):
                         # send file to galaxy after verifying the
                         # allowed extensions
                         type = detect_type(tmp_file.name)
+                        if type in ["fasta", "phylip"] and nb_sequences(tmp_file.name, type) <= 3:
+                            raise ValueError('Sequence file %s should contain more than 3 sequences for field %s' % (
+                                uploaded_file.name, fields.get(inputfile)))
                         if type in exts.get(inputfile, ""):
+                            if wksph is None:
+                                wksph = create_history(request, name="Analyse with " + tool_obj.name)
                             outputs = gi.tools.upload_file(path=tmp_file.name,
                                                            file_name=uploaded_file.name,
                                                            history_id=wksph.history,
                                                            file_type=type)
                         else:
-                            raise ValueError('File format of file %s is not allowed for field %s' % (uploaded_file.name,fields.get(inputfile)))
-                        if type in ["fasta","phylip"] and nb_sequences(tmp_file.name,type) <= 3:
-                            raise ValueError('Sequence file %s should contain more than 3 sequences for field %s' % (uploaded_file.name,fields.get(inputfile)))
+                            raise ValueError('File format of file %s is not allowed for field %s' % (
+                                uploaded_file.name, fields.get(inputfile)))
                     else:
-                        print "input file:"
-                        print inputfile
                         # else paste content
                         content = request.POST.get(inputfile)
-                        galaxyfile = request.POST.get("galaxyfile_"+inputfile)
-                        print content
-                        print galaxyfile
-                        if content :
+                        galaxyfile = request.POST.get(
+                            "galaxyfile_" + inputfile)
+                        if content:
                             tmp_file = tempfile.NamedTemporaryFile()
                             tmp_file.write(content)
                             tmp_file.flush()
@@ -126,19 +126,22 @@ def tool_exec_view(request, pk, store_output=None):
                             # allowed extensions
                             input_fieldname = fields.get(inputfile)
                             type = detect_type(tmp_file.name)
-                            if type in exts.get(inputfile,""):
+                            if type in exts.get(inputfile, ""):
+                                if wksph is None:
+                                    wksph = create_history(request, name="Analyse with " + tool_obj.name)
                                 outputs = gi.tools.upload_file(path=tmp_file.name,
                                                                file_name=input_fieldname + " pasted_sequence",
                                                                history_id=wksph.history,
                                                                file_type=type)
                             else:
-                                raise ValueError('This file format is not allowed for field %s' % (input_fieldname))
+                                raise ValueError(
+                                    'This file format is not allowed for field %s' % (input_fieldname))
                         # Else we look at galaxy file ids
                         else:
                             if galaxyfile:
                                 file_id = galaxyfile
                                 hid[inputfile] = file_id
-                            
+
                     if outputs:
                         file_id = outputs.get('outputs')[0].get('id')
                         hid[inputfile] = file_id
@@ -153,7 +156,7 @@ def tool_exec_view(request, pk, store_output=None):
                 monitorworkspace.delay(wksph.history)
                 wksph.monitored = True
                 wksph.save()
-                
+
                 if store_output:
                     request.session['output'] = tool_outputs
 
@@ -182,7 +185,7 @@ def tool_exec_view(request, pk, store_output=None):
                         tool_form.add_error(reverse_dict_field.get(field),
                                             ValidationError(err_msg, code='invalid'))
                 else:
-                    message=raw_message
+                    message = raw_message
 
                 delete_history(request, wksph.history)
 
@@ -260,6 +263,7 @@ def detect_type(filename):
         pass
 
     return "txt"
+
 
 def nb_sequences(filename, format):
     nbseq = 0
