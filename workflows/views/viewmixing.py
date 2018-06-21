@@ -55,7 +55,6 @@ class WorkflowDuplicateMixin(object):
             try:
                 # import published shared workflow
                 wf_import = gi.workflows.import_shared_workflow(wk.id_galaxy)
-                print
             except:
                 # make a working copy workflow
                 wk_cp = gi.workflows.export_workflow_dict(wk.id_galaxy)
@@ -76,7 +75,6 @@ class WorkflowDuplicateMixin(object):
         # Verify workflow doesnt exist in db
         if not wk:
             msg = self.request.galaxy.workflows.delete_workflow(workflow_id=workflow_id)
-        print (msg)
         return msg
 
     def clean_copy(self):

@@ -183,7 +183,8 @@ class WorkflowAdvancedSinglePageView(WorkflowDuplicateMixin,
     def post(self, request, *args, **kwargs):
 
         gi = request.galaxy
-
+        
+        # Get a copy of the workflow
         workflow = self.get_workflow()
         context = self.get_context_data(object=self.object)
         # input file
@@ -201,6 +202,7 @@ class WorkflowAdvancedSinglePageView(WorkflowDuplicateMixin,
         if not uploaded_file:
             context = self.get_context_data(object=self.object)
             context['fileerror'] = "No input file given"
+            self.clean_copy()
             return render(request, self.template_name, context)
         # Then we check input file format
         try:
@@ -209,10 +211,12 @@ class WorkflowAdvancedSinglePageView(WorkflowDuplicateMixin,
         except WorkflowInputFileFormatError as e:
             context = self.get_context_data(object=self.object)
             context['fileerror'] = str(e)
+            self.clean_copy()
             return render(request, self.template_name, context)
 
         # We check form validity
         if not self.check_form_validity(request, context):
+            self.clean_copy()
             return self.get(request, *args, **kwargs)
 
         # We create an history (local and on galaxy)
@@ -231,6 +235,8 @@ class WorkflowAdvancedSinglePageView(WorkflowDuplicateMixin,
             self.analyze_forms(request, context, workflow, params, gi, wksph)
         except WorkflowInvalidFormError as e:
             # if one form is not valid
+            self.clean_copy()
+            delete_history(wksph.history)
             return self.get(request, *args, **kwargs)
 
         # We run the galaxy workflow

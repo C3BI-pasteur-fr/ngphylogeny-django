@@ -102,8 +102,8 @@ class ToolForm(forms.Form):
         else:
             self.fields[field_id] = forms.CharField(
                 **map_galaxy_tool_input(attrfield))
-        print(attrfield)
-        print(field_id)
+        # print(attrfield)
+        # print(field_id)
         return field_id
 
     def parse_galaxy_input_tool(self, list_inputs, cond_name='', whitelist=list()):
