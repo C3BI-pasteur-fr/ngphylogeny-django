@@ -13,7 +13,6 @@ from workflows.models import Workflow, WorkflowStepInformation
 from workspace.views import create_history
 from workspace.tasks import monitorworkspace
 from .viewmixing import WorkflowDetailMixin
-from django.shortcuts import render
 
 
 @method_decorator(connection_galaxy, name="dispatch")
