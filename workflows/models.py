@@ -49,8 +49,8 @@ class Workflow(models.Model):
         except:
             # Otherwise try to export it as dict and
             # import it again as a new workflow
-            wk_cp = gi.workflows.export_workflow_dict(wk.id_galaxy)
-            wf_import = gi.workflows.import_workflow_dict(wk_cp)
+            wk_cp = galaxyinstance.workflows.export_workflow_dict(self.id_galaxy)
+            wf_import = galaxyinstance.workflows.import_workflow_dict(wk_cp)
 
         # makes the copy
         workflow_copy = Workflow(galaxy_server=self.galaxy_server,
@@ -65,7 +65,7 @@ class Workflow(models.Model):
         """
         Deletes the given workflow from galaxy server
         """
-        msg = self.request.galaxy.workflows.delete_workflow(workflow_id=workflow_id)
+        msg =galaxyinstance.workflows.delete_workflow(workflow_id=self.id_galaxy)
         return msg
 
     class Meta:

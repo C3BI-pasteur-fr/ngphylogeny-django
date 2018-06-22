@@ -37,16 +37,12 @@ class WorkflowOneClickFormView(WorkflowFormView):
     """
     model = Workflow
     template_name = 'workflows/workflows_oneclick_form.html'
-
+    object = None
     def form_valid(self, form):
         try:
             render = super(WorkflowOneClickFormView, self).form_valid(form)
-
         except Exception as galaxy_exception:
             raise galaxy_exception
-
-        finally:
-            self.clean_copy()
         return render
 
 @method_decorator(connection_galaxy, name="dispatch")

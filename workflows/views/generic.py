@@ -76,13 +76,15 @@ class WorkflowFormView(UploadView, DetailView):
 
     def form_valid(self, form):
         gi = self.request.galaxy
-        workflow = self.get_object()
+        wk = self.get_object()
+        workflow = wk.duplicate(gi)
         workflow.fetch_details(gi)
         # create new history
         wksph = create_history(
             self.request,
             name="NGPhylogeny Analyse - " + workflow.name,
         )
+
         # upload user file or pasted content
         submitted_file = form.cleaned_data.get('input_file')
         if submitted_file:
@@ -95,7 +97,6 @@ class WorkflowFormView(UploadView, DetailView):
         # input file
         dataset_map = dict()
         dataset_map[i_input] = {'id': file_id, 'src': 'hda'}
-        print (dataset_map)
         try:
             # run workflow
             self.outputs = gi.workflows.run_workflow(workflow_id=workflow.id_galaxy,
@@ -106,6 +107,8 @@ class WorkflowFormView(UploadView, DetailView):
             
         except Exception as galaxy_exception:
             raise galaxy_exception
+        finally:
+            workflow.delete(gi)
         self.success_url = reverse_lazy("history_detail", kwargs={
                                         'history_id': wksph.history}, )
         # Start monitoring
