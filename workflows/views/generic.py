@@ -12,11 +12,9 @@ from galaxy.decorator import connection_galaxy
 from workflows.models import Workflow, WorkflowStepInformation
 from workspace.views import create_history
 from workspace.tasks import monitorworkspace
-from .viewmixing import WorkflowDetailMixin
-
 
 @method_decorator(connection_galaxy, name="dispatch")
-class WorkflowListView(WorkflowDetailMixin, ListView):
+class WorkflowListView(ListView):
     """
     Generic class-based ListView
     """
@@ -26,11 +24,12 @@ class WorkflowListView(WorkflowDetailMixin, ListView):
 
     @cached_property
     def workflow_list(self):
+        gi = self.request.galaxy
         workflow_queryset = Workflow.objects.filter(
             galaxy_server__current=True).select_related()
 
         for workflow in workflow_queryset:
-            self.fetch_workflow_detail(workflow)
+            workflow.fetch_details(gi)
         return workflow_queryset
 
     def get_queryset(self):
@@ -38,19 +37,20 @@ class WorkflowListView(WorkflowDetailMixin, ListView):
 
 
 @method_decorator(connection_galaxy, name="dispatch")
-class WorkflowFormView(WorkflowDetailMixin, UploadView, DetailView):
+class WorkflowFormView(UploadView, DetailView):
     """
     Generic Workflow form view, upload one file and run workflow
     """
-
+    model = Workflow
     template_name = 'workflows/workflows_form.html'
     restricted_toolset = None
 
     def get_context_data(self, **kwargs):
+        gi = self.request.galaxy
         context = super(WorkflowFormView, self).get_context_data(**kwargs)
         # get workflows
         wk = self.get_object()
-        self.fetch_workflow_detail(wk)
+        wk.fetch_details(gi)
         if context.get('form') is None:
             context['form'] = UploadView.form()
         if hasattr(wk, 'json'):
@@ -76,7 +76,8 @@ class WorkflowFormView(WorkflowDetailMixin, UploadView, DetailView):
 
     def form_valid(self, form):
         gi = self.request.galaxy
-        workflow = self.get_workflow()
+        workflow = self.get_object()
+        workflow.fetch_details(gi)
         # create new history
         wksph = create_history(
             self.request,

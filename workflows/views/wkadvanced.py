@@ -13,10 +13,9 @@ from galaxy.decorator import connection_galaxy
 from tools.models import Tool
 from workspace.views import create_history, delete_history
 from workflows.forms import tool_form_factory
-from workflows.views.viewmixing import WorkflowDuplicateMixin
-from workflows.views.viewmixing import WorkflowDetailMixin
 from workflows.views.generic import WorkflowListView
 from workflows.exceptions import WorkflowInvalidFormError
+from workflows.models import Workflow
 from workflows.exceptions import WorkflowInputFileFormatError
 from workspace.tasks import monitorworkspace
 
@@ -48,26 +47,27 @@ class WorkflowAdvancedListView(WorkflowListView):
     restricted_toolset = Tool.objects.filter(toolflag__name=WORKFLOW_ADV_FLAG)
 
 
-class WorkflowAdvancedFormView(WorkflowDetailMixin, SingleObjectMixin):
+class WorkflowAdvancedFormView(SingleObjectMixin):
     """
         Generic Workflow Advanced class-based view:
         - Cut selected workflow into multiple tool forms
     """
-    # object = workflow
-
+    model = Workflow
+    object = None
     template_name = 'workflows/workflows_advanced_form.html'
     context_object_name = "workflow"
     restricted_toolset = Tool.objects.filter(toolflag__name=WORKFLOW_ADV_FLAG)
 
     def get_context_data(self, **kwargs):
-
+        gi = request.galaxy
         if not self.object:
             self.object = self.get_object()
-        self.fetch_workflow_detail(self.object)
-        context = super(WorkflowAdvancedFormView,
-                        self).get_context_data(**kwargs)
+        # Workflow
+        self.object.fetch_details(gi,restricted_toolset)
+        context = super(
+            WorkflowAdvancedFormView,
+            self).get_context_data(**kwargs)
         context['workflow_list'] = [self.object, ]
-
         context['tool_list'] = []
         tools = []
 
@@ -81,8 +81,7 @@ class WorkflowAdvancedFormView(WorkflowDetailMixin, SingleObjectMixin):
 
 
 @method_decorator(connection_galaxy, name="dispatch")
-class WorkflowAdvancedSinglePageView(WorkflowDuplicateMixin,
-                                     WorkflowAdvancedFormView,
+class WorkflowAdvancedSinglePageView(WorkflowAdvancedFormView,
                                      View):
     template_name = 'workflows/workflows_adv_singlepage_form.html'
 
@@ -181,18 +180,19 @@ class WorkflowAdvancedSinglePageView(WorkflowDuplicateMixin,
                 del params[step_id]
 
     def post(self, request, *args, **kwargs):
-
         gi = request.galaxy
         
-        # Get a copy of the workflow
-        workflow = self.get_workflow()
+        # Get a copy of the workflow with full details 
+        workflow = self.get_object().duplicate(gi)
+        workflow.fetch_details(gi)
+        
         context = self.get_context_data(object=self.object)
+        
         # input file
         dataset_map = {}
-
         # tool params
         params = {}
-
+        # Workflow inputs
         i_input = workflow.json['inputs'].keys()[0]
 
         # Handle workflow main input file
@@ -202,7 +202,7 @@ class WorkflowAdvancedSinglePageView(WorkflowDuplicateMixin,
         if not uploaded_file:
             context = self.get_context_data(object=self.object)
             context['fileerror'] = "No input file given"
-            self.clean_copy()
+            workflow.delete(gi)
             return render(request, self.template_name, context)
         # Then we check input file format
         try:
@@ -211,12 +211,12 @@ class WorkflowAdvancedSinglePageView(WorkflowDuplicateMixin,
         except WorkflowInputFileFormatError as e:
             context = self.get_context_data(object=self.object)
             context['fileerror'] = str(e)
-            self.clean_copy()
+            workflow.delete(gi)
             return render(request, self.template_name, context)
 
         # We check form validity
         if not self.check_form_validity(request, context):
-            self.clean_copy()
+            workflow.delete(gi)
             return self.get(request, *args, **kwargs)
 
         # We create an history (local and on galaxy)
@@ -235,7 +235,7 @@ class WorkflowAdvancedSinglePageView(WorkflowDuplicateMixin,
             self.analyze_forms(request, context, workflow, params, gi, wksph)
         except WorkflowInvalidFormError as e:
             # if one form is not valid
-            self.clean_copy()
+            workflow.delete(gi)
             delete_history(wksph.history)
             return self.get(request, *args, **kwargs)
 

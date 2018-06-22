@@ -6,6 +6,7 @@ import json
 from django.db import models
 
 from galaxy.models import Server
+from galaxy.galaxylib import GalaxyInstance
 from tools.models import Tool, ToolOutputData
 
 
@@ -22,6 +23,50 @@ class Workflow(models.Model):
     description = models.CharField(max_length=250)
     slug = models.SlugField(max_length=100, unique=True)
     rank = models.IntegerField(default=999, help_text="Workflows order")
+
+    # Json representation of the workflow
+    json = None
+    # Details about Steps (WorkflowStepInformation.sorted_tool_list)
+    detail = None
+
+    def fetch_details(self, galaxyinstance, toolset=None):
+        self.json = galaxyinstance.workflows.show_workflow(workflow_id=self.id_galaxy)
+        self.detail = WorkflowStepInformation(
+            self.json,
+            tools=toolset).sorted_tool_list
+
+    def duplicate(self, galaxyinstance):
+        """
+        Returns a copy of this workflow.
+        It copies the workflow locally on the django db
+        and remotely on the galaxy server
+        """
+        workflow_copy = None
+        try:
+            # Try to import directly the publicly shared workflow
+            # as a new workflow
+            wf_import = galaxyinstance.workflows.import_shared_workflow(self.id_galaxy)
+        except:
+            # Otherwise try to export it as dict and
+            # import it again as a new workflow
+            wk_cp = gi.workflows.export_workflow_dict(wk.id_galaxy)
+            wf_import = gi.workflows.import_workflow_dict(wk_cp)
+
+        # makes the copy
+        workflow_copy = Workflow(galaxy_server=self.galaxy_server,
+                                 id_galaxy=wf_import.get('id'),
+                                 name=self.name+"_copy",
+                                 category=self.category,
+                                 description=self.description+" (COPY)",
+                                 slug=self.name+"_copy")
+        return workflow_copy
+
+    def delete(self,galaxyinstance):
+        """
+        Deletes the given workflow from galaxy server
+        """
+        msg = self.request.galaxy.workflows.delete_workflow(workflow_id=workflow_id)
+        return msg
 
     class Meta:
         ordering = ["rank", ]

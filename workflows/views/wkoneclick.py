@@ -5,8 +5,8 @@ from django.utils.decorators import method_decorator
 from data.views import UploadView
 from galaxy.decorator import connection_galaxy
 from tools.models import Tool
+from workflows.models import Workflow
 from workflows.views.generic import WorkflowFormView, WorkflowListView
-from workflows.views.viewmixing import WorkflowDuplicateMixin
 
 from workspace.tasks import monitorworkspace
 
@@ -30,11 +30,12 @@ class WorkflowOneClickListView(WorkflowListView):
 
 
 @method_decorator(connection_galaxy, name="dispatch")
-class WorkflowOneClickFormView(WorkflowDuplicateMixin, WorkflowFormView):
+class WorkflowOneClickFormView(WorkflowFormView):
     """
     Workflow oneclick form with the list of tools and
     Launch oneclick workflow
     """
+    model = Workflow
     template_name = 'workflows/workflows_oneclick_form.html'
 
     def form_valid(self, form):
