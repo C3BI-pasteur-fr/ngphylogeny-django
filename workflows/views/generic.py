@@ -1,17 +1,15 @@
-from bioblend.galaxy.tools.inputs import inputs
-from django.core.files.storage import FileSystemStorage
 from django.core.urlresolvers import reverse_lazy
 from django.http import HttpResponseRedirect
 from django.utils.decorators import method_decorator
 from django.utils.functional import cached_property
 from django.views.generic import ListView, DetailView
-from formtools.wizard.views import SessionWizardView
 
 from data.views import UploadView
 from galaxy.decorator import connection_galaxy
 from workflows.models import Workflow, WorkflowStepInformation
 from workspace.views import create_history
 from workspace.tasks import monitorworkspace
+
 
 @method_decorator(connection_galaxy, name="dispatch")
 class WorkflowListView(ListView):
@@ -66,7 +64,6 @@ class WorkflowFormView(UploadView, DetailView):
     def post(self, request, *args, **kwargs):
         # determines which form is being submitted
         # uses the name of the form's submit button
-        form_name = 'form'
         form = self.get_form(UploadView.form())
         # validate
         if form.is_valid() and form.validate_form_inputs():
@@ -99,12 +96,11 @@ class WorkflowFormView(UploadView, DetailView):
         dataset_map[i_input] = {'id': file_id, 'src': 'hda'}
         try:
             # run workflow
-            self.outputs = gi.workflows.run_workflow(workflow_id=workflow.id_galaxy,
-                                                     history_id=wksph.history,
-                                                     dataset_map=dataset_map,
-                                                     # inputs=dataset_map
-            )  # ,params=wk_galaxy.params)
-            
+            self.outputs = gi.workflows.run_workflow(
+                workflow_id=workflow.id_galaxy,
+                history_id=wksph.history,
+                dataset_map=dataset_map,
+            )
         except Exception as galaxy_exception:
             raise galaxy_exception
         finally:
@@ -116,86 +112,3 @@ class WorkflowFormView(UploadView, DetailView):
         monitorworkspace.delay(wksph.history)
         wksph.save()
         return HttpResponseRedirect(self.get_success_url())
-
-    
-class WorkflowWizard(SessionWizardView):
-    """
-    Generic Form Wizard for Advanced and Alacarte mode
-    """
-    template_name = 'workflows/workflows_wizard_form.html'
-    file_storage = FileSystemStorage('/tmp')
-    succes_url = ""
-
-    def done(self, form_list, **kwargs):
-
-        workflow = self.get_workflow()
-        wksph = create_history(
-            self.request, name="NGPhylogeny Analyse - " + workflow.name)
-
-        i_input = workflow.json['inputs'].keys()[0]
-        steps = workflow.json['steps']
-
-        # input file
-        dataset_map = {}
-
-        # tool params
-        params = {}
-
-        for tool_form in form_list:
-            step_id = u'0'
-
-            # get from which step the tools are used
-            for i, step in steps.items():
-                if getattr(tool_form, 'tool_id', 'null') == step.get('tool_id'):
-                    step_id = i
-                    break
-
-            params[step_id] = inputs()
-
-            for key, form in tool_form.cleaned_data.items():
-
-                if "file" in key:
-
-                    output = self.request.galaxy.tools.upload_file(path=str(form.file),
-                                                                   file_name=str(
-                                                                       form.name),
-                                                                   history_id=wksph.history
-                                                                   )
-                    galaxy_file = output.get('outputs')[0]
-                    dataset_map[i_input] = {
-                        'id': galaxy_file.get('id'), 'src': 'hda'}
-
-                    # delete temp file
-                    self.file_storage.delete(form)
-
-                else:
-                    # set the Galaxy parameter ( name, value)
-                    params[step_id].set_param(
-                        tool_form.fields_ids_mapping.get(key), form)
-
-            # convert inputs to dict
-            params[step_id] = params[step_id].to_dict()
-
-            if not params[step_id]:
-                del params[step_id]
-
-        try:
-            output = self.request.galaxy.workflows.invoke_workflow(workflow_id=workflow.id_galaxy,
-                                                                   history_id=wksph.history,
-                                                                   inputs=dataset_map,
-                                                                   params=params,
-                                                                   allow_tool_state_corrections=True,
-                                                                   )
-
-            self.succes_url = reverse_lazy("history_detail", kwargs={
-                                           'history_id': wksph.history})
-            # Start monitoring (for sending emails)
-            wksph.monitored = True
-            monitorworkspace.delay(wksph.history)
-            wksph.save()
-
-        except Exception as galaxy_exception:
-
-            raise galaxy_exception
-
-        return HttpResponseRedirect(self.succes_url)

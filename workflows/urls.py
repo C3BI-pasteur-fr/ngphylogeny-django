@@ -16,9 +16,13 @@ Including another URLconf
 
 from django.conf.urls import url
 
-from .views.wkoneclick import WorkflowStartedView, WorkflowOneClickListView, WorkflowOneClickFormView
-from .views.wkadvanced import WorkflowAdvancedListView, WorkflowAdvancedSinglePageView
-from .views.wkmaker import WorkflowMakerView, workflows_alacarte_build
+from .views.wkoneclick import WorkflowStartedView
+from .views.wkoneclick import WorkflowOneClickListView
+from .views.wkoneclick import WorkflowOneClickFormView
+from .views.wkadvanced import WorkflowAdvancedListView
+from .views.wkadvanced import WorkflowAdvancedSinglePageView
+from .views.wkmaker import WorkflowMakerView
+from .views.wkmaker import workflows_alacarte_build
 
 urlpatterns = [
 
@@ -30,7 +34,8 @@ urlpatterns = [
         name="workflow_oneclick_form"),
     url(r'^advanced/$', WorkflowAdvancedListView.as_view(),
         name="workflows_advanced"),
-    url(r'^advanced/(?P<slug>[\w-]+)$', WorkflowAdvancedSinglePageView.as_view(),
+    url(r'^advanced/(?P<slug>[\w-]+)$',
+        WorkflowAdvancedSinglePageView.as_view(),
         name="workflows_advanced_fullsteps"),
     url(r'^alacarte$', workflows_alacarte_build,
         name="workflows_alacarte"),

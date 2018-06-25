@@ -6,7 +6,6 @@ import json
 from django.db import models
 
 from galaxy.models import Server
-from galaxy.galaxylib import GalaxyInstance
 from tools.models import Tool, ToolOutputData
 
 
@@ -30,7 +29,8 @@ class Workflow(models.Model):
     detail = None
 
     def fetch_details(self, galaxyinstance, toolset=None):
-        self.json = galaxyinstance.workflows.show_workflow(workflow_id=self.id_galaxy)
+        self.json = galaxyinstance.workflows.show_workflow(
+            workflow_id=self.id_galaxy)
         self.detail = WorkflowStepInformation(
             self.json,
             tools=toolset).sorted_tool_list
@@ -45,11 +45,13 @@ class Workflow(models.Model):
         try:
             # Try to import directly the publicly shared workflow
             # as a new workflow
-            wf_import = galaxyinstance.workflows.import_shared_workflow(self.id_galaxy)
-        except:
+            wf_import = galaxyinstance.workflows.import_shared_workflow(
+                self.id_galaxy)
+        except Exception:
             # Otherwise try to export it as dict and
             # import it again as a new workflow
-            wk_cp = galaxyinstance.workflows.export_workflow_dict(self.id_galaxy)
+            wk_cp = galaxyinstance.workflows.export_workflow_dict(
+                self.id_galaxy)
             wf_import = galaxyinstance.workflows.import_workflow_dict(wk_cp)
 
         # makes the copy
@@ -61,11 +63,12 @@ class Workflow(models.Model):
                                  slug=self.name+"_copy")
         return workflow_copy
 
-    def delete(self,galaxyinstance):
+    def delete(self, galaxyinstance):
         """
         Deletes the given workflow from galaxy server
         """
-        msg =galaxyinstance.workflows.delete_workflow(workflow_id=self.id_galaxy)
+        msg = galaxyinstance.workflows.delete_workflow(
+            workflow_id=self.id_galaxy)
         return msg
 
     class Meta:
@@ -178,7 +181,8 @@ class WorkflowGalaxyFactory(object):
                 if previous_step:
                     # i.e first step : We link input data only to
                     # fields marked as galaxy_input_data
-                    if previous_step.type == "data_input" and inputdata.galaxy_input_data:
+                    if (previous_step.type == "data_input" and
+                            inputdata.galaxy_input_data):
                         wfi.set_input_connections(
                             stepid=previous_step.id,
                             input_name=inputdata.name,
@@ -203,7 +207,8 @@ class WorkflowGalaxyFactory(object):
                                     output_name=o.name
                                 )
                             i_extensions = inputdata.get_extensions()
-                            if i_extensions and not (o.extension in i_extensions):
+                            if (i_extensions and
+                                    not (o.extension in i_extensions)):
                                 first_ext = "".join(i_extensions[:1])
                                 previous_step.convert_action(o.name, first_ext)
             if not tmpvalid and step > 1:

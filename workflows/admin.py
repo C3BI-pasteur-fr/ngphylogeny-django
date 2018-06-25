@@ -6,7 +6,7 @@ from .models import Workflow
 class WorkflowsAdmin(admin.ModelAdmin):
 
     prepopulated_fields = {"slug": ("name",)}
-    list_display = ('name','galaxy_server')
+    list_display = ('name', 'galaxy_server')
     list_filter = ['galaxy_server']
 
 
