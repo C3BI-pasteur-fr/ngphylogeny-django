@@ -1,7 +1,6 @@
 import ast
 import json
 import tempfile
-from os import system
 
 from bioblend.galaxy.tools.inputs import inputs
 from django.core.urlresolvers import reverse_lazy

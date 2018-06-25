@@ -20,7 +20,7 @@ from .views.wkoneclick import WorkflowStartedView
 from .views.wkoneclick import WorkflowOneClickListView
 from .views.wkoneclick import WorkflowOneClickFormView
 from .views.wkadvanced import WorkflowAdvancedListView
-from .views.wkadvanced import WorkflowAdvancedSinglePageView
+from .views.wkadvanced import WorkflowAdvancedFormView
 from .views.wkmaker import WorkflowMakerView
 from .views.wkmaker import workflows_alacarte_build
 
@@ -35,7 +35,7 @@ urlpatterns = [
     url(r'^advanced/$', WorkflowAdvancedListView.as_view(),
         name="workflows_advanced"),
     url(r'^advanced/(?P<slug>[\w-]+)$',
-        WorkflowAdvancedSinglePageView.as_view(),
+        WorkflowAdvancedFormView.as_view(),
         name="workflows_advanced_fullsteps"),
     url(r'^alacarte$', workflows_alacarte_build,
         name="workflows_alacarte"),

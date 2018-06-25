@@ -11,9 +11,10 @@ from tools.models import ToolFlag, Tool
 from workflows.models import Workflow
 from workflows.models import WorkflowGalaxyFactory
 
-from workflows.views.wkadvanced import WorkflowAdvancedSinglePageView
+from workflows.views.wkadvanced import WorkflowAdvancedFormView
 
 WORKFLOW_MAKER_FLAG = 'wmake'
+
 
 @connection_galaxy
 def workflows_alacarte_build(request):
@@ -57,9 +58,14 @@ def workflows_alacarte_build(request):
             else:
                 select_tool_pk = None
             # TODO use data input/output format to invalidate form
-            if ("visu" in category) and select_tool_pk and (not previous_tool or not tools):
+            if (("visu" in category) and
+                    select_tool_pk and
+                    (not previous_tool or not tools)):
                 form_is_valid = False
-                messages.add_message(request, messages.ERROR, "This combination of tools is not allowed")
+                messages.add_message(
+                    request,
+                    messages.ERROR,
+                    "This combination of tools is not allowed")
                 break
             if select_tool_pk:
                 tools.append(select_tool_pk)
@@ -87,17 +93,20 @@ def workflows_alacarte_build(request):
                     wk_id = wkgi.get('id')
                     # remove temp history
                     gi.histories.delete_history(history_id, purge=True)
-                    return redirect(reverse("workflow_maker_form", args=[wk_id]))
+                    return redirect(reverse(
+                        "workflow_maker_form", args=[wk_id]))
     context = {"workflow": WORKFLOW_STATIC_STEPS}
     return render(request, 'workflows/workflows_alacarte.html', context)
 
+
 @method_decorator(connection_galaxy, name="dispatch")
-class WorkflowMakerView(WorkflowAdvancedSinglePageView):
+class WorkflowMakerView(WorkflowAdvancedFormView):
     """
     Workflow form with the list of tools and launch workflow
     """
     template_name = "workflows/workflows_maker_form.html"
-    restricted_toolset = Tool.objects.filter(toolflag__name=WORKFLOW_MAKER_FLAG)
+    restricted_toolset = Tool.objects.filter(
+        toolflag__name=WORKFLOW_MAKER_FLAG)
 
     def get_workflow(self, detail=True):
 
@@ -108,10 +117,10 @@ class WorkflowMakerView(WorkflowAdvancedSinglePageView):
 
         return self.copy_workflow
 
-
     def get_object(self, queryset=None, detail=True):
         # load workflow
-        wk_json = self.request.galaxy.workflows.show_workflow(workflow_id=self.kwargs['id'])
+        wk_json = self.request.galaxy.workflows.show_workflow(
+            workflow_id=self.kwargs['id'])
         wkname = wk_json.get('name')
 
         # create workflow

@@ -76,16 +76,18 @@ class WorkflowAdvancedListView(WorkflowListView):
     restricted_toolset = Tool.objects.filter(toolflag__name=WORKFLOW_ADV_FLAG)
 
 
-class WorkflowAdvancedFormView(SingleObjectMixin):
-    """
-        Generic Workflow Advanced class-based view:
-        - Cut selected workflow into multiple tool forms
-    """
+@method_decorator(connection_galaxy, name="dispatch")
+class WorkflowAdvancedFormView(SingleObjectMixin,
+                               View):
+    template_name = 'workflows/workflows_adv_singlepage_form.html'
     model = Workflow
     object = None
-    template_name = 'workflows/workflows_advanced_form.html'
     context_object_name = "workflow"
     restricted_toolset = Tool.objects.filter(toolflag__name=WORKFLOW_ADV_FLAG)
+
+    def get(self, request, *args, **kwargs):
+        context = self.get_context_data(object=self.object)
+        return render(request, self.template_name, context)
 
     def get_context_data(self, **kwargs):
         gi = self.request.galaxy
@@ -107,16 +109,6 @@ class WorkflowAdvancedFormView(SingleObjectMixin):
         context['form_list'] = form_list(tools, self.request)
 
         return context
-
-
-@method_decorator(connection_galaxy, name="dispatch")
-class WorkflowAdvancedSinglePageView(WorkflowAdvancedFormView,
-                                     View):
-    template_name = 'workflows/workflows_adv_singlepage_form.html'
-
-    def get(self, request, *args, **kwargs):
-        context = self.get_context_data(object=self.object)
-        return render(request, self.template_name, context)
 
     # Copies and checks format of input
     # file to upload on galaxy server
@@ -200,7 +192,8 @@ class WorkflowAdvancedSinglePageView(WorkflowAdvancedFormView,
             # workflow step
             # get from which step the tools are used
             for i, step in steps.items():
-                if getattr(tool_form, 'tool_id', 'null') == step.get('tool_id'):
+                if (getattr(tool_form, 'tool_id', 'null') ==
+                        step.get('tool_id')):
                     step_id = i
                     break
             # convert inputs to dict
@@ -210,13 +203,13 @@ class WorkflowAdvancedSinglePageView(WorkflowAdvancedFormView,
 
     def post(self, request, *args, **kwargs):
         gi = request.galaxy
-        
-        # Get a copy of the workflow with full details 
+
+        # Get a copy of the workflow with full details
         workflow = self.get_object().duplicate(gi)
         workflow.fetch_details(gi)
-        
+
         context = self.get_context_data(object=self.object)
-        
+
         # input file
         dataset_map = {}
         # tool params

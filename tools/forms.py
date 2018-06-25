@@ -8,7 +8,7 @@ import json
 
 def map_galaxy_tool_input(attr):
     """Convert Galaxy tool input information to django field attribute dict"""
-    optional = attr.get('optional', False)
+    # optional = attr.get('optional', False)
     field_map = {'initial': attr.get('default_value', attr.get('value', None)),
                  # 'required': not optional,
                  'required': False,
@@ -53,7 +53,6 @@ class ToolForm(forms.Form):
     tool_name = ""
     n = 0
 
-
     def create_field(self, attrfield):
         self.n += 1
         field_id = str(self.n)
@@ -68,15 +67,17 @@ class ToolForm(forms.Form):
                 self.fields[field_id] = forms.FileField(
                     **map_galaxy_tool_input(attrfield))
                 self.fields[field_id].widget.attrs = (
-                    {'data-ext'  : json.dumps(attrfield.get('extensions')),
-                     'data-name' : json.dumps(attrfield.get('name')),
-                     'data-compatible-inputs' : json.dumps(self.compatibleInputs(attrfield.get('extensions')))})
+                    {'data-ext': json.dumps(attrfield.get('extensions')),
+                     'data-name': json.dumps(attrfield.get('name')),
+                     'data-compatible-inputs': json.dumps(
+                         self.compatibleInputs(attrfield.get('extensions')))})
                 # Update extensions associated to field => used in tools/views
                 self.fields_ext_mapping[field_id] = attrfield.get('extensions')
         elif fieldtype == "select":
             if attrfield.get("display", "") == 'radio':
                 self.fields[field_id] = forms.ChoiceField(
-                    widget=forms.RadioSelect, **map_galaxy_tool_input(attrfield))
+                    widget=forms.RadioSelect,
+                    **map_galaxy_tool_input(attrfield))
             else:
                 self.fields[field_id] = forms.ChoiceField(
                     **map_galaxy_tool_input(attrfield))
@@ -109,13 +110,15 @@ class ToolForm(forms.Form):
         # print(field_id)
         return field_id
 
-    def parse_galaxy_input_tool(self, list_inputs, cond_name='', whitelist=list()):
+    def parse_galaxy_input_tool(self, list_inputs,
+                                cond_name='', whitelist=list()):
 
         fields_created = []
         for input_tool in list_inputs:
             if input_tool.get('type') == 'section':
-                fields_created.append(Fieldset(input_tool.get('title'),
-                                               *self.parse_galaxy_input_tool(input_tool.get('inputs'))))
+                fields_created.append(Fieldset(
+                    input_tool.get('title'),
+                    *self.parse_galaxy_input_tool(input_tool.get('inputs'))))
 
             elif input_tool.get('name') in whitelist or not whitelist:
                 cond_input = input_tool.get('test_param')
@@ -139,7 +142,8 @@ class ToolForm(forms.Form):
                                 nested_field.append(Div(data_test=data_test,
                                                         data_case=case_value,
                                                         css_class="well",
-                                                        *self.parse_galaxy_input_tool(case_inputs, cond_name)))
+                                                        *self.parse_galaxy_input_tool(
+                                                            case_inputs, cond_name)))
 
                     fields_created.append(
                         Div(conditional_field, *nested_field))
