@@ -11,8 +11,9 @@ import tempfile
 
 from galaxy.decorator import connection_galaxy
 from tools.models import Tool
+from tools.models import ToolFieldWhiteList
+from tools.forms import ToolForm
 from workspace.views import create_history, delete_history
-from workflows.forms import tool_form_factory
 from workflows.views.generic import WorkflowListView
 from workflows.exceptions import WorkflowInvalidFormError
 from workflows.models import Workflow
@@ -25,17 +26,45 @@ from Bio import SeqIO
 WORKFLOW_ADV_FLAG = "wadv"
 
 
-def form_class_list(tools):
+def make_form(tool, request=None):
     """
-    Create ToolForm classes on the fly to be used by WizardForm
-    :param gi:
-    :param tools:
-    :return: list af Class form
+    Instantiate one form, based on the request and the tool
+    :param tool:
+    :param request: the current post request
+    :return: an instanciated and initialized form
     """
-    tool_form_class = []
+
+    tool_inputs_details = tool.fetch_tool_json()
+    tool_field_white_list, created = ToolFieldWhiteList.objects.get_or_create(
+        tool=tool, context="w")
+    formname = str(slugify(tool.name).title().replace('-', '')) + 'Form'
+    prefix = formname.lower()
+
+    # If not post, it means that we want to create a form with
+    # default values
+    formdata = None
+    if request is not None and request.POST:
+        formdata = request.POST
+
+    return ToolForm(data=formdata,
+                    prefix=prefix,
+                    tool_params=tool_inputs_details.get('inputs'),
+                    tool_id=tool.id_galaxy,
+                    tool_name=tool.name,
+                    whitelist=tool_field_white_list.saved_params,
+                    fields_ids_mapping={},
+                    n=0)
+
+
+def form_list(tools, request=None):
+    """
+    Instantiate a list of forms
+    givent the tools and the request
+    """
+    tool_forms = []
     for tool in tools:
-        tool_form_class.append(tool_form_factory(tool))
-    return tool_form_class
+        tool_forms.append(make_form(tool, request))
+    return tool_forms
 
 
 @method_decorator(connection_galaxy, name="dispatch")
@@ -59,11 +88,11 @@ class WorkflowAdvancedFormView(SingleObjectMixin):
     restricted_toolset = Tool.objects.filter(toolflag__name=WORKFLOW_ADV_FLAG)
 
     def get_context_data(self, **kwargs):
-        gi = request.galaxy
+        gi = self.request.galaxy
         if not self.object:
             self.object = self.get_object()
         # Workflow
-        self.object.fetch_details(gi,restricted_toolset)
+        self.object.fetch_details(gi, self.restricted_toolset)
         context = super(
             WorkflowAdvancedFormView,
             self).get_context_data(**kwargs)
@@ -75,7 +104,7 @@ class WorkflowAdvancedFormView(SingleObjectMixin):
             tools.append(t[1])
             context['tool_list'].append(slugify(t[1].name))
 
-        context['form_list'] = form_class_list(tools)
+        context['form_list'] = form_list(tools, self.request)
 
         return context
 
@@ -114,19 +143,17 @@ class WorkflowAdvancedSinglePageView(WorkflowAdvancedFormView,
 
     def check_form_validity(self, request, context):
         for form in context['form_list']:
-            tool_form = form(data=request.POST, prefix=form.prefix)
-            if not tool_form.is_valid():
+            if not form.is_valid():
                 return False
         return True
 
     def analyze_forms(self, request, context, workflow, params, gi, wksph):
         steps = workflow.json['steps']
         step_id = u'0'
-        for form in context['form_list']:
-            tool_form = form(data=request.POST, prefix=form.prefix)
+        for tool_form in context['form_list']:
             if not tool_form.is_valid():
                 raise WorkflowInvalidFormError(
-                    "One form is invalid %s " % (form.prefix))
+                    "One form is invalid %s " % (tool_form.prefix))
 
             tool_inputs = inputs()
             # mapping between form id to galaxy params names
@@ -146,9 +173,10 @@ class WorkflowAdvancedSinglePageView(WorkflowAdvancedFormView,
                         tmp_file.write(chunk)
                     tmp_file.flush()
                     # send file to galaxy
-                    outputs = gi.tools.upload_file(path=tmp_file.name,
-                                                   file_name=uploaded_file.name,
-                                                   history_id=wksph.history)
+                    outputs = gi.tools.upload_file(
+                        path=tmp_file.name,
+                        file_name=uploaded_file.name,
+                        history_id=wksph.history)
                     file_id = outputs.get('outputs')[0].get('id')
                     tool_inputs.set_dataset_param(
                         fields.get(inputfile), file_id)
@@ -162,9 +190,10 @@ class WorkflowAdvancedSinglePageView(WorkflowAdvancedFormView,
                         # send file to galaxy
                         input_fieldname = tool_form.fields_ids_mapping.get(
                             inputfile)
-                        outputs = gi.tools.upload_file(path=tmp_file.name,
-                                                       file_name=input_fieldname + " pasted_sequence",
-                                                       history_id=wksph.history)
+                        outputs = gi.tools.upload_file(
+                            path=tmp_file.name,
+                            file_name=input_fieldname + " pasted_sequence",
+                            history_id=wksph.history)
                         file_id = outputs.get('outputs')[0].get('id')
                         tool_inputs.set_dataset_param(fields.get(inputfile),
                                                       file_id)
@@ -264,7 +293,7 @@ class WorkflowAdvancedSinglePageView(WorkflowAdvancedFormView,
         finally:
             # delete the workflow copy of oneclick workflow when
             # the workflow has been run
-            self.clean_copy()
+            workflow.delete(gi)
 
 
 def valid_fasta(fasta_file):

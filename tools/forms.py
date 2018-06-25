@@ -49,7 +49,10 @@ class ToolForm(forms.Form):
     fields_ext_mapping = {}
     session_files = []
     visible_field = []
+    prefix = ""
+    tool_name = ""
     n = 0
+
 
     def create_field(self, attrfield):
         self.n += 1
@@ -155,23 +158,24 @@ class ToolForm(forms.Form):
         that are compatible with the given list of extenstions
         """
         outlist = []
-        if self.session_files :
-            print "session:"
-            for key, sf in self.session_files.iteritems() :
-                print "File:"
-                print json.dumps(sf)
+        if self.session_files:
+            for key, sf in self.session_files.iteritems():
                 if sf.get('ext') in extensions:
                     outlist.append(sf)
         return outlist
-        
+
     def __init__(self, tool_params=None,
                  tool_id=None, whitelist=None,
-                 data=None, prefix=None, session_files=None):
+                 data=None, prefix=None, session_files=None,
+                 fields_ids_mapping=None, n=0, tool_name=None):
         super(ToolForm, self).__init__(data=data, prefix=prefix)
         self.tool_params = tool_params or self.tool_params
         self.visible_field = whitelist or self.visible_field
+        self.fields_ids_mapping = fields_ids_mapping
         self.tool_id = tool_id or self.tool_id
         self.input_file_ids = []
+        self.n = n
+        self.tool_name = tool_name
         # To propose compatible session files as input
         if session_files:
             self.session_files = session_files
