@@ -153,7 +153,7 @@ class ToolForm(forms.Form):
                     new_field = self.create_field(input_tool)
                     fields_created.append(Field(new_field))
                     self.fields_ids_mapping[new_field] = cond_name + \
-                        input_tool['name']
+                        input_tool.get('name', '')
         return fields_created
 
     def compatibleInputs(self, extensions):
@@ -171,7 +171,7 @@ class ToolForm(forms.Form):
     def __init__(self, tool_params=None,
                  tool_id=None, whitelist=None,
                  data=None, prefix=None, session_files=None,
-                 fields_ids_mapping=None, n=0, tool_name=None):
+                 fields_ids_mapping={}, n=0, tool_name=None):
         super(ToolForm, self).__init__(data=data, prefix=prefix)
         self.tool_params = tool_params or self.tool_params
         self.visible_field = whitelist or self.visible_field
