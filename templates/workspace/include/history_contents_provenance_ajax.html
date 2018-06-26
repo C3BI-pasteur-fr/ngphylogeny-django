@@ -25,6 +25,17 @@
 	$('#info-refresh').hide();
 	clearInterval(autorefresh);
 	{% endif %}
+
+        var ajax = $.getJSON("{% url 'get_dataset_citations' object.history_info.id %}",
+			     function (data) {
+ 			       var items = [];
+			     $.each(data, function(index, element) {
+			     $.each(element,function(i,citation){
+			     items.push("<li>"+citation+"</li>");
+			     });
+			     });
+			     $("#references").html(items.join(""));
+			     });
     });
 </script>
 
@@ -45,7 +56,7 @@
 	    // Push promise to 'deferreds' array
 	    deferreds.push(ajax);
 	});
-	// Use .apply onto array from deferreds
+        // Use .apply onto array from deferreds
 	$.when.apply($, deferreds).then(function () {
 	    // group dataset by tool
 	    var id_tool = '';
@@ -284,6 +295,10 @@
     </table>
   </div>
 </div>
+<h4>References of tools</h4>
+<ul id="references">
+  
+</ul>
 <h4>Files stored in session</h4>
 <table  class="table table-striped ">
   <tr><th>File ID</th><th>File Name</th><th>History ID</th><th>Remove</th></tr>

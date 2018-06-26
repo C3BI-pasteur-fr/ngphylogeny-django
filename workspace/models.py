@@ -5,8 +5,6 @@ from django.db import models
 
 from galaxy.models import Server, GalaxyUser
 
-import uuid
-
 
 class WorkspaceHistory(models.Model):
     """
@@ -25,24 +23,26 @@ class WorkspaceHistory(models.Model):
     # We keep the workspace on the django side but
     # describe it as deleted (it won't appear anymore
     # on workspace history)
-    deleted =  models.BooleanField(default=False)
-    # history Json coming from galaxy server: stored in the database 
+    deleted = models.BooleanField(default=False)
+    # history Json coming from galaxy server: stored in the database
     history_content_json = models.TextField(default="{}")
-    history_info_json  = models.TextField(default="{}")
-    # Deserialized json, not stored in the django database 
+    history_info_json = models.TextField(default="{}")
+    # Deserialized json, not stored in the django database
     history_content = None
     history_info = None
-    
+
     def get_galaxy_user(self):
         if self.user:
-            return GalaxyUser.objects.get(user=self.user, galaxy_server=self.galaxy_server)
+            return GalaxyUser.objects.get(user=self.user,
+                                          galaxy_server=self.galaxy_server)
 
     def rename(self):
         """Rename history galaxy"""
         gu = self.get_galaxy_user()
         if gu:
             gi = gu.get_galaxy_instance
-            gi.histories.update_history(history_id=self.history, name=self.name)
+            gi.histories.update_history(history_id=self.history,
+                                        name=self.name)
 
     def save(self, *args, **kwargs):
         if self.name:
@@ -52,5 +52,3 @@ class WorkspaceHistory(models.Model):
     class Meta:
         verbose_name_plural = "Workspace histories"
         unique_together = (("history", "galaxy_server"),)
-
-

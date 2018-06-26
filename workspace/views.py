@@ -13,6 +13,8 @@ from tasks import deletegalaxyhistory
 
 from galaxy.decorator import connection_galaxy
 from .models import WorkspaceHistory
+from tools.models import Tool
+
 
 @connection_galaxy
 def create_history(request, name=''):
@@ -88,7 +90,6 @@ def delete_history(request, history_id=None):
 
         request.session['last_history'] = request.session['histories'][-1]
 
-
     WorkspaceHistory.objects.get(history=history_id).delete()
 
 class WorkspaceHistoryObjectMixin(SingleObjectMixin):
@@ -117,6 +118,7 @@ class HistoryDetailView(WorkspaceHistoryObjectMixin, DetailView):
     """
     template_name = 'workspace/history.html'
 
+    
 @connection_galaxy
 def get_dataset_toolprovenance(request, history_id, ):
     """
@@ -128,12 +130,43 @@ def get_dataset_toolprovenance(request, history_id, ):
 
         data_id = request.POST.get('dataset_id')
         if data_id:
-            dataset_provenance = gi.histories.show_dataset_provenance(history_id,
-                                                                      data_id,
-                                                                      follow=False)
+            dataset_provenance = gi.histories.show_dataset_provenance(
+                history_id,
+                data_id,
+                follow=False)
             context.update({'tool_id': dataset_provenance.get("tool_id"),
                             'dataset_id': data_id})
+    return HttpResponse(json.dumps(context), content_type='application/json')
 
+
+@connection_galaxy
+def get_dataset_citations(request, history_id):
+    """
+    Ajax: return citations of all tools used in the dataset
+    """
+    context = dict()
+    refs = []
+    tools = []
+    gi = request.galaxy
+    try:
+        w = WorkspaceHistory.objects.get(history=history_id)
+        w.history_content = json.loads(w.history_content_json)
+        for file in w.history_content:
+            dataset_provenance = gi.histories.show_dataset_provenance(
+                history_id,
+                file.get('id'),
+                follow=False)
+            tools.append(dataset_provenance.get('tool_id'))
+        tools = list(set(tools))
+        for tid in tools:
+            try:
+                t = Tool.objects.get(id_galaxy=tid)
+                refs.extend(t.citations)
+            except Tool.DoesNotExist:
+                pass
+    except WorkspaceHistory.DoesNotExist:
+        pass
+    context.update({'citations': refs})
     return HttpResponse(json.dumps(context), content_type='application/json')
 
 
