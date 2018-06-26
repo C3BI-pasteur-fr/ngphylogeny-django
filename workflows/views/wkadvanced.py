@@ -206,7 +206,7 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
 
         # Get a copy of the workflow with full details
         workflow = self.get_object().duplicate(gi)
-        workflow.fetch_details(gi)
+        workflow.fetch_details(gi, self.restricted_toolset)
 
         context = self.get_context_data(object=self.object)
 

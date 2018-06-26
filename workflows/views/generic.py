@@ -27,7 +27,7 @@ class WorkflowListView(ListView):
             galaxy_server__current=True).select_related()
 
         for workflow in workflow_queryset:
-            workflow.fetch_details(gi)
+            workflow.fetch_details(gi, self.restricted_toolset)
         return workflow_queryset
 
     def get_queryset(self):
@@ -48,7 +48,7 @@ class WorkflowFormView(UploadView, DetailView):
         context = super(WorkflowFormView, self).get_context_data(**kwargs)
         # get workflows
         wk = self.get_object()
-        wk.fetch_details(gi)
+        wk.fetch_details(gi, self.restricted_toolset)
         if context.get('form') is None:
             context['form'] = UploadView.form()
         if hasattr(wk, 'json'):
@@ -75,7 +75,7 @@ class WorkflowFormView(UploadView, DetailView):
         gi = self.request.galaxy
         wk = self.get_object()
         workflow = wk.duplicate(gi)
-        workflow.fetch_details(gi)
+        workflow.fetch_details(gi, self.restricted_toolset)
         # create new history
         wksph = create_history(
             self.request,
