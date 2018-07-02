@@ -1,4 +1,5 @@
 import requests
+
 from django.core.management.base import BaseCommand, CommandError
 
 from galaxy.models import Server
@@ -56,7 +57,6 @@ class Command(BaseCommand):
         self.import_tools(galaxy_url, query, tool_id, force)
         self.associate_flags()
         self.set_input_fields()
-        
 
     def import_tools(self, galaxy_url, query, tool_id, force):
         tools_found = []
@@ -142,6 +142,6 @@ class Command(BaseCommand):
                 tool__name=input_field[0], name=input_field[1]).first()
             if field:
                 self.stdout.write(self.style.SUCCESS(
-                    "%s : %s" % (input_field[0],input_field[1])))
+                    "%s : %s" % (input_field[0], input_field[1])))
                 field.galaxy_input_data = True
                 field.save()

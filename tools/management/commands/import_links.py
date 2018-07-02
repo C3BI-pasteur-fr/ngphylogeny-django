@@ -19,10 +19,19 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         linkfile = options.get('linkfile')
-        print(linkfile)
+        self.stdout.write(
+            self.style.SUCCESS(
+                "importing from %s" % (linkfile)
+            )
+        )
+
         self.read_link_file(linkfile)
         for io in self.links:
-            print(io)
+            self.stdout.write(
+                self.style.SUCCESS(
+                    "importing %s" % (io)
+                )
+            )
             first = ToolOutputData.objects.filter(
                 tool__name=io[0], name=io[1]).first()
             second = ToolInputData.objects.filter(

@@ -6,21 +6,33 @@ from slugify import slugify
 from galaxy.models import Server
 from galaxy.models import GalaxyUser
 from workflows.models import Workflow
+from tools.models import Tool
+from tools.models import ToolFlag
+
 
 class Command(BaseCommand):
     help = 'Import Galaxy workflows into NGPhylogeny'
     requires_system_checks = True
     flags = []
+    wfnames = []
 
     def add_arguments(self, parser):
         # Named (optional) arguments
         parser.add_argument('--galaxyurl')
-
+        parser.add_argument('--wfnamefile')
 
     def handle(self, *args, **options):
+        wffile = options.get('wfnamefile')
         galaxy_url = options.get('galaxyurl')
+        self.read_wfname_file(wffile)
         self.import_workflows(galaxy_url)
 
+    def read_wfname_file(self, wffile):
+        with open(wffile) as f:
+            for line in f:
+                wfname = line.strip()
+                self.wfnames.append(wfname)
+        
     def import_workflows(self, galaxy_url):
         if galaxy_url:
             galaxy_server, created = Server.objects.get_or_create(
@@ -32,9 +44,15 @@ class Command(BaseCommand):
                 raise CommandError(
                     'Server Galaxy does not exist, please use --galaxyurl')
 
-        galaxy_key = GalaxyUser.objects.filter(galaxy_server__url=galaxy_url, anonymous = True)
+        galaxy_key = GalaxyUser.objects.filter(
+            galaxy_server__url=galaxy_url,
+            anonymous=True)
         print(galaxy_key)
-        workflows_url = '%s/%s/%s/?key=%s' % (galaxy_server.url, 'api', 'workflows',galaxy_key.first().api_key)
+        workflows_url = '%s/%s/%s/?key=%s' % (
+            galaxy_server.url,
+            'api',
+            'workflows',
+            galaxy_key.first().api_key)
 
         # fetch list of tools
         connection = requests.get(workflows_url)
@@ -45,8 +63,19 @@ class Command(BaseCommand):
             for wf in wf_list:
                 wfname = wf.get('name')
                 wfid = wf.get('id')
-                if re.search('oneclick', wfname, re.IGNORECASE):
-                    w = Workflow(galaxy_server = galaxy_server, id_galaxy = wfid, name = wfname, description = wfname, slug = slugify(wfname) )
+                self.stdout.write(
+                    self.style.SUCCESS(
+                        "importing workflow %s" % (wfname)
+                    )
+                )
+                if(re.search('oneclick', wfname, re.IGNORECASE) or
+                   wfname in self.wfnames):
+                    w = Workflow(
+                        galaxy_server=galaxy_server,
+                        id_galaxy=wfid,
+                        name=wfname,
+                        description=wfname,
+                        slug=slugify(wfname))
                     w.save()
         else:
             self.stdout.write("Problem while querying galaxy server")
