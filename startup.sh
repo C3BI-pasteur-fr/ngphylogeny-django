@@ -6,9 +6,7 @@ GALAXYSERVER=$3
 GALAXYKEY=$4
 
 # Start required services 
-#service redis_6379 start
-#service celeryd start
-#service celerybeat start
+service redis_6379 start
 
 # Initialize databases
 python manage.py makemigrations
@@ -24,11 +22,15 @@ python manage.py import_links --linkfile=toollinks.txt
 python manage.py importworkflows --wfnamefile=wfnames.txt --galaxyurl=$GALAXYSERVER
 
 export PYTHONPATH=$PWD:$PYTHONPATH
-celery --app=NGPhylogeny_fr.celery:app worker --loglevel=INFO &
-celery beat --app=NGPhylogeny_fr.celery:app --loglevel=DEBUG &
-python manage.py runserver 0.0.0.0:8000
+
+service celeryd start
+service celerybeat start
+
+#celery --app=NGPhylogeny_fr.celery:app worker --loglevel=INFO &
+#celery beat --app=NGPhylogeny_fr.celery:app --loglevel=DEBUG &
+#python manage.py runserver 0.0.0.0:8000
 
 # Run uwsgi
-#exec uwsgi --ini /home/ngphylo/docker/ngphylogeny_uwsgi.ini &
+exec uwsgi --ini /home/ngphylo/docker/ngphylogeny_uwsgi.ini &
 # Run nginx
-#nginx -g 'daemon off;'
+nginx -g 'daemon off;'
