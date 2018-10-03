@@ -15,7 +15,7 @@
 <h1>Previous Blast Runs (in session)</h1>
 <ul>
   {% for blastrun in object_list %}
-  <li> <a href="{% url 'blast_view' blastrun.id %}">{{blastrun.id}}</a> ({{ blastrun.date|date:"Y/m/d h:i" }}): {{blastrun.database}}|{{blastrun.blastprog}}({{blastrun.evalue}}) = {{ blastrun.status }} </li>
+  <li> <a href="{% url 'blast_view' blastrun.id %}">{{blastrun.query_id}}</a> ({{ blastrun.date|date:"Y/m/d h:i" }}): {{blastrun.database}}|{{blastrun.blastprog}}({{blastrun.evalue}}) = {{ blastrun.status }} </li>
   {% endfor %}
 </ul>
 
