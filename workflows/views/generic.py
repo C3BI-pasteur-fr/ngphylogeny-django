@@ -9,7 +9,7 @@ from galaxy.decorator import connection_galaxy
 from workflows.models import Workflow, WorkflowStepInformation
 from workspace.views import create_history
 from workspace.tasks import monitorworkspace
-
+from blast.models import BlastRun
 
 @method_decorator(connection_galaxy, name="dispatch")
 class WorkflowListView(ListView):
@@ -39,10 +39,11 @@ class WorkflowFormView(UploadView, DetailView):
     """
     Generic Workflow form view, upload one file and run workflow
     """
-    model = Workflow
+    #model = Workflow
     template_name = 'workflows/workflows_form.html'
     restricted_toolset = None
 
+  
     def get_context_data(self, **kwargs):
         gi = self.request.galaxy
         context = super(WorkflowFormView, self).get_context_data(**kwargs)
@@ -64,7 +65,7 @@ class WorkflowFormView(UploadView, DetailView):
     def post(self, request, *args, **kwargs):
         # determines which form is being submitted
         # uses the name of the form's submit button
-        form = self.get_form(UploadView.form())
+        form = self.get_form()
         # validate
         if form.is_valid() and form.validate_form_inputs():
             return self.form_valid(form)
@@ -84,11 +85,18 @@ class WorkflowFormView(UploadView, DetailView):
 
         # upload user file or pasted content
         submitted_file = form.cleaned_data.get('input_file')
+        pasted_text = form.cleaned_data.get('pasted_text')
+        blast_run   = form.cleaned_data.get('blast_run')
+        
         if submitted_file:
             u_file = self.upload_file(submitted_file, wksph.history)
         # or upload user pasted content
-        else:
-            u_file = self.upload_content(form.cleaned_data['pasted_text'])
+        elif pasted_text:
+            u_file = self.upload_content(pasted_text)
+        elif blast_run :
+            b = BlastRun.objects.get(pk=blast_run)
+            u_file = self.upload_content(b.to_fasta(),name="Blast_%s_%s" % (b.query_id,str(blast_run)))
+            
         file_id = u_file.get('outputs')[0].get('id')
         i_input = workflow.json['inputs'].keys()[0]
         # input file

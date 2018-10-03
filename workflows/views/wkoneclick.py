@@ -12,7 +12,7 @@ from workspace.tasks import monitorworkspace
 
 
 @method_decorator(connection_galaxy, name="dispatch")
-class WorkflowOneClickListView(WorkflowListView):
+class WorkflowOneClickListView(WorkflowListView, UploadView):
     """
     OneClick workflows class-based view
     """
@@ -22,12 +22,11 @@ class WorkflowOneClickListView(WorkflowListView):
     def get_queryset(self):
         return super(WorkflowOneClickListView, self).get_queryset()
 
-    def get_context_data(self, **kwargs):
-        context = super(WorkflowListView, self).get_context_data(**kwargs)
-        if context.get('form') is None:
-            context['form'] = UploadView.form_class()
-
-        return context
+    # def get_context_data(self, **kwargs):
+    #     context = super(WorkflowListView, self).get_context_data(**kwargs)
+    #     if context.get('form') is None:
+    #         context['form'] = UploadView.get_form()
+    #     return context
 
 
 @method_decorator(connection_galaxy, name="dispatch")

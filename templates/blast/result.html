@@ -1,0 +1,24 @@
+{% extends "base_site.html" %}
+{% load static %}
+{% block title %}BLAST{% endblock %}
+{% block content %}
+{{ object.status }}<br/>
+{{ object.date }}<br/>
+{{ object.database }}<br/>
+{{ object.evalue }}<br/>
+{{ object.date }}<br/>
+{{ object.blastprog }}<br/>
+{{ object.message }}<br/>
+{{ object.deleted }}<br/>
+
+<h4>Query</h4>
+<pre>&gt;{{ object.query_id }}
+{{ object.format_sequence }}</pre></li>
+<h4>Results</h4>
+<ul>
+  {% for s in object.blastsubject_set.all %}
+  <li><a href="{% url 'blast_subject_delete' s.id %}">delete</a><pre>&gt;{{ s.subject_id }}
+{{ s.format_sequence }}</pre></li>
+  {% endfor %}
+</ul>
+{% endblock %}

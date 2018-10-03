@@ -1,0 +1,22 @@
+{% extends "base_site.html" %}
+{% load crispy_forms_tags %}
+{% load static %}
+{% block title %}BLAST{% endblock %}
+{% block content %}
+<div>
+<form action="{% url 'blast_form' %}" method="post">
+    {% csrf_token %}
+    {% crispy form %}
+    <!-- <input name="submit" value="Submit" class="btn btn-primary pull-left" id="submit" type="submit"><br/> -->
+</form>
+</div>
+
+
+<h1>Previous Blast Runs (in session)</h1>
+<ul>
+  {% for blastrun in object_list %}
+  <li> <a href="{% url 'blast_view' blastrun.id %}">{{blastrun.id}}</a> ({{ blastrun.date|date:"Y/m/d h:i" }}): {{blastrun.database}}|{{blastrun.blastprog}}({{blastrun.evalue}}) = {{ blastrun.status }} </li>
+  {% endfor %}
+</ul>
+
+{% endblock %}

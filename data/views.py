@@ -21,10 +21,10 @@ from .models import ExampleFile
 from .forms import UploadForm
 from galaxy.decorator import connection_galaxy
 from workspace.views import get_or_create_history
-
+from blast.models import BlastRun
 
 class UploadMixin(object):
-    def upload_content(self, content, history_id=None):
+    def upload_content(self, content, history_id=None, name="pasted_data"):
         """
             send content into galaxy history: return galaxy response
         """
@@ -33,7 +33,7 @@ class UploadMixin(object):
         else:
             self.history_id = get_or_create_history(self.request)
 
-        return self.request.galaxy.tools.paste_content(content=content, file_name="pasted_data",
+        return self.request.galaxy.tools.paste_content(content=content, file_name=name,
                                                        history_id=self.history_id)
 
     def upload_file(self, file, history_id=None):
@@ -64,21 +64,36 @@ class UploadView(UploadMixin, FormView):
     form_class = UploadForm
     success_url = reverse_lazy("home")
 
+    # Add blast runs id to kwargs
+    # Used by UploadForm to get blastruns ids
+    def get_form_kwargs(self):
+        kwargs = super(UploadView, self).get_form_kwargs()
+        if self.request.session.get('blastruns'):
+            blastruns = []
+            for r in self.request.session['blastruns']:
+                b = BlastRun.objects.get(pk=r)
+                if b != None and b.status==b.FINISHED :
+                    blastruns.append(r)
+            kwargs['blastruns'] = blastruns
+        return kwargs
+    
     def form_valid(self, form):
         if form.cleaned_data.get('input_file') is not None:
             myfile = form.cleaned_data.get('input_file')
             outputs = self.upload_file(myfile)
-        elif form.cleaned_data['pasted_text'] is not None:
+        elif form.cleaned_data.get('pasted_text') is not None:
             p_content = form.cleaned_data['pasted_text']
+            outputs = self.upload_content(p_content)
+        elif form.cleaned_data.get('blast_run') is not None:
+            # We treat blastrun id as fasta content
+            b = BlastRun.objects.get(pk=form.cleaned_data.get('blast_run'))
+            p_content = b.to_fasta()
             outputs = self.upload_content(p_content)
 
         self.success_url = reverse_lazy("history_detail", kwargs={'history_id': self.history_id}, )
 
         return super(UploadView, self).form_valid()
     
-    @staticmethod
-    def form():
-        return UploadForm
 
 @connection_galaxy
 def download_file(request, file_id):

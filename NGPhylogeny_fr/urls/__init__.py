@@ -25,6 +25,7 @@ from surveys import urls as surveys_urls
 from tools import urls as tool_urls
 from workflows import urls as workflows_urls
 from workspace import urls as workspace_urls
+from blast import urls as blast_urls
 
 urlpatterns = [
     url(r'^admin/', admin.site.urls, name='admin'),  # Django ADMIN URLS
@@ -38,5 +39,6 @@ urlpatterns = [
     url(r'^data/', include(data_urls)),
     url(r'^workflows/', include(workflows_urls)),
     url(r'^workspace/', include(workspace_urls)),
+    url(r'^blast/',include(blast_urls)),
     url(r'^$', TemplateView.as_view(template_name="home.html"), name="home"),
 ]

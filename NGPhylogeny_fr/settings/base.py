@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     'workflows.apps.WorkflowsConfig',
     # 'workspace.apps.WorkspaceConfig',
     'markdown_deux',
+    'blast.apps.BlastConfig',
 ]
 
 MIDDLEWARE = [
