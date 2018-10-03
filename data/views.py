@@ -203,7 +203,7 @@ def export_to_itol(request, file_id):
             tmpfile.write(response.read())
             tmpfile.flush()
             # send file to itol server
-            url_itol = 'http://itol.embl.de/upload.cgi'
+            url_itol = 'https://itol.embl.de/upload.cgi'
             payload = {'tname': "", 'tfile': open(tmpfile.name, 'rb'), }
             r = requests.post(url_itol, files=payload)
             return redirect(r.url)
