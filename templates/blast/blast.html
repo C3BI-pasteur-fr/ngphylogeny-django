@@ -20,17 +20,17 @@
     <th>Blast DB</th>
     <th>Blast Program</th>
     <th>EValue cutoff</th>
-    <th>Deleted</th>
+    <th>Delete</th>
   </thead>
   <tbody>
   {% for blastrun in object_list %}
     <tr>
       <td><span class="label label-{{blastrun.status}}">{{ blastrun.status_str }}</span></td>
-      <td> <a href="{% url 'blast_view' blastrun.id %}">{{ blastrun.date|date:"Y/m/d h:i" }}</a></td>
+      <td><a href="{% url 'blast_view' blastrun.id %}">{{ blastrun.date|date:"Y/m/d h:i" }}</a></td>
       <td>{{ blastrun.database }}</td>
       <td>{{ blastrun.blastprog }}</td>
       <td>{{ blastrun.evalue }}</td>
-      <td>{{ blastrun.deleted }}</td>
+      <td><a href="{% url 'blast_delete' blastrun.id %}" class="btn btn-danger btn-xs"><span class="glyphicon glyphicon-remove"></span>delete</a></td>
     </tr>
   {% endfor %}
   </tbody>

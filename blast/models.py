@@ -52,6 +52,12 @@ class BlastRun(models.Model):
         Nor running anymore (success or error)
         '''
         return self.status== self.FINISHED or self.status == self.ERROR
+
+    def soft_delete(self):
+        self.deleted = True
+        self.blastsubject_set.all().delete()
+        self.save()
+
     
 class BlastSubject(models.Model):
     subject_id = models.CharField(max_length=1000)

@@ -71,8 +71,5 @@ def deleteoldblastruns():
     logger.info("Start old blast deletion task")
     datecutoff = datetime.now() - timedelta(days=14)
     for e in BlastRun.objects.filter(deleted=False).filter(date__lte=datecutoff):
-        e.deleted = True
-        e.blastsubject_set.all().delete()
-        e.save()
+        e.soft_delete()
     logger.info("Old blast deletion task finished")
-

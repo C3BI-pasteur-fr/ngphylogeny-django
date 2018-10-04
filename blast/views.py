@@ -6,6 +6,7 @@ from django.views.generic.edit import FormView
 from django.views.generic import DetailView, DeleteView, ListView
 from django.views.generic.detail import BaseDetailView
 from django.urls import reverse_lazy
+from  django.http import HttpResponseRedirect
 
 from .forms import BlastForm
 from tasks import launchblast
@@ -68,21 +69,36 @@ class BlastRunView(DetailView):
 
 class DeleteBlastSubjectView(DeleteView):
     model=BlastSubject
-
-    def get_object(self, queryset=None):
-        """ Hook to ensure object is owned by request.user. """
-        obj = super(DeleteBlastSubjectView, self).get_object()
-        return obj
-
+    success_url='blast_view'
+    
     def get_success_url(self):
         """ Go to the BlastRun page"""
         blastrun = self.object.blastrun
-        return reverse_lazy( 'blast_view', kwargs={'pk': blastrun.id})
+        return reverse_lazy( self.success_url, kwargs={'pk': blastrun.id})
     
     def get(self, request, *args, **kwargs):
         """ No confirmation template """
         return self.post(request, *args, **kwargs)
 
+class DeleteBlastRunView(DeleteView):
+    model=BlastRun
+    success_url = reverse_lazy('blast_form')
+
+    def get(self, request, *args, **kwargs):
+        """ No confirmation template """
+        return self.post(request, *args, **kwargs)
+
+    # Overrides the default delete method to prevent actual
+    # deletion, but instead mark it as deleted and delete the
+    # subject sequence results
+    def delete(self, request, *args, **kwargs):
+        """
+        Calls the delete() method on the fetched object and then
+        redirects to the success URL.
+        """
+        self.get_object().soft_delete()
+        return HttpResponseRedirect(self.success_url)
+    
 
 class BlastRunFasta(DetailView):
     model=BlastRun
