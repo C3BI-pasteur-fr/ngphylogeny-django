@@ -13,10 +13,26 @@
 
 
 <h1>Previous Blast Runs (in session)</h1>
-<ul>
+  <table id="myTable" class="table table-striped ">
+  <thead>
+    <th>Status</th>
+    <th>Date</th>
+    <th>Blast DB</th>
+    <th>Blast Program</th>
+    <th>EValue cutoff</th>
+    <th>Deleted</th>
+  </thead>
+  <tbody>
   {% for blastrun in object_list %}
-  <li> <a href="{% url 'blast_view' blastrun.id %}">{{blastrun.query_id}}</a> ({{ blastrun.date|date:"Y/m/d h:i" }}): {{blastrun.database}}|{{blastrun.blastprog}}({{blastrun.evalue}}) = {{ blastrun.status }} </li>
+    <tr>
+      <td><span class="label label-{{blastrun.status}}">{{ blastrun.status_str }}</span></td>
+      <td> <a href="{% url 'blast_view' blastrun.id %}">{{ blastrun.date|date:"Y/m/d h:i" }}</a></td>
+      <td>{{ blastrun.database }}</td>
+      <td>{{ blastrun.blastprog }}</td>
+      <td>{{ blastrun.evalue }}</td>
+      <td>{{ blastrun.deleted }}</td>
+    </tr>
   {% endfor %}
-</ul>
-
+  </tbody>
+</table>
 {% endblock %}

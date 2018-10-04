@@ -51,9 +51,9 @@ class BlastView(FormView, ListView):
         sessionids= []
         if self.request.session.get('blastruns'):
             sessionids=self.request.session.get('blastruns')
-        queryset = self.model.objects.filter(pk__in=sessionids, deleted=False)
+        queryset = self.model.objects.filter(pk__in=sessionids, deleted=False).order_by('-date')
         return queryset
-    
+
 
 class BlastRunView(DetailView):
     model=BlastRun
