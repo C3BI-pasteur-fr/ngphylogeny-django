@@ -4,6 +4,7 @@ from __future__ import unicode_literals
 from django.shortcuts import render
 from django.views.generic.edit import FormView
 from django.views.generic import DetailView, DeleteView, ListView
+from django.views.generic.detail import BaseDetailView
 from django.urls import reverse_lazy
 
 from .forms import BlastForm
@@ -81,4 +82,15 @@ class DeleteBlastSubjectView(DeleteView):
     def get(self, request, *args, **kwargs):
         """ No confirmation template """
         return self.post(request, *args, **kwargs)
+
+
+class BlastRunFasta(DetailView):
+    model=BlastRun
+    template_name = 'blast/result_fasta.txt'
+    content_type='text/plain'
+    
+    def get_object(self):
+        o = super(BlastRunFasta,self).get_object()
+        add_blast_id_to_session(self.request,str(o.id))
+        return o
 
