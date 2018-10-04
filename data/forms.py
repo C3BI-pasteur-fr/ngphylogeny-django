@@ -10,7 +10,6 @@ import StringIO
 
 from blast.models import BlastRun
 
-
 class UploadForm(forms.Form):
     input_file = forms.FileField(widget=forms.FileInput(), required=False)
     pasted_text = forms.CharField(widget=forms.Textarea, required=False)
@@ -25,9 +24,8 @@ class UploadForm(forms.Form):
             ('--','--'),
         )
         if blastruns is not None:
-            for b in blastruns:
-                obj = BlastRun.objects.get(pk=b)
-                c = (b,"%s (%s)" % (obj.query_id, str(obj.id)))
+            for (bid, bname) in blastruns:
+                c = (bid,"%s (%s)" % (str(bname), str(bid)))
                 choices.append(c)
         self.fields['blast_run'] = forms.ChoiceField(choices=choices)
         

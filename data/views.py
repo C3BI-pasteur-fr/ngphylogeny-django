@@ -64,16 +64,15 @@ class UploadView(UploadMixin, FormView):
     form_class = UploadForm
     success_url = reverse_lazy("home")
 
-    # Add blast runs id to kwargs
+    # Add blast runs (id,name) to kwargs
     # Used by UploadForm to get blastruns ids
     def get_form_kwargs(self):
         kwargs = super(UploadView, self).get_form_kwargs()
         if self.request.session.get('blastruns'):
             blastruns = []
-            for r in self.request.session['blastruns']:
-                b = BlastRun.objects.get(pk=r)
-                if b != None and b.status==b.FINISHED :
-                    blastruns.append(r)
+            for b in BlastRun.objects.filter(pk__in=self.request.session['blastruns'], deleted=False, status='F').order_by('-date').all():
+                x = (b.id,b.query_id)
+                blastruns.append(x)
             kwargs['blastruns'] = blastruns
         return kwargs
     
