@@ -42,6 +42,7 @@
     <th>Blast Program</th>
     <th>EValue cutoff</th>
     <th>Deleted</th>
+    <th>Download</th>
   </thead>
   <tbody>
     <tr>
@@ -51,6 +52,7 @@
       <td>{{ object.blastprog }}</td>
       <td>{{ object.evalue }}</td>
       <td>{{ object.deleted }}</td>
+      <td><a href="{% url 'blast_fasta' object.id %}"  class="btn btn-info btn-xs" download>fasta</a></td>
     </tr>
   </tbody>
 </table>
