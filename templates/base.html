@@ -1,10 +1,13 @@
 {% load static %}
 <!DOCTYPE html>
 <html lang="en">
-<head>
+  <head>
+    {% block meta %} {% endblock %}
+
     <meta http-equiv="Content-type" content="text/html;charset=UTF-8"/>
     <title>NGPhylogeny.fr{% block title-block %}{% endblock %}</title>
     <script src="{% static 'js/jquery-2.1.4.min.js' %}"></script>
+    <script src="{% static 'js/ngphylo.js' %}"></script>
 
     <!-- Bootstrap -->
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>

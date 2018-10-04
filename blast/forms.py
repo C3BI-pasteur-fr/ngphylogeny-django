@@ -6,7 +6,7 @@ BLAST_PROGS = (
     ("blastn", "blastn"),
     ("blastp", "blastp"),
     ("blastx", "blastx"),
-    ("tblast", "tblast"),
+    ("tblastn", "tblastn"),
     ("tblastx", "tblastx")
 )
 

@@ -1,24 +1,71 @@
 {% extends "base_site.html" %}
 {% load static %}
+{% block meta %}
+{% if not object.finished %}
+<meta http-equiv="refresh" content="10">
+{% endif %}
+{% endblock %}
+
+{% block javascripts %}
+<script  type="text/javascript">
+    $(document).ready(function(){
+	var interval = 10000;
+	var elt = $('#countdown_span');
+	elt.html(interval / 1000);
+	
+	function countdown() {
+	    elt.html(elt.html() - 1);
+	    if (elt.html() < 0) {
+		elt.html(interval / 1000);
+	    }
+	}
+	setInterval(countdown, 1000);
+	{% if object.finished %}
+	$('#info-refresh').hide();
+	{% endif %}
+    });
+</script>
+
+{% endblock %}
+
 {% block title %}BLAST{% endblock %}
 {% block content %}
-{{ object.status }}<br/>
-{{ object.date }}<br/>
-{{ object.database }}<br/>
-{{ object.evalue }}<br/>
-{{ object.date }}<br/>
-{{ object.blastprog }}<br/>
-{{ object.message }}<br/>
-{{ object.deleted }}<br/>
+<div id="info-refresh" class="alert alert-info alert-dismissable fade in">
+  <a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
+  <strong>Info !</strong> This page is will be refreshed in <span id="countdown_span">10</span> sec.
+</div>
+<table id="myTable" class="table table-striped ">
+  <thead>
+    <th>Status</th>
+    <th>Date</th>
+    <th>Blast DB</th>
+    <th>Blast Program</th>
+    <th>EValue cutoff</th>
+    <th>Deleted</th>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="label label-{{object.status}}">{{ object.status_str }}</span></td>
+      <td>{{ object.date }}</td>
+      <td>{{ object.database }}</td>
+      <td>{{ object.blastprog }}</td>
+      <td>{{ object.evalue }}</td>
+      <td>{{ object.deleted }}</td>
+    </tr>
+</table>
+
+
 
 <h4>Query</h4>
 <pre>&gt;{{ object.query_id }}
 {{ object.format_sequence }}</pre></li>
 <h4>Results</h4>
-<ul>
-  {% for s in object.blastsubject_set.all %}
-  <li><a href="{% url 'blast_subject_delete' s.id %}">delete</a><pre>&gt;{{ s.subject_id }}
-{{ s.format_sequence }}</pre></li>
+{% for s in object.blastsubject_set.all %}
+<div>
+  
+  <pre><a href="{% url 'blast_subject_delete' s.id %}" class="btn btn-danger btn-xs"><span class="glyphicon glyphicon-remove"></span>Delete</a>&gt;{{ s.subject_id }}
+{{ s.format_sequence }}</pre>
+</div>
   {% endfor %}
 </ul>
 {% endblock %}

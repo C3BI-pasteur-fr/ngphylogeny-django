@@ -41,7 +41,18 @@ class BlastRun(models.Model):
             fasta+= "%s\n" % s.format_sequence()
         return fasta
 
+    def status_str(self):
+        for (code,desc) in self.RUNSTATUS:
+            if self.status == code:
+                return desc
+        return 'Error'
 
+    def finished(self):
+        '''
+        Nor running anymore (success or error)
+        '''
+        return self.status== self.FINISHED or self.status == self.ERROR
+    
 class BlastSubject(models.Model):
     subject_id = models.CharField(max_length=1000)
     subject_seq = models.TextField()
