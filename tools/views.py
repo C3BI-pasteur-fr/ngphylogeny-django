@@ -148,6 +148,9 @@ def tool_exec_view(request, pk, store_output=None):
                 for h, file_id in hid.items():
                     tool_inputs.set_dataset_param(fields.get(h), file_id)
 
+                if wksph is None:
+                    wksph = create_history(request, name="Analyse with " + tool_obj.name)
+                    
                 tool_outputs = gi.tools.run_tool(history_id=wksph.history,
                                                  tool_id=tool_obj.id_galaxy,
                                                  tool_inputs=tool_inputs)
