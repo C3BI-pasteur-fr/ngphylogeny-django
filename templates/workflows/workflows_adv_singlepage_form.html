@@ -58,19 +58,44 @@
 
                 reader.onload = function (e) {
                     fileDisplayArea.val(reader.result);
+		    $("#id_blast_run").val("--");
                 };
 
                 if (evt.target.files[0]) {
                     reader.readAsText(evt.target.files[0]);
                 } else {
                     parentFileDiv.find('textarea').val("");
-
+		    $("#id_blast_run").val("--");
                 }
 
             });
             parentFileDiv.find('textarea').change(function () {
-                fileInput.val('');
+        	fileInput.val('');
+	        $("#id_blast_run").val("--");
             });
+
+	    // If select changes, we fill the textarea with blast result
+	    // fasta file
+	    $("#id_blast_run").on('change', function (e) {
+	    	var val = $(e.target).val();
+	    	
+	    	if(val == "--"){
+	    	    var fileDisplayArea = parentFileDiv.find('textarea');
+	    	    fileDisplayArea.val("");
+	    	}else{
+	    	    $.ajax({
+	    		// Blast result fasta api entry point
+	    		url: '/blast/'+val+'/fasta',
+	    		timeout: 4000,
+	    		
+	    		success: function (data) {
+	    		    var fileDisplayArea = parentFileDiv.find('textarea');
+			    fileDisplayArea.val(data);
+			    fileInput.val('');
+	    		},
+	    	    });
+	    	}
+	    });
 
             parentFileDiv.append("<button id='cleanTextarea" + fileInput.attr('name') + "' type='button' class='btn btn-default'><span class='glyphicon glyphicon-trash'></span></button>");
             $("#cleanTextarea" + fileInput.attr('name')).click(this, function () {
@@ -196,7 +221,14 @@
                             <div class="panel-heading">Choose a file or Paste content</div>
                             <div class="panel-body">
                                 <div class="form-group">
-                                    <input data-ext="fasta" name="file" type="file">
+                                  <input data-ext="fasta" name="file" type="file">
+				  Blast runs
+                                  <select name="blastrun" class="select form-control" id="id_blast_run"> 
+				    <option value="--">--</option>
+				    {% for bid, bname in blastruns %}
+				    <option value="{{bid}}">{{bname}} ({{bid}})</option>
+				    {% endfor %}
+				  </select>
                                 </div>
                             </div>
                         </div>

@@ -19,6 +19,7 @@ from workflows.exceptions import WorkflowInvalidFormError
 from workflows.models import Workflow
 from workflows.exceptions import WorkflowInputFileFormatError
 from workspace.tasks import monitorworkspace
+from blast.models import BlastRun
 
 from bioblend.galaxy.tools.inputs import inputs
 from Bio import SeqIO
@@ -102,6 +103,13 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
         context['tool_list'] = []
         tools = []
 
+        if self.request.session.get('blastruns'):
+            blastruns = []
+            for b in BlastRun.objects.filter(pk__in=self.request.session['blastruns'], deleted=False, status='F').order_by('-date').all():
+                x = (str(b.id),str(b.query_id))
+                blastruns.append(x)
+            context['blastruns'] = blastruns
+        
         for t in self.object.detail:
             tools.append(t[1])
             context['tool_list'].append(slugify(t[1].name))
