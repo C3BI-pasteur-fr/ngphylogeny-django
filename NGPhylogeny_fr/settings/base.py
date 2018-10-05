@@ -176,6 +176,22 @@ BROKER_URL = 'redis://localhost:6379/0'
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
-CELERYD_CONCURRENCY = 100
+#CELERYD_CONCURRENCY = 4
 CELERY_TIMEZONE = 'Europe/Madrid'
 CELERY_ENABLE_UTC = True
+
+# celery queues setup
+CELERY_DEFAULT_QUEUE = 'default'
+CELERY_ROUTES = {
+    'blast.tasks.launchblast'               : { 'queue': 'blast' },
+    'workspace.tasks.deleteoldblastruns'    : { 'queue': 'default' },
+    'workspace.tasks.initializeworkspacejob': { 'queue': 'default' },
+    'workspace.tasks.monitorworkspace'      : { 'queue': 'default' },
+    'workspace.tasks.deletegalaxyhistory'   : { 'queue': 'default' },
+    'workspace.tasks.deleteoldgalaxyhistory': { 'queue': 'default' },
+}
+
+## Launch celery workers with : (1 cpu for blast, the remaining for other tasks)
+## celery multi start 2 -l INFO -c:2 1 -Q:1 default -Q:2 blast --app=NGPhylogeny_fr.celery:app
+## stop them with
+## celery multi stop celery1 celery2

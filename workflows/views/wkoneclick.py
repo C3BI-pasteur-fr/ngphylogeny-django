@@ -8,9 +8,6 @@ from tools.models import Tool
 from workflows.models import Workflow
 from workflows.views.generic import WorkflowFormView, WorkflowListView
 
-from workspace.tasks import monitorworkspace
-
-
 @method_decorator(connection_galaxy, name="dispatch")
 class WorkflowOneClickListView(WorkflowListView, UploadView):
     """

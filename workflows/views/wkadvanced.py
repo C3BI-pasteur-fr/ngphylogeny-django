@@ -18,8 +18,8 @@ from workflows.views.generic import WorkflowListView
 from workflows.exceptions import WorkflowInvalidFormError
 from workflows.models import Workflow
 from workflows.exceptions import WorkflowInputFileFormatError
-from workspace.tasks import monitorworkspace
 from blast.models import BlastRun
+from workspace.tasks import initializeworkspacejob
 
 from bioblend.galaxy.tools.inputs import inputs
 from Bio import SeqIO
@@ -282,7 +282,7 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
             self.succes_url = reverse_lazy("history_detail", kwargs={
                                            'history_id': wksph.history})
             # Start monitoring (for sending emails)
-            monitorworkspace.delay(wksph.history)
+            initializeworkspacejob.delay(wksph.history)
             wksph.monitored = True
             wksph.save()
 

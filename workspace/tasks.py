@@ -18,6 +18,9 @@ from galaxy.decorator import galaxy_connection
 from django.core.mail import send_mail
 from django.db import transaction
 from django.core.urlresolvers import reverse
+from django.core.cache import cache
+
+LOCK_EXPIRE = 60 * 5 # Lock expires in 5 minutes
 
 def flush_transaction():
     transaction.commit()
@@ -25,27 +28,48 @@ def flush_transaction():
 logger = get_task_logger(__name__)
 
 @shared_task
-def monitorworkspace(historyid):
-    """
-    Celery task that will monitor galaxy workspace
+def initializeworkspacejob(historyid):
+    galaxycon = galaxy_connection()
+    galaxycon.nocache = True
+    hc = galaxycon.histories.show_history(historyid, contents=True)
+    hi = galaxycon.histories.show_history(historyid)
+    w = WorkspaceHistory.objects.get(history=historyid)
+    w.history_content_json = json.dumps(hc)
+    w.history_info_json =  json.dumps(hi)
+    w.save()
 
-    It will update content of the workspace django model every 10 seconds
+
+@periodic_task(run_every=(crontab(hour="*", minute="*", day_of_week="*")))
+def monitorworkspace():
+    """
+    Celery periodic task that will monitor galaxy workspaces
+
+    It will update content of the workspace django model every minutes
 
     It will wait for end of execution of all jobs
     and send a mail at the end, if the mail has been
     given by the user.
-    
-    this task is launched by workspace.views.HistoryDetailView
-    only once, when the WorkspaceHistory is marked as "notmonitored"
     """
-    galaxycon = galaxy_connection()
-    galaxycon.nocache = True
-    #print "Monitoring workspace " + historyid
-    finished = False
-    error = False
-    email = None
 
-    while not finished:
+    ## To be sure that the task is not reexecuted in parallel while
+    ## the previous one is still running
+    lock_id = "lock_ngphylo_workspacemonitoring"
+    acquire_lock = lambda: cache.add(lock_id, "true", LOCK_EXPIRE)
+    release_lock = lambda: cache.delete(lock_id)
+
+    if acquire_lock():
+        pass
+    else:
+        return
+
+    for w in WorkspaceHistory.objects.filter(monitored=True, finished=False, deleted=False):
+        galaxycon = galaxy_connection()
+        galaxycon.nocache = True
+        #print "Monitoring workspace " + historyid
+        finished = False
+        error = False
+        email = None
+        historyid = w.history
         try:
             hc = galaxycon.histories.show_history(historyid, contents=True)
             hi = galaxycon.histories.show_history(historyid)
@@ -53,7 +77,6 @@ def monitorworkspace(historyid):
             w.history_content_json = json.dumps(hc)
             w.history_info_json =  json.dumps(hi)
             w.save()
-
             finished = True
             for file in hc:
                 if ( 'running' in file.get('state','') or
@@ -67,37 +90,35 @@ def monitorworkspace(historyid):
             logging.warning('Problem with Galaxy server, waiting 1 minute')
             time.sleep(60)
         
-        if not finished:
-            time.sleep(10)
-            
-    w.finished = True
-    w.save()
-    logging.warning("history finished? %r" % (w.finished))
-
-    
-    if w and w.email and re.match(r"[^@]+@[^@]+\.[^@]+", w.email):
-        try:
-            message = "Dear NGPhylogeny user, \n\n"
-            if error:
-                message= message + "Your NGPhylogeny job finished with errors.\n\n"
-            else:
-                message=message + "Your NGPhylogeny job finished successfuly.\n"
-            please = 'Please visit http://%s%s to check results\n\n' % ("ngphylogeny.fr", reverse('history_detail', kwargs={'history_id':historyid}))
-            message = message + please
-            message = message + "Thank you for using ngphylogeny.fr\n\n"
-            message = message + "NGPhylogeny.fr development team.\n"
-            send_mail(
-                'NGPhylogeny.fr results',
-                message,
-                'ngphylogeny@pasteur.fr',
-                [w.email],
-                fail_silently=False,
-            )
-            print(message)
-        except SMTPException as e:
-            logging.warning("Problem with smtp server : %s" % (e))
-        except Exception as e:
-            logging.warning("Unknown Problem while sending e-mail: %s" % (e))
+        if finished:
+            w.finished = finished
+            logging.warning("history %s finished? %r" % (historyid, w.finished))
+            logging.warning("Sending EMail to %s",w.email)
+            if w and w.email and re.match(r"[^@]+@[^@]+\.[^@]+", w.email):
+                try:
+                    message = "Dear NGPhylogeny user, \n\n"
+                    if error:
+                        message= message + "Your NGPhylogeny job finished with errors.\n\n"
+                    else:
+                        message=message + "Your NGPhylogeny job finished successfuly.\n"
+                    please = 'Please visit http://%s%s to check results\n\n' % ("ngphylogeny.fr", reverse('history_detail', kwargs={'history_id':historyid}))
+                    message = message + please
+                    message = message + "Thank you for using ngphylogeny.fr\n\n"
+                    message = message + "NGPhylogeny.fr development team.\n"
+                    send_mail(
+                        'NGPhylogeny.fr results',
+                        message,
+                        'ngphylogeny@pasteur.fr',
+                        [w.email],
+                        fail_silently=False,
+                    )
+                    print(message)
+                except SMTPException as e:
+                    logging.warning("Problem with smtp server : %s" % (e))
+                except Exception as e:
+                    logging.warning("Unknown Problem while sending e-mail: %s" % (e))
+            w.save()
+    release_lock()
 
 @shared_task
 def deletegalaxyhistory(historyid):

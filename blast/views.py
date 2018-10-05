@@ -41,7 +41,7 @@ class BlastView(FormView, ListView):
         email= form.cleaned_data.get('email')
         b = BlastRun()
         b.query_id=""
-        b.query_sequence=""
+        b.query_seq=""
         b.email = email
         b.save()
         self.runid=b.id

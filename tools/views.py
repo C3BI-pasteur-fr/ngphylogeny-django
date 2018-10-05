@@ -15,7 +15,7 @@ from galaxy.decorator import connection_galaxy
 from workspace.views import create_history, delete_history
 from .forms import ToolForm
 from .models import Tool, ToolFieldWhiteList, ToolFlag
-from workspace.tasks import monitorworkspace
+from workspace.tasks import initializeworkspacejob
 
 from Bio import SeqIO, Phylo
 
@@ -155,7 +155,7 @@ def tool_exec_view(request, pk, store_output=None):
                                                  tool_id=tool_obj.id_galaxy,
                                                  tool_inputs=tool_inputs)
                 # Start monitoring (for sending emails)
-                monitorworkspace.delay(wksph.history)
+                initializeworkspacejob.delay(wksph.history)
                 wksph.monitored = True
                 wksph.save()
 

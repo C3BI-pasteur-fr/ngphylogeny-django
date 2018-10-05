@@ -12,6 +12,7 @@ from io import StringIO
 
 import logging
 import re
+import time
 
 from celery import shared_task
 from celery.decorators import periodic_task
@@ -93,6 +94,7 @@ def launchblast(blastrunid, sequence, prog, db, evalue, coverage):
         b.status=BlastRun.ERROR
         b.message=str(e)
     b.save()
+    time.sleep(30)
 
 
 # Every day at 2am, clears analyses older than 14 days

@@ -8,8 +8,8 @@ from data.views import UploadView
 from galaxy.decorator import connection_galaxy
 from workflows.models import Workflow, WorkflowStepInformation
 from workspace.views import create_history
-from workspace.tasks import monitorworkspace
 from blast.models import BlastRun
+from workspace.tasks import initializeworkspacejob
 
 @method_decorator(connection_galaxy, name="dispatch")
 class WorkflowListView(ListView):
@@ -117,6 +117,6 @@ class WorkflowFormView(UploadView, DetailView):
                                         'history_id': wksph.history}, )
         # Start monitoring
         wksph.monitored = True
-        monitorworkspace.delay(wksph.history)
+        initializeworkspacejob.delay(wksph.history)
         wksph.save()
         return HttpResponseRedirect(self.get_success_url())
