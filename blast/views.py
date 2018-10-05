@@ -37,10 +37,15 @@ class BlastView(FormView, ListView):
         prog= form.cleaned_data.get('program')
         db= form.cleaned_data.get('database')
         evalue= form.cleaned_data.get('evalue')
+        coverage= form.cleaned_data.get('coverage')
+        email= form.cleaned_data.get('email')
         b = BlastRun()
+        b.query_id=""
+        b.query_sequence=""
+        b.email = email
         b.save()
         self.runid=b.id
-        launchblast.delay(b.id, seq, prog, db, evalue)
+        launchblast.delay(b.id, seq, prog, db, evalue, coverage)
         add_blast_id_to_session(self.request, str(b.id))
         #form.send_email()
         return super(BlastView, self).form_valid(form)

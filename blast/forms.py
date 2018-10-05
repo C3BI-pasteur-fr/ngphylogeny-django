@@ -29,7 +29,8 @@ class BlastForm(forms.Form):
         choices=BLAST_DB,
     )
     evalue = forms.FloatField(label='E.Value Threshold', min_value=0, max_value=1, initial=1.0E-5)
-
+    coverage = forms.FloatField(label='Query coverage Threshold', min_value=0, max_value=1, initial=0.8)
+    email  = forms.CharField(label='Contact Email (optional)', required=False)
 
     def __init__(self, *args, **kwargs):
         self.helper = FormHelper()

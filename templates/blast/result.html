@@ -41,6 +41,7 @@
     <th>Blast DB</th>
     <th>Blast Program</th>
     <th>EValue cutoff</th>
+    <th>Coverage cutoff</th>
     <th>Deleted</th>
     <th>Download</th>
   </thead>
@@ -51,6 +52,7 @@
       <td>{{ object.database }}</td>
       <td>{{ object.blastprog }}</td>
       <td>{{ object.evalue }}</td>
+      <td>{{ object.coverage }}</td>
       <td>{{ object.deleted }}</td>
       <td><a href="{% url 'blast_fasta' object.id %}"  class="btn btn-info btn-xs" download>fasta</a></td>
     </tr>
