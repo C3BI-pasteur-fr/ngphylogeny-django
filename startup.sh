@@ -11,6 +11,7 @@ service redis_6379 start
 # Initialize databases
 python manage.py makemigrations
 python manage.py migrate
+python manage.py createcachetable
 # Create admin user
 echo "from django.contrib.auth.models import User; User.objects.filter(username='admin').delete(); User.objects.create_superuser('admin', '$USEREMAIL', '$USERPASS');exit()" | python manage.py shell
 python manage.py loaddata tool_flags
