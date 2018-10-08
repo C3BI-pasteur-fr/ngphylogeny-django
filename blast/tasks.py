@@ -19,15 +19,13 @@ from celery.decorators import periodic_task
 from celery.utils.log import get_task_logger
 from celery.schedules import crontab
 
+from datetime import timedelta, datetime
+
 from .models import BlastRun, BlastSubject
 
-from datetime import date, timedelta, datetime
-
-
-def flush_transaction():
-    transaction.commit()
 
 logger = get_task_logger(__name__)
+
 
 @shared_task
 def launchblast(blastrunid, sequence, prog, db, evalue, coverage):
@@ -39,16 +37,14 @@ def launchblast(blastrunid, sequence, prog, db, evalue, coverage):
     try:
         fasta_io = StringIO(sequence)
         records = list(SeqIO.parse(fasta_io, "fasta"))
-        #fasta_io.close()
-        i=0
         if len(records) == 1:
-            b.query_id=records[0].id
-            b.query_seq=records[0].seq
-            b.evalue=evalue
+            b.query_id = records[0].id
+            b.query_seq = records[0].seq
+            b.evalue = evalue
             b.coverage = coverage
-            b.database=db
+            b.database = db
             b.blastprog = prog
-            b.status=BlastRun.RUNNING
+            b.status = BlastRun.RUNNING
             b.save()
 
             result_handle = NCBIWWW.qblast(prog, db, sequence)
@@ -57,24 +53,24 @@ def launchblast(blastrunid, sequence, prog, db, evalue, coverage):
             for blast_record in blast_records:
                 for alignment in blast_record.alignments:
                     for hsp in alignment.hsps:
-                        if hsp.expect < evalue and (hsp.align_length / blast_record.query_length) >= coverage :
+                        if (hsp.expect < evalue and (float(hsp.align_length) / float(blast_record.query_length)) >= coverage):
                             s = BlastSubject(subject_id=alignment.title.split(" ")[0],
                                              subject_seq=hsp.sbjct.replace("-",""),
                                              blastrun=b)
                             s.save()
-            b.status=BlastRun.FINISHED
+            b.status = BlastRun.FINISHED
         else:
-            b.status=BlastRun.ERROR
+            b.status = BlastRun.ERROR
             b.message = "More than one record in the fasta file! %d" % (len(list(records)))
 
-        if b.email != None and  re.match(r"[^@]+@[^@]+\.[^@]+", b.email):
+        if b.email is not None and re.match(r"[^@]+@[^@]+\.[^@]+", b.email):
             try:
                 message = "Dear NGPhylogeny user, \n\n"
-                if b.status != b.FINISHED :
-                    message= message + "Your NGPhylogeny BLAST job finished with errors.\n\n"
+                if b.status != b.FINISHED:
+                    message = message + "Your NGPhylogeny BLAST job finished with errors.\n\n"
                 else:
-                    message=message + "Your NGPhylogeny BLAST job finished successfuly.\n"
-                please = 'Please visit http://%s%s to check results\n\n' % ("ngphylogeny.fr", reverse('blast_view', kwargs={'pk':b.id}))
+                    message = message + "Your NGPhylogeny BLAST job finished successfuly.\n"
+                please = 'Please visit http://%s%s to check results\n\n' % ("ngphylogeny.fr", reverse('blast_view', kwargs={'pk': b.id}))
                 message = message + please
                 message = message + "Thank you for using ngphylogeny.fr\n\n"
                 message = message + "NGPhylogeny.fr development team.\n"
@@ -91,8 +87,8 @@ def launchblast(blastrunid, sequence, prog, db, evalue, coverage):
             except Exception as e:
                 logging.warning("Unknown Problem while sending e-mail: %s" % (e))
     except Exception as e:
-        b.status=BlastRun.ERROR
-        b.message=str(e)
+        b.status = BlastRun.ERROR
+        b.message = str(e)
     b.save()
     time.sleep(30)
 
