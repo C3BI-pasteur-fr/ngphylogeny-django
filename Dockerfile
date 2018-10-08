@@ -27,7 +27,8 @@ RUN wget http://download.redis.io/redis-stable.tar.gz \
 WORKDIR /home/ngphylo/
 RUN pip install -r requirement.txt
 RUN python manage.py makemigrations \
-    && python manage.py migrate --run-syncdb
+    && python manage.py migrate --run-syncdb \
+    && python manage.py createcachetable
 
 # Celeryd / Celerybeat init scripts
 COPY docker/celeryd /etc/init.d/celeryd
