@@ -18,8 +18,9 @@ BLAST_DB = (
     ("swissprot", "swissprot"),
 )
 
+
 class BlastForm(forms.Form):
-    sequence = forms.CharField(label='Sequence',widget=forms.Textarea)
+    sequence = forms.CharField(label='Sequence', widget=forms.Textarea)
     program = forms.ChoiceField(
         label='Program',
         choices=BLAST_PROGS,
@@ -30,10 +31,9 @@ class BlastForm(forms.Form):
     )
     evalue = forms.FloatField(label='E.Value Threshold', min_value=0, max_value=1, initial=1.0E-5)
     coverage = forms.FloatField(label='Query coverage Threshold', min_value=0, max_value=1, initial=0.8)
-    email  = forms.CharField(label='Contact Email (optional)', required=False)
+    email = forms.CharField(label='Contact Email (optional)', required=False)
 
     def __init__(self, *args, **kwargs):
         self.helper = FormHelper()
         self.helper.add_input(Submit('submit', 'Submit'))
         super(BlastForm, self).__init__(*args, **kwargs)
-    
