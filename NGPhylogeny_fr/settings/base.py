@@ -13,7 +13,8 @@ https://docs.djangoproject.com/en/1.11/ref/settings/
 import os
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+BASE_DIR = os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__))))
 
 LOGIN_URL = '/galaxy/login'
 LOGIN_REDIRECT_URL = '/'
@@ -26,8 +27,8 @@ SECRET_KEY = '_m(y$t1ukdw&!z-e_)ig5h!=*#y*3db3vh81il_i=n*y24ih9k'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-ALLOWED_HOSTS = ["127.0.0.1",]
-INTERNAL_IPS = ["127.0.0.1",]
+ALLOWED_HOSTS = ["127.0.0.1", ]
+INTERNAL_IPS = ["127.0.0.1", ]
 
 CRISPY_TEMPLATE_PACK = "bootstrap3"
 
@@ -73,8 +74,7 @@ ROOT_URLCONF = 'NGPhylogeny_fr.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [os.path.join(BASE_DIR, 'templates')]
-        ,
+        'DIRS': [os.path.join(BASE_DIR, 'templates')],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -157,12 +157,12 @@ CACHES = {
     }
 }
 
-MARKDOWN_DEUX_STYLES = { 'default': {
+MARKDOWN_DEUX_STYLES = {'default': {
     "extras": {
         "code-friendly": None,
         "tables": None,
     },
-    "safe_mode": False, # << here's the change
+    "safe_mode": False,  # << here's the change
 }}
 
 # EMAIL_HOST = '<smtp>'
@@ -176,22 +176,23 @@ BROKER_URL = 'redis://localhost:6379/0'
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
-#CELERYD_CONCURRENCY = 4
+# CELERYD_CONCURRENCY = 4
 CELERY_TIMEZONE = 'Europe/Madrid'
 CELERY_ENABLE_UTC = True
 
 # celery queues setup
 CELERY_DEFAULT_QUEUE = 'default'
 CELERY_ROUTES = {
-    'blast.tasks.launchblast'               : { 'queue': 'blast' },
-    'workspace.tasks.deleteoldblastruns'    : { 'queue': 'default' },
-    'workspace.tasks.initializeworkspacejob': { 'queue': 'default' },
-    'workspace.tasks.monitorworkspace'      : { 'queue': 'default' },
-    'workspace.tasks.deletegalaxyhistory'   : { 'queue': 'default' },
-    'workspace.tasks.deleteoldgalaxyhistory': { 'queue': 'default' },
+    'blast.tasks.launchblast': {'queue': 'blast'},
+    'blast.tasks.build_tree': {'queue': 'default'},
+    'workspace.tasks.deleteoldblastruns': {'queue': 'default'},
+    'workspace.tasks.initializeworkspacejob': {'queue': 'default'},
+    'workspace.tasks.monitorworkspace': {'queue': 'default'},
+    'workspace.tasks.deletegalaxyhistory': {'queue': 'default'},
+    'workspace.tasks.deleteoldgalaxyhistory': {'queue': 'default'},
 }
 
-## Launch celery workers with : (1 cpu for blast, the remaining for other tasks)
-## celery multi start 2 -l INFO -c:2 1 -Q:1 default -Q:2 blast --app=NGPhylogeny_fr.celery:app
-## stop them with
-## celery multi stop celery1 celery2
+# Launch celery workers with : (1 cpu for blast, the remaining for other tasks)
+# celery multi start 2 -l INFO -c:2 1 -Q:1 default -Q:2 blast --app=NGPhylogeny_fr.celery:app
+# stop them with
+# celery multi stop celery1 celery2
