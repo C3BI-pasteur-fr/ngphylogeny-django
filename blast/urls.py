@@ -24,7 +24,7 @@ urlpatterns = [
         name="blast_form"),
     url(r'^(?P<pk>[\w-]+)$', BlastRunView.as_view(),
         name="blast_view"),
-    url(r'^subject/(?P<pk>[\w-]+)/delete$',DeleteBlastSubjectView.as_view(),
+    url(r'^subject/(?P<pk>[\w-]+)/delete$', DeleteBlastSubjectView.as_view(),
         name="blast_subject_delete"),
     url(r'^(?P<pk>[\w-]+)/fasta$', BlastRunFasta.as_view(),
         name="blast_fasta"),

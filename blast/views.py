@@ -7,7 +7,7 @@ from django.urls import reverse_lazy
 from django.http import HttpResponseRedirect
 
 from .forms import BlastForm
-from tasks import launchblast
+from tasks import launchblast, build_tree
 from .models import BlastRun, BlastSubject
 
 
@@ -76,6 +76,11 @@ class DeleteBlastSubjectView(DeleteView):
     def get_success_url(self):
         """ Go to the BlastRun page"""
         blastrun = self.object.blastrun
+        """ And relaunch the pseudo tree building """
+        blastrun.tree = ""
+        blastrun.status = blastrun.RUNNING
+        blastrun.save()
+        build_tree.delay(blastrun.id)
         return reverse_lazy(self.success_url, kwargs={'pk': blastrun.id})
 
     def get(self, request, *args, **kwargs):
