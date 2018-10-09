@@ -17,6 +17,7 @@ Including another URLconf
 from django.conf.urls import url
 from .views import BlastView, BlastRunView, DeleteBlastRunView
 from .views import DeleteBlastSubjectView, BlastRunFasta
+from .views import DeleteBlastSequences
 
 
 urlpatterns = [
@@ -24,6 +25,8 @@ urlpatterns = [
         name="blast_form"),
     url(r'^(?P<pk>[\w-]+)$', BlastRunView.as_view(),
         name="blast_view"),
+    url(r'^(?P<pk>[\w-]+)/deletemulti$', DeleteBlastSequences.as_view(),
+        name="blast_delete_seqs"),
     url(r'^subject/(?P<pk>[\w-]+)/delete$', DeleteBlastSubjectView.as_view(),
         name="blast_subject_delete"),
     url(r'^(?P<pk>[\w-]+)/fasta$', BlastRunFasta.as_view(),

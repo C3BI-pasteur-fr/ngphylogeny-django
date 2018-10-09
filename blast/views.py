@@ -2,7 +2,7 @@
 from __future__ import unicode_literals
 
 from django.views.generic.edit import FormView
-from django.views.generic import DetailView, DeleteView, ListView
+from django.views.generic import DetailView, DeleteView, ListView, View
 from django.urls import reverse_lazy
 from django.http import HttpResponseRedirect
 
@@ -88,6 +88,25 @@ class DeleteBlastSubjectView(DeleteView):
         return self.post(request, *args, **kwargs)
 
 
+class DeleteBlastSequences(View):
+
+    def post(self, request, *args, **kwargs):
+        id = self.kwargs['pk']
+        blastrun = BlastRun.objects.get(pk=id)
+
+        for seqid in request.POST.getlist('todelete[]'):
+            BlastSubject.objects.filter(blastrun__id=id, subject_id=seqid).delete()
+            
+        blastrun.tree = ""
+        blastrun.status = blastrun.RUNNING
+        blastrun.save()
+        build_tree.delay(id)
+        
+        return HttpResponseRedirect(reverse_lazy('blast_view', kwargs=kwargs))
+
+    def get(self, request, *args, **kwargs):
+        return HttpResponseRedirect(reverse_lazy('blast_view', kwargs=kwargs))
+    
 class DeleteBlastRunView(DeleteView):
     model = BlastRun
     success_url = reverse_lazy('blast_form')

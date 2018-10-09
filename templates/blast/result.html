@@ -7,7 +7,12 @@
 {% endblock %}
 
 {% block javascripts %}
-<script  type="text/javascript">
+    <link href="//veg.github.io/phylotree.js/phylotree.css" rel="stylesheet"/>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>    
+    <script src="https://d3js.org/d3.v3.min.js"></script>
+    <script src="http://phylotree.hyphy.org/phylotree.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.8.3/underscore-min.js" charset="utf-8"></script>
+    <script  type="text/javascript">
     $(document).ready(function(){
 	var interval = 10000;
 	var elt = $('#countdown_span');
@@ -22,10 +27,42 @@
 	setInterval(countdown, 1000);
 	{% if object.finished %}
 	$('#info-refresh').hide();
+	
+	var tree = d3.layout.phylotree().svg(d3.select("#tree_display"));
+	tree.align_tips(true);
+	tree.spacing_y(50, true);
+	tree("{{ object.tree.strip }}").layout();
+
+
+	$("#submit").click(function(event){
+	    event.preventDefault();
+	    var tip_selection = [];
+	    var nodearray = tree.get_selection();
+	    for (var i in nodearray) {
+		// If tip
+		var n=nodearray[i];
+		if(!n.children){
+		    tip_selection.push(n.name);
+		}
+	    }
+	    console.log(tip_selection);
+	    
+	    $.ajax({
+	    	type: "POST",
+	    	url: "{% url 'blast_delete_seqs' object.id %}",
+	    	data: {
+		    "todelete" : tip_selection,
+		    csrfmiddlewaretoken: '{{ csrf_token }}',
+		},
+		success: function(){
+			location.reload();
+		}
+	    });
+	});
+	
 	{% endif %}
     });
 </script>
-
 {% endblock %}
 
 {% block title %}BLAST{% endblock %}
@@ -59,12 +96,15 @@
   </tbody>
 </table>
 
-<h4>Newick tree (raw inaccurate tree)</h4>
-<pre>{{ object.tree }}</pre>
-
 <h4>Message</h4>
 <pre>{{ object.message }}</pre>
 
+    <h4>Quick (and inaccurate) tree</h4>
+<svg id="tree_display" height="500" width="500"></svg>
+<div>
+    <a value="" class="btn btn-primary" id="submit">Delete selected sequences</a>
+    </br>
+</div>
 <h4>Query</h4>
 <pre>&gt;{{ object.query_id }}
 {{ object.format_sequence }}</pre></li>

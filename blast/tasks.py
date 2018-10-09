@@ -106,14 +106,19 @@ def launchblast(blastrunid, sequence, prog, db, evalue, coverage):
 
 @shared_task
 def build_tree(blastrunid):
-    b = BlastRun.objects.get(id=blastrunid)
-    b.status = BlastRun.RUNNING
-    b.tree = ""
-    b.save()
-    b.tree = b.build_nj_tree()
-    b.status = BlastRun.FINISHED
-    b.save()
-
+    try:
+        b = BlastRun.objects.get(id=blastrunid)
+        b.status = BlastRun.RUNNING
+        b.tree = ""
+        b.save()
+        b.tree = b.build_nj_tree()
+        b.status = BlastRun.FINISHED
+        b.save()
+    except Exception as e:
+        logging.exception(str(e))
+        b.status = BlastRun.ERROR
+        b.message = str(e)
+        b.save()
 
 @periodic_task(run_every=(crontab(hour="02", minute="00", day_of_week="*")))
 def deleteoldblastruns():
