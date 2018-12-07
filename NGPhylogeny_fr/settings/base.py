@@ -186,6 +186,7 @@ CELERY_ROUTES = {
     'blast.tasks.launch_ncbi_blast': {'queue': 'ncbi_blast'},
     'blast.tasks.launch_pasteur_blast': {'queue': 'default'},
     'blast.tasks.build_tree': {'queue': 'default'},
+    'blast.tasks.checkblastruns': {'queue': 'default'},
     'workspace.tasks.deleteoldblastruns': {'queue': 'default'},
     'workspace.tasks.initializeworkspacejob': {'queue': 'default'},
     'workspace.tasks.monitorworkspace': {'queue': 'default'},
