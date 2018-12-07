@@ -183,7 +183,8 @@ CELERY_ENABLE_UTC = True
 # celery queues setup
 CELERY_DEFAULT_QUEUE = 'default'
 CELERY_ROUTES = {
-    'blast.tasks.launchblast': {'queue': 'blast'},
+    'blast.tasks.launch_ncbi_blast': {'queue': 'ncbi_blast'},
+    'blast.tasks.launch_pasteur_blast': {'queue': 'default'},
     'blast.tasks.build_tree': {'queue': 'default'},
     'workspace.tasks.deleteoldblastruns': {'queue': 'default'},
     'workspace.tasks.initializeworkspacejob': {'queue': 'default'},
@@ -191,6 +192,8 @@ CELERY_ROUTES = {
     'workspace.tasks.deletegalaxyhistory': {'queue': 'default'},
     'workspace.tasks.deleteoldgalaxyhistory': {'queue': 'default'},
 }
+
+PASTEUR_BLAST_ACTIVATED = True
 
 # Launch celery workers with : (1 cpu for blast, the remaining for other tasks)
 # celery multi start 2 -l INFO -c:2 1 -Q:1 default -Q:2 blast --app=NGPhylogeny_fr.celery:app
