@@ -32,6 +32,7 @@ class BlastView(FormView, ListView):
         # It should return an HttpResponse.
         seq = form.cleaned_data.get('sequence')
         prog = form.cleaned_data.get('program')
+        server = form.cleaned_data.get('server')
         db = form.cleaned_data.get('database')
         evalue = form.cleaned_data.get('evalue')
         coverage = form.cleaned_data.get('coverage')
@@ -42,9 +43,11 @@ class BlastView(FormView, ListView):
         b.email = email
         b.save()
         self.runid = b.id
-        launchblast.delay(b.id, seq, prog, db, evalue, coverage)
+        if server == 'pasteur':
+            launch_pasteur_blast.delay(b.id, server, seq, prog, db, evalue, coverage)
+        else:
+            launch_ncbi_blast.delay(b.id, server, seq, prog, db, evalue, coverage)
         add_blast_id_to_session(self.request, str(b.id))
-
         return super(BlastView, self).form_valid(form)
 
     def get_success_url(self):

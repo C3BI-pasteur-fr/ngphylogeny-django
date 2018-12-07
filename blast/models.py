@@ -26,6 +26,14 @@ class BlastRun(models.Model):
         (FINISHED, 'Finished'),
         (ERROR, 'Error')
     )
+
+    PASTEUR = 'P'
+    NCBI = 'N'
+    BLASTSERVERS =(
+        (PASTEUR, 'Pasteur'),
+        (NCBI, 'Pasteur'),
+    )
+    
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email = models.CharField(null=True, max_length=100)
     date = models.DateTimeField(default=datetime.now, blank=True)
@@ -35,7 +43,10 @@ class BlastRun(models.Model):
     coverage = models.FloatField(default=0.8)
     database = models.CharField(max_length=100, default='swissprot')
     blastprog = models.CharField(max_length=100, default='blastp')
+    history = models.CharField(max_length=20) # If pasteur blast: galaxy history id
+    history_fileid= models.CharField(max_length=20) # If pasteur blast: output file galaxy id 
     status = models.CharField(max_length=1, default=PENDING, choices=RUNSTATUS)
+    server = models.CharField(max_length=1, default=NCBI, choices=BLASTSERVERS)
     message = models.TextField(null=True)
     deleted = models.BooleanField(default=False)
     tree = models.TextField(null=True)
@@ -57,6 +68,12 @@ class BlastRun(models.Model):
                 return desc
         return 'Error'
 
+    def server_str(self):
+        for (code, desc) in self.BLASTSERVERS:
+            if self.status == code:
+                return desc
+        return 'Error'
+    
     def finished(self):
         '''
         Nor running anymore (success or error)
