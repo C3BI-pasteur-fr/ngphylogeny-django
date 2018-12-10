@@ -4,7 +4,76 @@
 {% block title %}BLAST{% endblock %}
 {% block content %}
 
-<script ></script>
+<script type="text/javascript">
+    $(document).ready(function(){
+
+	function update_programs(){
+	    var server = $("select#id_server").find(":selected").val();
+	    var url = '{% url 'available_blasts_progs' "wildcard" %}';
+	    url = url.replace('wildcard', server);
+	    var ajax = $.getJSON(
+		url,
+	    	function (data) {
+		    $("select#id_program").empty();
+		    console.log(data);
+	    	    $.each(data, function(id, name) {
+			$("select#id_program").append($("<option></option>")
+						  .attr("value", id).text(name));
+	    	    });
+		    update_databases();
+	    	});
+	}
+
+	function update_databases(){
+	    var server = $("select#id_server").find(":selected").val();
+	    var progid = $("select#id_program").find(":selected").val();
+	    var url = '{% url 'available_blasts_dbs' "wildcard1" "wildcard2" %}';
+	    url = url.replace('wildcard1', server);
+	    url = url.replace('wildcard2', progid);
+	    var ajax = $.getJSON(
+		url,
+	    	function (data) {
+		    $("select#id_database").empty();
+		    console.log(data);
+	    	    $.each(data, function(id, name) {
+			$("select#id_database").append($("<option></option>")
+						  .attr("value", id).text(name));
+	    	    });
+	    	});
+	}
+	
+	$( "select#id_server" ).change(function() {
+	    update_programs();
+	});
+
+	
+	$( "select#id_program" ).change(function() {
+	    update_databases();
+	});
+
+	$( "select#id_program" ).change(function() {
+	    var server = $("select#id_server").find(":selected").val();
+	    var progid = $(this).find(":selected").val();
+	    var url = '{% url 'available_blasts_dbs' "wildcard1" "wildcard2" %}';
+	    url = url.replace('wildcard1', server);
+	    url = url.replace('wildcard2', progid);
+	    var ajax = $.getJSON(
+		url,
+	    	function (data) {
+		    $("select#id_database").empty();
+		    console.log(data);
+	    	    $.each(data, function(id, name) {
+			$("select#id_database").append($("<option></option>")
+						  .attr("value", id).text(name));
+	    	    });
+	    	});
+	});
+
+	
+    });
+
+  
+</script>
 
 <div>
 <form action="{% url 'blast_form' %}" method="post">
