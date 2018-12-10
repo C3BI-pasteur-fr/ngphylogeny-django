@@ -9,7 +9,7 @@ from django.conf import settings
 from django.http import HttpResponse
 
 from .forms import BlastForm
-from tasks import launch_ncbi_blast, build_tree
+from tasks import launch_ncbi_blast, launch_pasteur_blast, build_tree
 from .models import BlastRun, BlastSubject
 
 import json

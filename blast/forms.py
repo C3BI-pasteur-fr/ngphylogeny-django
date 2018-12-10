@@ -12,7 +12,6 @@ class BlastForm(forms.Form):
     init_progs =  BlastRun.blast_progs(init_servers[0][0]).items()
     init_dbs = BlastRun.blast_dbs(init_servers[0][0],init_progs[0][0]).items()
 
-  
     server = forms.ChoiceField(
         label='Server',
         choices=init_servers,
@@ -25,9 +24,6 @@ class BlastForm(forms.Form):
         initial=init_progs[0],
     )
 
-    print init_servers
-    print init_progs
-    print init_dbs
     database = forms.ChoiceField(
         label='Database',
         choices=init_dbs,
