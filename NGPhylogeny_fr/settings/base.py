@@ -194,7 +194,106 @@ CELERY_ROUTES = {
     'workspace.tasks.deleteoldgalaxyhistory': {'queue': 'default'},
 }
 
-PASTEUR_BLAST_ACTIVATED = True
+BLASTS = {
+    'pasteur' : {
+        'activated' : True,
+        'name' : 'Institut Pasteur Galaxy Server',
+        'progs': {
+            'toolshed.pasteur.fr/repos/fmareuil/ncbi_blast_plus/ncbi_blastn_wrapper/2.6.0' : {
+                'name': 'blastn (nt query vs. nt db)',
+                'dbs': {
+                    'nt': 'Non redondant nucleotide sequence database',
+                    'embl_release' : 'EMBL Release',
+                    'genbank_release' : 'Genbank Release',
+                    'refseqn_release' : 'RefSeq Nucleic Release',
+                    'hg19' : 'hg19 complete genome',
+                    'mm9' : 'mm9 complete genome',
+                    'mm10' : 'mm10 complete genome',
+                },
+                'type' : 'blastn',
+                'input': 'nt',
+            },
+            'toolshed.pasteur.fr/repos/fmareuil/ncbi_blast_plus/ncbi_blastp_wrapper/2.6.0' : {
+                'name': 'blastp (aa query vs. aa db)',
+                'dbs': {
+                    'uniprot' : 'Uniprot',
+                    'nrprot': 'Nr Prot',
+                    'refseqp_release' : 'RefSeq Protein Release',
+                },
+                'type' : 'blastp',
+                'input': 'aa',
+            },
+            'toolshed.pasteur.fr/repos/fmareuil/ncbi_blast_plus/ncbi_tblastn_wrapper/2.6.0' : {
+                'name': 'tblastn (aa query vs. nt db)',
+                'dbs' : {
+                    'nt': 'Non redondant nucleotide sequence database',
+                    'embl_release' : 'EMBL Release',
+                    'genbank_release' : 'Genbank Release',
+                    'refseqn_release' : 'RefSeq Nucleic Release',
+                    'hg19' : 'hg19 complete genome',
+                    'mm9' : 'mm9 complete genome',
+                    'mm10' : 'mm10 complete genome',
+                },
+                'type' : 'tblastn',
+                'input': 'aa',
+            },
+            'toolshed.pasteur.fr/repos/fmareuil/ncbi_blast_plus/ncbi_blastx_wrapper/2.6.0' : {
+                'name': 'blastx (nt query vs. aa db)',
+                'dbs' : {
+                    'uniprot' : 'Uniprot',
+                    'nrprot': 'Nr Prot',
+                    'refseqp_release' : 'RefSeq Protein Release',
+                },
+                'type' : 'blastx',
+                'input': 'nt',
+            },
+        },
+    },
+    'ncbi' : {
+        'activated' : True,
+        'name' : 'Public NCBI Blast Server',
+        'progs' : {
+            'blastn' : {
+                'name': 'blastn (nt query vs. nt db)',
+                'dbs': {
+                    'nr': 'nr',
+                    'refseq_genomic': 'refseq_genomic',
+                    'refseq_rna': 'refseq_rna',
+                },
+                'type' : 'blastn',
+                'input': 'nt',
+            },
+            'blastp' : {
+                'name': 'blastp (aa query vs. aa db)',
+                'dbs': {
+                    'refseq_protein' : 'refseq_protein',
+                    'swissprot' : 'swissprot',
+                },
+                'type' : 'blastp',
+                'input': 'aa',
+            },
+            'tblastn' : {
+                'name': 'tblastn (aa query vs. nt db)',
+                'dbs' : {
+                    'nr': 'nr',
+                    'refseq_genomic': 'refseq_genomic',
+                    'refseq_rna': 'refseq_rna',
+                },
+                'type' : 'tblastn',
+                'input': 'aa',
+            },
+            'blastx' : {
+                'name': 'blastx (nt query vs. aa db)',
+                'dbs' : {
+                    'refseq_protein' : 'refseq_protein',
+                    'swissprot' : 'swissprot',
+                },
+                'type' : 'blastx',
+                'input': 'nt',
+            },
+        }
+    }
+}
 
 # Launch celery workers with : (1 cpu for blast, the remaining for other tasks)
 # celery multi start 2 -l INFO -c:2 1 -Q:1 default -Q:2 blast --app=NGPhylogeny_fr.celery:app

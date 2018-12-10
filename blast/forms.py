@@ -3,48 +3,35 @@ from django.conf import settings
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Submit
 
-BLAST_PROGS = (
-    ("blastn", "blastn"),
-    ("blastp", "blastp"),
-    ("blastx", "blastx"),
-    ("tblastn", "tblastn"),
-    ("tblastx", "tblastx"),
-)
-
-BLAST_DB = (
-    ("nr", "nr"),
-    ("refseq_genomic", "refseq_genomic"),
-    ("refseq_rna", "refseq_rna"),
-    ("refseq_protein", "refseq_protein"),
-    ("swissprot", "swissprot"),
-)
-
-if settings.PASTEUR_BLAST_ACTIVATED:
-    BLAST_SERVERS = (
-        ("pasteur", "pasteur"),
-        ("ncbi", "ncbi"),
-    )
-else:
-    BLAST_SERVERS = (
-        ("ncbi", "ncbi"),
-    )
+from .models import BlastRun
 
 class BlastForm(forms.Form):
     sequence = forms.CharField(label='Sequence', widget=forms.Textarea)
-    
+
+    init_servers = BlastRun.blast_servers().items()
+    init_progs =  BlastRun.blast_progs(init_servers[0][0]).items()
+    init_dbs = BlastRun.blast_dbs(init_servers[0][0],init_progs[0][0]).items()
+
+  
     server = forms.ChoiceField(
         label='Server',
-        choices=BLAST_SERVERS,
+        choices=init_servers,
+        initial=init_servers[0],
     )
-    
+
     program = forms.ChoiceField(
         label='Program',
-        choices=BLAST_PROGS,
+        choices=init_progs,
+        initial=init_progs[0],
     )
-    
+
+    print init_servers
+    print init_progs
+    print init_dbs
     database = forms.ChoiceField(
         label='Database',
-        choices=BLAST_DB,
+        choices=init_dbs,
+        initial=init_dbs[0],
     )
     
     evalue = forms.FloatField(label='E.Value Threshold', min_value=0, max_value=1, initial=1.0E-5)

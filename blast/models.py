@@ -2,6 +2,7 @@
 from __future__ import unicode_literals
 
 from django.db import models
+from django.conf import settings
 
 from Bio.Phylo.TreeConstruction import DistanceTreeConstructor, DistanceMatrix
 from Bio import Phylo
@@ -121,7 +122,37 @@ class BlastRun(models.Model):
                 matrix[i].append(d)
         return DistanceMatrix(names=names, matrix=matrix)
 
+    @staticmethod
+    def blast_servers():
+        context = dict()
+        for server in settings.BLASTS:
+            if settings.BLASTS.get(server).get('activated'):
+                name = settings.BLASTS.get(server).get('name')
+                context.update({server : name})
+        return context
 
+    @staticmethod
+    def blast_progs(server):
+        context = dict()
+        blast = settings.BLASTS.get(server)
+        if blast is not None and blast.get('activated'):
+            progs = blast.get('progs')
+            for prog in progs:
+                context.update({prog : progs.get(prog).get('name')})
+        return context
+
+    @staticmethod
+    def blast_dbs(server, prog):
+        context = dict()
+        blast = settings.BLASTS.get(server)
+        if blast is not None and blast.get('activated'):
+            blastprog = blast.get('progs').get(prog)
+            if blastprog is not None:
+                blastdbs = blastprog.get('dbs')
+                for db in blastdbs:
+                    context.update({db : blastdbs.get(db)})
+        return context
+                    
 class BlastSubject(models.Model):
     subject_id = models.CharField(max_length=1000)
     subject_seq = models.TextField()

@@ -140,20 +140,30 @@ def launch_pasteur_blast(blastrunid, sequence, prog, db, evalue, coverage):
             tmp_file.write(sequence)
             tmp_file.flush()
             if is_fasta_one_seq(tmp_file.name):
-	        outputs = galaxycon.tools.upload_file(path=tmp_file.name,file_name="blastinput.fasta",history_id=history.get("id"),file_type="fasta")
-	        file_id = outputs.get('outputs')[0].get('id')
-                ## TODO: All possible tools
-	        toolid="toolshed.pasteur.fr/repos/fmareuil/ncbi_blast_plus/ncbi_blastn_wrapper/2.6.0"
-	        tool_inputs=inputs()
-	        tool_inputs.set_dataset_param("query",file_id)
-                ## TODO: All possible databases for the given tools
-	        tool_inputs.set_param("db_opts|database", "refseqn_release")
-	        tool_inputs.set_param("blast_type", "blastn")
-	        tool_inputs.set_param("evalue_cutoff", evalue)
-	        tool_inputs.set_param("output|out_format", "5")
 
-	        outputs=galaxycon.tools.run_tool(history_id=history.get("id"),tool_id=toolid,tool_inputs=tool_inputs)
-                b.history_fileid = outputs.get("outputs")[0].get("id")
+                blast = settings.PASTEUR_BLASTS.get(prog)
+                if blast is None:
+                    b.status=BlastRun.ERROR
+                    b.message="Blast program %s is not available" % (prog)
+                else:
+                    toolid=blast.get('id')
+                    if blast.get('dbs').get(db) is None:
+                        b.status=BlastRun.ERROR
+                        b.message="Blast DB %s is not available for Blast program %s" % (db, prog)
+                    else:
+                        ## upload input query file to galaxy
+	                outputs = galaxycon.tools.upload_file(path=tmp_file.name,file_name="blastinput.fasta",history_id=history.get("id"),file_type="fasta")
+	                file_id = outputs.get('outputs')[0].get('id')
+	                tool_inputs=inputs()
+	                tool_inputs.set_dataset_param("query",file_id)
+                        ## TODO: All possible databases for the given tools
+	                tool_inputs.set_param("db_opts|database", db)
+	                tool_inputs.set_param("blast_type", blast.get('type'))
+	                tool_inputs.set_param("evalue_cutoff", evalue)
+	                tool_inputs.set_param("output|out_format", "5")
+                        
+	                outputs=galaxycon.tools.run_tool(history_id=history.get("id"),tool_id=toolid,tool_inputs=tool_inputs)
+                        b.history_fileid = outputs.get("outputs")[0].get("id")
             else:
                 b.status=BlastRun.ERROR
                 b.message="Bad input FASTA file format"
@@ -162,31 +172,6 @@ def launch_pasteur_blast(blastrunid, sequence, prog, db, evalue, coverage):
             b.status = BlastRun.ERROR
             b.message = "More than one record in the fasta file! %d" % (
                 len(list(records)))
-
-        if b.email is not None and re.match(r"[^@]+@[^@]+\.[^@]+", b.email):
-            try:
-                message = "Dear NGPhylogeny user, \n\n"
-                if b.status != b.FINISHED:
-                    message = message + "Your NGPhylogeny BLAST job finished with errors.\n\n"
-                else:
-                    message = message + "Your NGPhylogeny BLAST job finished successfuly.\n"
-                please = 'Please visit http://%s%s to check results\n\n' % (
-                    "ngphylogeny.fr", reverse('blast_view', kwargs={'pk': b.id}))
-                message = message + please
-                message = message + "Thank you for using ngphylogeny.fr\n\n"
-                message = message + "NGPhylogeny.fr development team.\n"
-                send_mail(
-                    'NGPhylogeny.fr BLAST results',
-                    message,
-                    'ngphylogeny@pasteur.fr',
-                    [b.email],
-                    fail_silently=False,
-                )
-            except SMTPException as e:
-                logging.warning("Problem with smtp server : %s" % (e))
-            except Exception as e:
-                logging.warning(
-                    "Unknown Problem while sending e-mail: %s" % (e))
     except Exception as e:
         logging.exception(str(e))
         b.status = BlastRun.ERROR
@@ -272,6 +257,32 @@ def checkblastruns():
         else:
             b.state=BlastRun.ERROR
         b.save()
+
+        if b.email is not None and re.match(r"[^@]+@[^@]+\.[^@]+", b.email) and (b.state == BlastRun.ERROR or b.state == BlastRun.FINISHED):
+            try:
+                message = "Dear NGPhylogeny user, \n\n"
+                if b.status != b.FINISHED:
+                    message = message + "Your NGPhylogeny BLAST job finished with errors.\n\n"
+                else:
+                    message = message + "Your NGPhylogeny BLAST job finished successfuly.\n"
+                please = 'Please visit http://%s%s to check results\n\n' % (
+                    "ngphylogeny.fr", reverse('blast_view', kwargs={'pk': b.id}))
+                message = message + please
+                message = message + "Thank you for using ngphylogeny.fr\n\n"
+                message = message + "NGPhylogeny.fr development team.\n"
+                send_mail(
+                    'NGPhylogeny.fr BLAST results',
+                    message,
+                    'ngphylogeny@pasteur.fr',
+                    [b.email],
+                    fail_silently=False,
+                )
+            except SMTPException as e:
+                logging.warning("Problem with smtp server : %s" % (e))
+            except Exception as e:
+                logging.warning(
+                    "Unknown Problem while sending e-mail: %s" % (e))
+        
     logger.info("Pasteur blast runs checked")
 
 def is_fasta_one_seq(filename):

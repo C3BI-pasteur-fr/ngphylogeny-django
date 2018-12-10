@@ -18,9 +18,14 @@ from django.conf.urls import url
 from .views import BlastView, BlastRunView, DeleteBlastRunView
 from .views import DeleteBlastSubjectView, BlastRunFasta
 from .views import DeleteBlastSequences
+from .views import available_blasts_progs, available_blasts_dbs
 
 
 urlpatterns = [
+    url(r'^dbs/(?P<server>\w+)/(?P<prog>[\w/\.]+)$',
+        available_blasts_dbs, name="available_blasts_dbs"),
+    url(r'^progs/(?P<server>\w+)$',
+        available_blasts_progs, name="available_blasts_progs"),
     url(r'^$', BlastView.as_view(),
         name="blast_form"),
     url(r'^(?P<pk>[\w-]+)$', BlastRunView.as_view(),
@@ -33,5 +38,11 @@ urlpatterns = [
         name="blast_fasta"),
     url(r'^(?P<pk>[\w-]+)/delete$', DeleteBlastRunView.as_view(),
         name="blast_delete"),
-
 ]
+
+def available_blasts_progs(request, server):
+    """
+    Ajax: return possible blasts progs : {id:name}
+    """
+    context = BlastRun.blast_progs(server)
+    return HttpResponse(json.dumps(context), content_type='application/json')

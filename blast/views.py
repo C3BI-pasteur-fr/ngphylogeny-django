@@ -5,11 +5,14 @@ from django.views.generic.edit import FormView
 from django.views.generic import DetailView, DeleteView, ListView, View
 from django.urls import reverse_lazy
 from django.http import HttpResponseRedirect
+from django.conf import settings
+from django.http import HttpResponse
 
 from .forms import BlastForm
-from tasks import launchblast, build_tree
+from tasks import launch_ncbi_blast, build_tree
 from .models import BlastRun, BlastSubject
 
+import json
 
 def add_blast_id_to_session(request, blastrunid):
     if not request.session.get('blastruns'):
@@ -18,6 +21,20 @@ def add_blast_id_to_session(request, blastrunid):
     if blastrunid not in rundict:
         rundict.append(blastrunid)
         request.session["blastruns"] = rundict
+
+def available_blasts_progs(request, server):
+    """
+    Ajax: return possible blasts progs : {id:name}
+    """
+    context = BlastRun.blast_progs(server)
+    return HttpResponse(json.dumps(context), content_type='application/json')
+
+def available_blasts_dbs(request, server, prog):
+    """
+    Ajax: return possible blasts databases : {id, name}
+    """
+    context = BlastRun.blast_dbs(server, prog)
+    return HttpResponse(json.dumps(context), content_type='application/json')
 
 
 class BlastView(FormView, ListView):
@@ -139,3 +156,4 @@ class BlastRunFasta(DetailView):
         o = super(BlastRunFasta, self).get_object()
         add_blast_id_to_session(self.request, str(o.id))
         return o
+
