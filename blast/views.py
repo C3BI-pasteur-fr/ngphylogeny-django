@@ -2,7 +2,7 @@
 from __future__ import unicode_literals
 
 from django.views.generic.edit import FormView
-from django.views.generic import DetailView, DeleteView, ListView, View
+from django.views.generic import DetailView, DeleteView, TemplateView, View
 from django.urls import reverse_lazy
 from django.http import HttpResponseRedirect
 from django.conf import settings
@@ -22,6 +22,13 @@ def add_blast_id_to_session(request, blastrunid):
         rundict.append(blastrunid)
         request.session["blastruns"] = rundict
 
+def available_blasts_servers(request):
+    """
+    Ajax: return possible blasts servers : {id:name}
+    """
+    context = BlastRun.blast_servers()
+    return HttpResponse(json.dumps(context), content_type='application/json')
+
 def available_blasts_progs(request, server):
     """
     Ajax: return possible blasts progs : {id:name}
@@ -37,7 +44,7 @@ def available_blasts_dbs(request, server, prog):
     return HttpResponse(json.dumps(context), content_type='application/json')
 
 
-class BlastView(FormView, ListView):
+class BlastView(FormView, TemplateView):
     template_name = "blast/blast.html"
     form_class = BlastForm
     success_url = 'blast_view'
@@ -61,9 +68,9 @@ class BlastView(FormView, ListView):
         b.save()
         self.runid = b.id
         if server == 'pasteur':
-            launch_pasteur_blast.delay(b.id, server, seq, prog, db, evalue, coverage)
+            launch_pasteur_blast.delay(b.id, seq, prog, db, evalue, coverage)
         else:
-            launch_ncbi_blast.delay(b.id, server, seq, prog, db, evalue, coverage)
+            launch_ncbi_blast.delay(b.id, seq, prog, db, evalue, coverage)
         add_blast_id_to_session(self.request, str(b.id))
         return super(BlastView, self).form_valid(form)
 
@@ -71,12 +78,14 @@ class BlastView(FormView, ListView):
         return reverse_lazy(self.success_url, kwargs={'pk': str(self.runid)})
 
     # We take only blast runs whose id are in the session
-    def get_queryset(self):
+    def get_context_data(self, **kwargs):
+        context = super(BlastView, self).get_context_data(**kwargs)
         sessionids = []
         if self.request.session.get('blastruns'):
             sessionids = self.request.session.get('blastruns')
         queryset = self.model.objects.filter(pk__in=sessionids, deleted=False).order_by('-date')
-        return queryset
+        context["blast_runs"] = queryset
+        return context
 
 
 class BlastRunView(DetailView):

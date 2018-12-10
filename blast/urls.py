@@ -18,7 +18,7 @@ from django.conf.urls import url
 from .views import BlastView, BlastRunView, DeleteBlastRunView
 from .views import DeleteBlastSubjectView, BlastRunFasta
 from .views import DeleteBlastSequences
-from .views import available_blasts_progs, available_blasts_dbs
+from .views import available_blasts_progs, available_blasts_dbs, available_blasts_servers
 
 
 urlpatterns = [
@@ -26,6 +26,8 @@ urlpatterns = [
         available_blasts_dbs, name="available_blasts_dbs"),
     url(r'^progs/(?P<server>\w+)$',
         available_blasts_progs, name="available_blasts_progs"),
+    url(r'^servers$',
+        available_blasts_servers, name="available_blasts_servers"),
     url(r'^$', BlastView.as_view(),
         name="blast_form"),
     url(r'^(?P<pk>[\w-]+)$', BlastRunView.as_view(),

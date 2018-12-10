@@ -7,6 +7,23 @@
 <script type="text/javascript">
     $(document).ready(function(){
 
+	update_servers();
+
+	function update_servers(){
+	    var url = '{% url 'available_blasts_servers' %}';
+	    var ajax = $.getJSON(
+		url,
+	    	function (data) {
+		    $("select#id_server").empty();
+		    console.log(data);
+	    	    $.each(data, function(id, name) {
+			$("select#id_server").append($("<option></option>")
+						  .attr("value", id).text(name));
+	    	    });
+		    update_programs();
+	    	});
+	}
+	
 	function update_programs(){
 	    var server = $("select#id_server").find(":selected").val();
 	    var url = '{% url 'available_blasts_progs' "wildcard" %}';
@@ -97,7 +114,7 @@
     <th>Delete</th>
   </thead>
   <tbody>
-  {% for blastrun in object_list %}
+  {% for blastrun in blast_runs %}
     <tr>
       <td><span class="label label-{{blastrun.status}}">{{ blastrun.status_str }}</span></td>
       <td>{{ blastrun.query_id }}</td>

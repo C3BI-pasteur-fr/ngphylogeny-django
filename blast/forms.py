@@ -12,22 +12,22 @@ class BlastForm(forms.Form):
     init_progs =  BlastRun.blast_progs(init_servers[0][0]).items()
     init_dbs = BlastRun.blast_dbs(init_servers[0][0],init_progs[0][0]).items()
 
-    server = forms.ChoiceField(
+    server = forms.CharField(
         label='Server',
-        choices=init_servers,
         initial=init_servers[0],
+        widget=forms.Select(),
     )
 
-    program = forms.ChoiceField(
+    program = forms.CharField(
         label='Program',
-        choices=init_progs,
         initial=init_progs[0],
+        widget=forms.Select(),
     )
 
-    database = forms.ChoiceField(
+    database = forms.CharField(
         label='Database',
-        choices=init_dbs,
         initial=init_dbs[0],
+        widget=forms.Select(),
     )
     
     evalue = forms.FloatField(label='E.Value Threshold', min_value=0, max_value=1, initial=1.0E-5)
