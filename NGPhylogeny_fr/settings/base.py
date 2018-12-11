@@ -196,7 +196,7 @@ CELERY_ROUTES = {
 
 BLASTS = {
     'pasteur' : {
-        'activated' : True,
+        'activated' : False,
         'name' : 'Institut Pasteur Galaxy Server',
         'progs': {
             'toolshed.pasteur.fr/repos/fmareuil/ncbi_blast_plus/ncbi_blastn_wrapper/2.6.0' : {
