@@ -27,7 +27,6 @@
 	setInterval(countdown, 1000);
 	{% if object.finished %}
 	$('#info-refresh').hide();
-	
 	var tree = d3.layout.phylotree().svg(d3.select("#tree_display"));
 	tree.align_tips(true);
 	tree.spacing_y(50, true);

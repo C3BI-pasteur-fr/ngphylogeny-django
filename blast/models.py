@@ -28,8 +28,8 @@ class BlastRun(models.Model):
         (ERROR, 'Error')
     )
 
-    PASTEUR = 'P'
-    NCBI = 'N'
+    PASTEUR = 'pasteur'
+    NCBI = 'ncbi'
     BLASTSERVERS =(
         (PASTEUR, 'Pasteur'),
         (NCBI, 'Pasteur'),
@@ -152,7 +152,17 @@ class BlastRun(models.Model):
                 for db in blastdbs:
                     context.update({db : blastdbs.get(db)})
         return context
-                    
+
+    @staticmethod
+    def blast_type(server, prog):
+        blast = settings.BLASTS.get(server)
+        if blast is not None and blast.get('activated'):
+            blastprog = blast.get('progs').get(prog)
+            if blastprog is not None:
+                type = blastprog.get('type')
+                return type
+        return None
+    
 class BlastSubject(models.Model):
     subject_id = models.CharField(max_length=1000)
     subject_seq = models.TextField()

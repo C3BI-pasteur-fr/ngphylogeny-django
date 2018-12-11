@@ -6,6 +6,7 @@ from django.http import Http404, HttpResponseGone
 from django.shortcuts import redirect
 
 from galaxy.models import Server, GalaxyUser
+from galaxy.galaxylib import GalaxyInstance
 
 logger = logging.getLogger(__name__)
 
@@ -104,3 +105,7 @@ def galaxy_connection():
         logger.exception(e)
         raise e
     return galaxy_instance
+
+def galaxy_connection_simple(server, key):
+    """Initiating Galaxy connection"""
+    return GalaxyInstance(url=server, key=key)

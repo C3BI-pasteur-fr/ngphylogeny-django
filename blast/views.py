@@ -64,6 +64,7 @@ class BlastView(FormView, TemplateView):
         b = BlastRun()
         b.query_id = ""
         b.query_seq = ""
+        b.server = server
         b.email = email
         b.save()
         self.runid = b.id
