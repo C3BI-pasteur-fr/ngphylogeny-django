@@ -40,7 +40,15 @@ def available_blasts_dbs(request, server, prog):
     """
     Ajax: return possible blasts databases : {id, name}
     """
+    
     context = BlastRun.blast_dbs(server, prog)
+    return HttpResponse(json.dumps(context), content_type='application/json')
+
+def blast_example(request, server, prog):
+    """
+    Ajax: return fasta sequence (prot or nt depending on prog)
+    """
+    context = BlastRun.blast_example(server, prog)
     return HttpResponse(json.dumps(context), content_type='application/json')
 
 

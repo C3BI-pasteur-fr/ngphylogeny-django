@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
 
+import os
+
 from django.db import models
 from django.conf import settings
 
@@ -162,6 +164,21 @@ class BlastRun(models.Model):
                 type = blastprog.get('type')
                 return type
         return None
+
+    @staticmethod
+    def blast_example(server, prog):
+        context = []
+        blast = settings.BLASTS.get(server)
+        if blast is not None and blast.get('activated'):
+            blastprog = blast.get('progs').get(prog)
+            if blastprog is not None:
+                testdata = blastprog.get('test_data')
+                if testdata is not None:
+                    filestr = os.path.join(settings.TESTDATA_DIR,testdata)
+                    if os.path.exists(filestr):
+                        with open(filestr, "r") as f:
+                            context.append(f.read())
+        return context
     
 class BlastSubject(models.Model):
     subject_id = models.CharField(max_length=1000)

@@ -86,7 +86,25 @@
 	    	});
 	});
 
-	
+    	function update_example(){
+	    var server = $("select#id_server").find(":selected").val();
+	    var progid = $("select#id_program").find(":selected").val();
+	    var url = '{% url 'blast_example' "wildcard1" "wildcard2" %}';
+	    url = url.replace('wildcard1', server);
+	    url = url.replace('wildcard2', progid);
+	    var ajax = $.getJSON(
+		url,
+	    	function (data) {
+		    $("textarea#id_sequence").empty();
+	    	    $.each(data, function(index, content) {
+			$("textarea#id_sequence").text(content);
+	    	    });
+	    	}
+	    );
+	}
+	$( "button#example" ).click(function() {
+	    update_example();
+	});
     });
 
   
@@ -96,6 +114,7 @@
 <form action="{% url 'blast_form' %}" method="post">
     {% csrf_token %}
     {% crispy form %}
+    <button type="button" class="btn btn-info btn-sm" id="example"><span class='glyphicon glyphicon-question-sign'></span> Example</button>    
     <!-- <input name="submit" value="Submit" class="btn btn-primary pull-left" id="submit" type="submit"><br/> -->
 </form>
 </div>
