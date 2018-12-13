@@ -31,7 +31,7 @@ ALLOWED_HOSTS = ["127.0.0.1", ]
 INTERNAL_IPS = ["127.0.0.1", ]
 
 CRISPY_TEMPLATE_PACK = "bootstrap3"
-
+TESTDATA_DIR = os.path.join(BASE_DIR, 'testdata')
 # Application definition
 
 INSTALLED_APPS = [
@@ -197,11 +197,12 @@ CELERY_ROUTES = {
 
 BLASTS = {
     'pasteur' : {
-        'activated' : False,
+        'activated' : True,
         'name' : 'Institut Pasteur Galaxy Server',
         'progs': {
             'toolshed.pasteur.fr/repos/fmareuil/ncbi_blast_plus/ncbi_blastn_wrapper/2.6.0' : {
                 'name': 'blastn (nt query vs. nt db)',
+                'test_data' : 'DNA_Human.fa',
                 'dbs': {
                     'nt': 'Non redondant nucleotide sequence database',
                     'embl_release' : 'EMBL Release',
@@ -216,6 +217,7 @@ BLASTS = {
             },
             'toolshed.pasteur.fr/repos/fmareuil/ncbi_blast_plus/ncbi_blastp_wrapper/2.6.0' : {
                 'name': 'blastp (aa query vs. aa db)',
+                'test_data' : 'AA_Human.fa',
                 'dbs': {
                     'uniprot' : 'Uniprot',
                     'nrprot': 'Nr Prot',
@@ -226,6 +228,7 @@ BLASTS = {
             },
             'toolshed.pasteur.fr/repos/fmareuil/ncbi_blast_plus/ncbi_tblastn_wrapper/2.6.0' : {
                 'name': 'tblastn (aa query vs. nt db)',
+                'test_data' : 'AA_Human.fa',
                 'dbs' : {
                     'nt': 'Non redondant nucleotide sequence database',
                     'embl_release' : 'EMBL Release',
@@ -240,6 +243,7 @@ BLASTS = {
             },
             'toolshed.pasteur.fr/repos/fmareuil/ncbi_blast_plus/ncbi_blastx_wrapper/2.6.0' : {
                 'name': 'blastx (nt query vs. aa db)',
+                'test_data' : 'DNA_Human.fa',
                 'dbs' : {
                     'uniprot' : 'Uniprot',
                     'nrprot': 'Nr Prot',
@@ -256,6 +260,7 @@ BLASTS = {
         'progs' : {
             'blastn' : {
                 'name': 'blastn (nt query vs. nt db)',
+                'test_data' : 'DNA_Human.fa',
                 'dbs': {
                     'nr': 'nr',
                     'refseq_genomic': 'refseq_genomic',
@@ -266,6 +271,7 @@ BLASTS = {
             },
             'blastp' : {
                 'name': 'blastp (aa query vs. aa db)',
+                'test_data' : 'AA_Human.fa',
                 'dbs': {
                     'refseq_protein' : 'refseq_protein',
                     'swissprot' : 'swissprot',
@@ -275,6 +281,7 @@ BLASTS = {
             },
             'tblastn' : {
                 'name': 'tblastn (aa query vs. nt db)',
+                'test_data' : 'AA_Human.fa',
                 'dbs' : {
                     'nr': 'nr',
                     'refseq_genomic': 'refseq_genomic',
@@ -285,6 +292,7 @@ BLASTS = {
             },
             'blastx' : {
                 'name': 'blastx (nt query vs. aa db)',
+                'test_data' : 'DNA_Human.fa',
                 'dbs' : {
                     'refseq_protein' : 'refseq_protein',
                     'swissprot' : 'swissprot',

@@ -297,6 +297,9 @@ def checkblastruns():
                     logging.warning(
                         "Unknown Problem while sending e-mail: %s" % (e))
     except Exception as e:
+        b.status=BlastRun.ERROR
+        b.message=str(e)
+        b.save()
         logger.info("Error while checking blast run: %s" % (e))
 
     release_lock()
@@ -332,22 +335,26 @@ def newick_clean(seqname):
     m = re.search(r"(\[(.+)\])", seqname)
     if m is None:
         m = re.search(r"(PREDICTED: (\w+ \w+))",seqname)
-        
+    
     if m is None:
         m = re.search(r"^[^\s]+( (\w+ \w+))",seqname)
-
+    
     if m is not None:
         toremove= m.group(1)
         species = "_"+m.group(2)
         seqname = seqname.replace(toremove,"")
-
+    
+    species=re.sub(r"\s\(.*\)","",species)
+    
     gene=""
-    m = re.findall(r"\((\w+)\)", seqname)
-    if len(m) > 0:
-        toremove= "("+m[0]+")"
-        gene = "_"+m[0]
-        seqname = seqname.replace(toremove,"")
-        
+    m = re.search(r"sp\|[^\s]*\|([\w_]+)", seqname)
+    if m is not None:
+        gene = m.group(1)
+    else:
+        m = re.findall(r"\((\w+)\)", seqname)
+        if len(m) > 0:
+            gene = "_"+m[0]
+
     out = seqname.split(" ")[0]+gene+species
     out = out.replace("[","_")
     out = out.replace("]","_")
@@ -357,6 +364,8 @@ def newick_clean(seqname):
     out = out.replace(";","_")
     out = out.replace(" ","_")
     out = out.replace(":","_")
+    out = re.sub(r"_+","_",out)
+    out = re.sub(r"_$","",out)
     
     return out
 
