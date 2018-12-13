@@ -27,7 +27,6 @@ from datetime import timedelta, datetime
 from galaxy.decorator import galaxy_connection
 from bioblend.galaxy.tools.inputs import inputs
 
-
 from .models import BlastRun, BlastSubject
 from .msa import PseudoMSA
 
@@ -203,7 +202,10 @@ def deleteoldblastruns():
     logger.info("Start old blast deletion task")
     datecutoff = datetime.now() - timedelta(days=14)
     for e in BlastRun.objects.filter(deleted=False).filter(date__lte=datecutoff):
+        if e.history != "":
+            deletegalaxyhistory(e.history)
         e.soft_delete()
+        e.save()
     logger.info("Old blast deletion task finished")
 
 
@@ -357,3 +359,16 @@ def newick_clean(seqname):
     out = out.replace(":","_")
     
     return out
+
+@shared_task
+def deletegalaxyhistory(historyid):
+    """
+    Celery task that will delete an history on the galaxy server in background
+    """
+    logging.info("Deleting history %s" % (historyid))
+    try:
+        galaxycon = galaxy_connection()
+        galaxycon.nocache = True
+        galaxycon.histories.delete_history(historyid, purge=True)
+    except Exception as e:
+        logging.warning("Problem while deleting history: %s" % (e))
