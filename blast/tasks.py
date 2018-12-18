@@ -332,7 +332,7 @@ def newick_clean(seqname):
     " Removing BL_ORD_ID if any"
     seqname = re.sub(r"\s*(?i)[^\s]*\|BL_ORD_ID\|\d+\s*", "", seqname)
     species = ""
-    m = re.search(r"(\[(.+)\])", seqname)
+    m = re.search(r"(\[(.+?)\])", seqname)
     if m is None:
         m = re.search(r"(PREDICTED: (\w+ \w+))",seqname)
     
