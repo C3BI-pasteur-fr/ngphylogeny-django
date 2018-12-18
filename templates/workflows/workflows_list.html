@@ -37,7 +37,7 @@
         {% endblock %}
         <div class="col-md-9">
             <div class="row">
-                    <h4>Workflow overview:</h4>
+                    <h4>Workflow skeleton</h4>
                     {% block workflow-overview %}
                         {% for workflow in workflow_list|dictsort:"rank" %}
                             {% include "workflows/include/workflow_overview.html" %}
