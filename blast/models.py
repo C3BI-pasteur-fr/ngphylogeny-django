@@ -49,7 +49,7 @@ class BlastRun(models.Model):
     history = models.CharField(max_length=20) # If pasteur blast: galaxy history id
     history_fileid= models.CharField(max_length=20) # If pasteur blast: output file galaxy id 
     status = models.CharField(max_length=1, default=PENDING, choices=RUNSTATUS)
-    server = models.CharField(max_length=1, default=NCBI, choices=BLASTSERVERS)
+    server = models.CharField(max_length=50, default=NCBI, choices=BLASTSERVERS)
     message = models.TextField(null=True)
     deleted = models.BooleanField(default=False)
     tree = models.TextField(null=True)
