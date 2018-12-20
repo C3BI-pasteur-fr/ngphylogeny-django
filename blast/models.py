@@ -44,6 +44,7 @@ class BlastRun(models.Model):
     query_seq = models.TextField(null=True)
     evalue = models.FloatField(default=0.00001)
     coverage = models.FloatField(default=0.8)
+    maxseqs = models.PositiveIntegerField(default=10)
     database = models.CharField(max_length=100, default='swissprot')
     blastprog = models.CharField(max_length=100, default='blastp')
     history = models.CharField(max_length=20) # If pasteur blast: galaxy history id

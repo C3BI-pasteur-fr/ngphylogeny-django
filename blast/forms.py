@@ -30,6 +30,15 @@ class BlastForm(forms.Form):
         initial=init_dbs[0],
         widget=forms.Select(),
     )
+
+    hitslimit = forms.IntegerField(
+        label='Max number of result sequences [10-200]',
+        help_text='Only the best blast results will be analyzed (based on bit score)',
+        initial=100,
+        min_value = 10,
+        max_value = 200,
+        widget = forms.NumberInput(),
+    )
     
     evalue = forms.FloatField(label='E.Value Threshold', min_value=0, max_value=1, initial=1.0E-5)
     coverage = forms.FloatField(label='Query coverage Threshold', min_value=0, max_value=1, initial=0.8)

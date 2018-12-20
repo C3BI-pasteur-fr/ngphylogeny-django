@@ -12,6 +12,7 @@ class PseudoMSA:
     query_id = ""
     query_seq = ""
     sequences = dict()  # Dict: key: seqname, value: sequence
+    scores = dict()  # Dict: key: seqname, value: blast score
 
     def __init__(self, query_id, query_seq):
         """
@@ -26,8 +27,11 @@ class PseudoMSA:
         hsp: Bio.Blast.Record.HSP
         """
         seq = self.sequences.get(str(sbjct_name))
+        sco = self.scores.get(str(sbjct_name))
         if seq is None:
             seq = list("-" * len(self.query_seq))
+        if sco is None:
+            sco = 0
         start = hsp.query_start
         position = start-1
         for p in range(0, len(hsp.sbjct)):
@@ -37,11 +41,23 @@ class PseudoMSA:
                     seq[position] = hsp.sbjct[p]
                 position += 1
         self.sequences[str(sbjct_name)] = seq
+        self.scores[str(sbjct_name)] = max(sco, hsp.score)
+        
 
     def all_sequences(self):
         for id, seq in self.sequences.iteritems():
             yield (str(id), "".join(seq))
 
+    def first_n_max_score_sequences(self, maxseqs):
+        nseqs = 0
+        for key, value in sorted(self.scores.iteritems(), reverse=True, key=lambda (k,v): (v,k)):
+            if nseqs >= maxseqs :
+                break
+            else:
+                seq = self.sequences.get(str(key))
+                yield (str(key), "".join(seq))
+                nseqs = nseqs+1
+            
     def to_string(self):
         msa = ">%s\n%s\n" % (self.query_id, "".join(self.query_seq))
         for id, seq in self.sequences.iteritems():

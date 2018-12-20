@@ -66,6 +66,7 @@ class BlastView(FormView, TemplateView):
         prog = form.cleaned_data.get('program')
         server = form.cleaned_data.get('server')
         db = form.cleaned_data.get('database')
+        maxseqs = form.cleaned_data.get('hitslimit')
         evalue = form.cleaned_data.get('evalue')
         coverage = form.cleaned_data.get('coverage')
         email = form.cleaned_data.get('email')
@@ -77,9 +78,9 @@ class BlastView(FormView, TemplateView):
         b.save()
         self.runid = b.id
         if server == 'pasteur':
-            launch_pasteur_blast.delay(b.id, seq, prog, db, evalue, coverage)
+            launch_pasteur_blast.delay(b.id, seq, prog, db, evalue, coverage, maxseqs)
         else:
-            launch_ncbi_blast.delay(b.id, seq, prog, db, evalue, coverage)
+            launch_ncbi_blast.delay(b.id, seq, prog, db, evalue, coverage, maxseqs)
         add_blast_id_to_session(self.request, str(b.id))
         return super(BlastView, self).form_valid(form)
 

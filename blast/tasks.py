@@ -38,7 +38,7 @@ LOCK_EXPIRE = 60 * 5 # Lock expires in 5 minutes
 ## It should be alone on a celery queue with only 1 cpu
 ## Otherwise, may run too many jobs on ncbi server
 @shared_task
-def launch_ncbi_blast(blastrunid, sequence, prog, db, evalue, coverage):
+def launch_ncbi_blast(blastrunid, sequence, prog, db, evalue, coverage, maxseqs):
     """
     Celery task that will launch a blast on the public blast server
     """
@@ -54,6 +54,7 @@ def launch_ncbi_blast(blastrunid, sequence, prog, db, evalue, coverage):
             b.coverage = coverage
             b.database = db
             b.blastprog = prog
+            b.maxseqs = maxseqs
             b.status = BlastRun.RUNNING
             b.save()
             result_handle = NCBIWWW.qblast(prog, db, sequence)
@@ -67,8 +68,7 @@ def launch_ncbi_blast(blastrunid, sequence, prog, db, evalue, coverage):
                             blast_record.query_length
                         if e_val < evalue and leng >= coverage:
                             msa.add_hsp(alignment.title.split(" ")[0], hsp)
-
-            for id, seq in msa.all_sequences():
+            for id, seq in msa.first_n_max_score_sequences(maxseqs):
                 s = BlastSubject(subject_id=id,
                                  subject_seq=seq,
                                  blastrun=b)
@@ -114,7 +114,7 @@ def launch_ncbi_blast(blastrunid, sequence, prog, db, evalue, coverage):
     time.sleep(30)
 
 @shared_task
-def launch_pasteur_blast(blastrunid, sequence, prog, db, evalue, coverage):
+def launch_pasteur_blast(blastrunid, sequence, prog, db, evalue, coverage, maxseqs):
     """
     Celery task that will launch a blast on the pasteur Galaxy Server
     """
@@ -135,6 +135,7 @@ def launch_pasteur_blast(blastrunid, sequence, prog, db, evalue, coverage):
             b.coverage = coverage
             b.database = db
             b.blastprog = prog
+            b.maxseqs = maxseqs
             b.status = BlastRun.PENDING
             b.save()
 
@@ -255,8 +256,8 @@ def checkblastruns():
                                 blast_record.query_length
                             if e_val < b.evalue and leng >= b.coverage:
                                 msa.add_hsp(newick_clean(alignment.title), hsp)
-    
-                for id, seq in msa.all_sequences():
+                
+                for id, seq in msa.first_n_max_score_sequences(b.maxseqs):
                     s = BlastSubject(subject_id=id,
                                      subject_seq=seq,
                                      blastrun=b)
