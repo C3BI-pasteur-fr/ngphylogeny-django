@@ -1,3 +1,6 @@
+from Bio.Seq import Seq
+from Bio.Alphabet import generic_dna
+import logging
 
 class PseudoMSA:
     """
@@ -11,39 +14,53 @@ class PseudoMSA:
 
     query_id = ""
     query_seq = ""
+    blast_prog = ""
     sequences = dict()  # Dict: key: seqname, value: sequence
     scores = dict()  # Dict: key: seqname, value: blast score
+    frame = 0
 
-    def __init__(self, query_id, query_seq):
+    def __init__(self, query_id, query_seq, query_seq_bk, frame, blast_prog):
         """
         query : blast query sequence without gaps
         """
         self.query_id = str(query_id)
         self.query_seq = list(query_seq)
+        self.query_seq_bk = query_seq_bk
+        self.frame = frame
+        self.blast_prog = blast_prog
 
     def add_hsp(self, sbjct_name, hsp):
         """
         sbjct_name: name of the subject sequence
         hsp: Bio.Blast.Record.HSP
         """
-        seq = self.sequences.get(str(sbjct_name))
-        sco = self.scores.get(str(sbjct_name))
-        if seq is None:
-            seq = list("-" * len(self.query_seq))
-        if sco is None:
-            sco = 0
-        start = hsp.query_start
-        position = start-1
-        for p in range(0, len(hsp.sbjct)):
-            # If no gap in the query at that position
-            if hsp.query[p] != '-':
-                if hsp.sbjct[p] != '-':
-                    seq[position] = hsp.sbjct[p]
-                position += 1
-        self.sequences[str(sbjct_name)] = seq
-        self.scores[str(sbjct_name)] = max(sco, hsp.score)
-        
+        if ((self.blast_prog != "blastx" and self.blast_prog != "tblastx")  or hsp.frame[0] == self.frame):
+            seq = self.sequences.get(str(sbjct_name))
+            sco = self.scores.get(str(sbjct_name))
+            if seq is None:
+                seq = list("-" * len(self.query_seq))
+            if sco is None:
+                sco = 0
+            start = hsp.query_start
 
+            if self.blast_prog=='blastx' or self.blast_prog=='tblastx':
+                # Computing start on the translated query sequence
+                if self.frame > 0:
+                    start = (hsp.query_start - self.frame) / 3 + 1
+                else:
+                    start = (len(self.query_seq_bk) - hsp.query_end + 1 + self.frame) / 3 + 1
+
+            position = start-1
+
+            for p in range(0, len(hsp.sbjct)):
+                # If no gap in the query at that position
+                if hsp.query[p] != '-':
+                    if hsp.sbjct[p] != '-':
+                        seq[position] = hsp.sbjct[p]
+                    position += 1
+            self.sequences[str(sbjct_name)] = seq
+            self.scores[str(sbjct_name)] = max(sco, hsp.score)
+            
     def all_sequences(self):
         for id, seq in self.sequences.iteritems():
             yield (str(id), "".join(seq))

@@ -252,6 +252,21 @@ BLASTS = {
                 'type' : 'blastx',
                 'input': 'nt',
             },
+            'toolshed.pasteur.fr/repos/fmareuil/ncbi_blast_plus/ncbi_tblastx_wrapper/2.6.0' : {
+                'name': 'tblastx (nt query vs. translated nt db)',
+                'test_data' : 'DNA_Human.fa',
+                'dbs' : {
+                    'nt': 'Non redondant nucleotide sequence database',
+                    'embl_release' : 'EMBL Release',
+                    'genbank_release' : 'Genbank Release',
+                    'refseqn_release' : 'RefSeq Nucleic Release',
+                    'hg19' : 'hg19 complete genome',
+                    'mm9' : 'mm9 complete genome',
+                    'mm10' : 'mm10 complete genome',
+                },
+                'type' : 'tblastx',
+                'input': 'nt',
+            },
         },
     },
     'ncbi' : {
@@ -298,6 +313,17 @@ BLASTS = {
                     'swissprot' : 'swissprot',
                 },
                 'type' : 'blastx',
+                'input': 'nt',
+            },
+            'tblastx' : {
+                'name': 'tblastx (nt query vs. translated nt db)',
+                'test_data' : 'DNA_Human.fa',
+                'dbs' : {
+                    'nr': 'nr',
+                    'refseq_genomic': 'refseq_genomic',
+                    'refseq_rna': 'refseq_rna',
+                },
+                'type' : 'tblastx',
                 'input': 'nt',
             },
         }

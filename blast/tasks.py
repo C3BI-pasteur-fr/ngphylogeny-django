@@ -10,8 +10,11 @@ from smtplib import SMTPException
 from Bio.Blast import NCBIWWW
 from Bio.Blast import NCBIXML
 from Bio import SeqIO
+from Bio.Seq import Seq
+from Bio.Alphabet import generic_dna
 
 from io import StringIO
+import shutil
 import logging
 import re
 import time
@@ -57,18 +60,32 @@ def launch_ncbi_blast(blastrunid, sequence, prog, db, evalue, coverage, maxseqs)
             b.maxseqs = maxseqs
             b.status = BlastRun.RUNNING
             b.save()
-            result_handle = NCBIWWW.qblast(prog, db, sequence)
+
+            rh = NCBIWWW.qblast(prog, db, sequence)
+            tmp_file = tempfile.NamedTemporaryFile()
+            shutil.copyfileobj(rh, tmp_file)
+            tmp_file.flush()
+
+            blast_type = BlastRun.blast_type(BlastRun.NCBI, prog)
+            query_seq_bk = b.query_seq
+            frame = 1
+            if blast_type == 'blastx' or blast_type == 'tblastx' :
+                frame=majorityQueryFrame(tmp_file.name)
+                b.query_seq = translate(b.query_seq, frame)
+                b.save()
+
+            result_handle = open(tmp_file.name, "r")
             blast_records = NCBIXML.parse(result_handle)
-            msa = PseudoMSA(b.query_id, b.query_seq)
+            ms = PseudoMSA(b.query_id, b.query_seq, query_seq_bk, frame, blast_type)
             for blast_record in blast_records:
                 for alignment in blast_record.alignments:
                     for hsp in alignment.hsps:
                         e_val = hsp.expect
-                        leng = float(hsp.align_length) / \
-                            blast_record.query_length
+                        leng = float(hsp.align_length) / float(len(b.query_seq))
                         if e_val < evalue and leng >= coverage:
-                            msa.add_hsp(alignment.title.split(" ")[0], hsp)
-            for id, seq in msa.first_n_max_score_sequences(maxseqs):
+                            ms.add_hsp(alignment.title.split(" ")[0], hsp)
+
+            for id, seq in ms.first_n_max_score_sequences(maxseqs):
                 s = BlastSubject(subject_id=id,
                                  subject_seq=seq,
                                  blastrun=b)
@@ -241,27 +258,35 @@ def checkblastruns():
     
             if state == 'ok':
                 b.status=BlastRun.FINISHED
+                blast_type = BlastRun.blast_type(BlastRun.PASTEUR, b.blastprog)
                 ## Download the result file from galaxy first...
                 tmp_file = tempfile.NamedTemporaryFile()
                 galaxycon.datasets.download_dataset(b.history_fileid,tmp_file.name,False)
+
+                query_seq_bk = b.query_seq
+                frame = 1
+                if blast_type == 'blastx' or blast_type == 'tblastx':
+                    frame=majorityQueryFrame(tmp_file.name)
+                    b.query_seq = translate(b.query_seq, frame)
+                    b.save()
+                
                 result_handle = open(tmp_file.name, "r")
-                ## Then
                 blast_records = NCBIXML.parse(result_handle)
-                msa = PseudoMSA(b.query_id, b.query_seq)
+                ms = PseudoMSA(b.query_id, b.query_seq, query_seq_bk, frame, blast_type)
                 for blast_record in blast_records:
                     for alignment in blast_record.alignments:
                         for hsp in alignment.hsps:
                             e_val = hsp.expect
-                            leng = float(hsp.align_length) / \
-                                blast_record.query_length
+                            leng = float(hsp.align_length) / float(len(b.query_seq))
                             if e_val < b.evalue and leng >= b.coverage:
-                                msa.add_hsp(newick_clean(alignment.title), hsp)
-                
-                for id, seq in msa.first_n_max_score_sequences(b.maxseqs):
+                                ms.add_hsp(newick_clean(alignment.title), hsp)
+
+                for id, seq in ms.first_n_max_score_sequences(b.maxseqs):
                     s = BlastSubject(subject_id=id,
                                      subject_seq=seq,
                                      blastrun=b)
                     s.save()
+                
                 b.tree = b.build_nj_tree()
                 b.status = BlastRun.FINISHED
                 b.save()
@@ -302,6 +327,7 @@ def checkblastruns():
         b.message=str(e)
         b.save()
         logger.info("Error while checking blast run: %s" % (e))
+        logging.exception("message")
 
     release_lock()
     logger.info("Pasteur blast runs checked")
@@ -382,3 +408,41 @@ def deletegalaxyhistory(historyid):
         galaxycon.histories.delete_history(historyid, purge=True)
     except Exception as e:
         logging.warning("Problem while deleting history: %s" % (e))
+
+
+def majorityQueryFrame(blastfile):
+    """
+    It takes a blast result file and returns the query frame that
+    is the most frequent in all HSP
+    """
+    frames = dict()
+    result_handle = open(blastfile, "r")
+    blast_records = NCBIXML.parse(result_handle)
+    for blast_record in blast_records:
+        for alignment in blast_record.alignments:
+            for hsp in alignment.hsps:
+                if hsp.frame[0] in frames:
+                    frames[hsp.frame[0]]+=1
+                else:
+                    frames[hsp.frame[0]]=1
+
+    max_frame = None
+    nb_frames = 0
+    for k,v in frames.items():
+        if nb_frames == 0 or max_frame<v:
+            max_frame = k
+            nb_frames = v
+    return max_frame
+
+def translate(sequence, frame):
+    """
+    It takes a sequence and translate it in the right frame.
+    if frame is
+     1,  2,  3: Just removes 0, 1, or 2 nt and translates
+    -1, -2, -3: RevComp, then removes 0, 1, or 2 nt, and translates
+    """
+    my_dna = Seq(sequence, generic_dna)
+    if frame < 0:
+        my_dna = my_dna.reverse_complement()
+    my_dna = Seq(str(my_dna)[abs(frame)-1:])
+    return str(my_dna.translate())
