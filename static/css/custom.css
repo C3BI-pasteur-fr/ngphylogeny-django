@@ -6,7 +6,7 @@
 font-family: 'Fascinate Inline', cursive;
 font-family: 'Bungee Inline', cursive;*/
 html {
-  font-size: 12px;
+  font-size: 13px;
 }
 
 #genie{
@@ -20,7 +20,7 @@ div#page-wrapper {
     margin-right:auto;
     margin-top: 0px;
     padding:0;
-    font-size:12px;
+    font-size:15px;
 }
 
 span.form-control{
@@ -306,4 +306,20 @@ a.btn.btn-toolbar {
 
 .workflow-name{
     font-size:14px;
+}
+
+div#toc {
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: #f5f5f5;
+    margin-top: 10px;
+    padding-left: 10px;
+}
+
+p.toc-H2{
+    
+}
+
+p.toc-H3{
+    text-indent: 15px;
 }

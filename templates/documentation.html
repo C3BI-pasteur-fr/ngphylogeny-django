@@ -5,43 +5,39 @@
 {% block content %}
 {% comment %} import from html source code on documentation of phylogeny.fr {% endcomment %}
 
+<script>
+  $(document).ready(function(){
+  toc();
+  });
+</script>
+
+<div id="toc">
+</div>
+
 {% markdown %}
 
 ## Overview
 
 NGPhylogeny.fr is a webservice dedicated to phylogenetic analysis. It provides a  complete  set
-of  phylogenetic tools and workflows adapted  to  various  contexts and various levels of user
-expertise. It is built around the main steps of all phylogenetic analyses:
+of phylogenetic tools and workflows adapted to  various contexts and various levels of user
+expertise. It is built around the main steps of most phylogenetic analyses:
 
-1. Multiple alignment
-2. Alignment curation
-3. Tree Inference
-4. Tree rendering
+<center>
+![Workflow]({% static 'images/workflow.png' %})
+</center>
 
-Integrated tools:
+NGPhylogeny.fr integrates several tools for each steps of the workflow:
+<center>
+![Workflow]({% static 'images/workflow_tools.png' %})
+</center>
 
-* Multiple alignment:
-    * Clustal Omega
-    * MAFFT
-    * Muscle
-    * Noisy
-* Alignment curation:
-    * BMGE
-    * Gblocks
-* Tree inference:
-    * FastME
-    * FastTree
-    * MrBayes
-    * PhyML
-    * PhyML-SMS
-    * TNT
 
 Different ways of using NGPhylogeny.fr are offered, depending on the user needs or expertise:
 
 1. [Oneclick workflows]({% url 'workflow_oneclick_list' %}) are already preconfigured with default options that should work on the majority of usecases. The only required
-input is the sequence data file in Fasta format, and the data type (dna or protein) is detected automatically;
+input is the sequence data file in Fasta format. Input data type (dna or protein) is detected automatically;
 2. [Advanced workflows]({% url 'workflows_advanced' %}) have basically the same structure as oneclick workflows, but can be parametrized.
-It means that the user can customize the options of each step of the workflows: alignment, curation, tree inference.
+It means that the user should customize the options of each step of the workflows: alignment, curation, tree inference.
 3. [Workflow maker]({% url 'workflows_alacarte' %}) allows the user to choose the combination of tools that suits best his/her needs, and to customize the parameters.
 4. [Individual tool]({% url 'tools' %}) may be run if specific taks are required.
 
@@ -57,7 +53,7 @@ In addition to their respective bootstraps, almost all tree inference tools are 
 
 For example, it is possible to compute FBP and TBE supports with FastTree.
 
-Bootstrap options are accessible at "Advanced workflows".
+Bootstrap options are accessible only via "Advanced workflows" and "Workflow maker".
 
 ### Computations
 
@@ -67,7 +63,9 @@ NGPhylogeny.fr works together with Institut Pasteur [Galaxy instance](https://ga
 2. Run tools and workflows on the underlying computing cluster;
 3. Keep track of run histories.
 
-
+<center>
+![Workflow]({% static 'images/ngphylo_galaxy.png' %})
+</center>
 
 ## [Oneclick workflows]({% url 'workflow_oneclick_list' %})
 One click workflows are accessible via the "Phylogeny Analysis/One click workflow" link on the tool bar:
