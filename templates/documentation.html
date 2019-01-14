@@ -11,6 +11,7 @@
   });
 </script>
 
+<h1>Documentation</h1>
 <div id="toc">
 </div>
 
@@ -31,7 +32,6 @@ NGPhylogeny.fr integrates several tools for each steps of the workflow:
 ![Workflow]({% static 'images/workflow_tools.png' %})
 </center>
 
-
 Different ways of using NGPhylogeny.fr are offered, depending on the user needs or expertise:
 
 1. [Oneclick workflows]({% url 'workflow_oneclick_list' %}) are already preconfigured with default options that should work on the majority of usecases. The only required
@@ -39,7 +39,7 @@ input is the sequence data file in Fasta format. Input data type (dna or protein
 2. [Advanced workflows]({% url 'workflows_advanced' %}) have basically the same structure as oneclick workflows, but can be parametrized.
 It means that the user should customize the options of each step of the workflows: alignment, curation, tree inference.
 3. [Workflow maker]({% url 'workflows_alacarte' %}) allows the user to choose the combination of tools that suits best his/her needs, and to customize the parameters.
-4. [Individual tool]({% url 'tools' %}) may be run if specific taks are required.
+4. [Individual tools]({% url 'tools' %}) may be run if specific taks are required.
 
 Moreover, NGPhylogeny.fr provides a user-friendly visualization layer specific to the different
 kinds of data usually manipulated in phylogenetics (i.e. alignments, trees).
@@ -51,11 +51,11 @@ Finally, BlastXplorer module is placed upstream phylogenetic workflows and aims 
 In addition to their respective bootstraps, almost all tree inference tools are proposed with the following branch support computations:
 
 1. Felsenstein Bootstrap Proportions (FBP);
-2. Transfer Bootstrap Expectation (TBE).
+2. Transfer Bootstrap Expectation ([TBE](https://booster.pasteur.fr)).
 
 For example, it is possible to compute FBP and TBE supports with FastTree.
 
-Bootstrap options are accessible only via "Advanced workflows" and "Workflow maker".
+Bootstrap options are accessible via "Advanced workflows" and "Workflow maker".
 
 ### Computations
 
@@ -69,12 +69,12 @@ NGPhylogeny.fr works together with Institut Pasteur [Galaxy instance](https://ga
 ![Workflow]({% static 'images/ngphylo_galaxy.png' %})
 </center>
 
-## [Oneclick workflows]({% url 'workflow_oneclick_list' %})
+## Oneclick workflows
 One click workflows are accessible via the "Phylogeny Analysis/One click workflow" link on the tool bar:
 
 ![One click workflows]({% static 'images/doc/menu_oc_1.png' %})
 
-The 4 oneclick workflows implemented in NGPhylogeny.fr are:
+The 4 oneclick workflows implemented in NGPhylogeny.fr differ by the tree inference tool:
 
 1. PhyML-SMS: This workflow uses [PhyML-SMS](http://www.atgc-montpellier.fr/phyml-sms/) to select the best evolutionary model and to infer the trees. However, it may not handle very large datasets, as the tree inference may take a very long time;
 2. PhyML: This workflow uses [PhyML](http://www.atgc-montpellier.fr/phyml/) to infer trees. Default options depend on data type (dna, protein). Like PhyML-SMS, large datasets may not be analyzed with this workflow;
@@ -93,10 +93,11 @@ Workflow outputs:
   - Alignment (FASTA)
   - Guide Tree (TXT)
   - Output logs (TXT
-* Gblocks:
-  - Output logs (TXT)
-  - Gblocks Cleaned alignment (FASTA)
-  - Gblocks alignment informations (HTML)
+* BMGE:
+  - Cleaned sequences Html (HTML)
+  - Cleaned sequences Nexus (NEXUS)
+  - Cleaned sequences Fasta (FASTA)
+  - Cleaned sequences Phylip (PHYLIP)
 * PhyML-SMS:
   - Output logs (TXT)
   - Output tree (NEWICK)
@@ -104,7 +105,6 @@ Workflow outputs:
   - SMS best model (TXT)
 * Newick Display
   - Tree image (SVG)
-
 
 ### PhyML
 
@@ -116,10 +116,11 @@ Workflow outputs:
   - Alignment (FASTA)
   - Guide Tree (TXT)
   - Output logs (TXT
-* Gblocks:
-  - Output logs (TXT)
-  - Gblocks Cleaned alignment (FASTA)
-  - Gblocks alignment informations (HTML)
+* BMGE:
+  - Cleaned sequences Html (HTML)
+  - Cleaned sequences Nexus (NEXUS)
+  - Cleaned sequences Fasta (FASTA)
+  - Cleaned sequences Phylip (PHYLIP)
 * PhyML:
   - Output logs (TXT)
   - PhyML statistics (TXT)
@@ -137,10 +138,11 @@ Workflow outputs:
   - Alignment (FASTA)
   - Guide Tree (TXT)
   - Output logs (TXT
-* Gblocks:
-  - Output logs (TXT)
-  - Gblocks Cleaned alignment (FASTA)
-  - Gblocks alignment informations (HTML)
+* BMGE:
+  - Cleaned sequences Html (HTML)
+  - Cleaned sequences Nexus (NEXUS)
+  - Cleaned sequences Fasta (FASTA)
+  - Cleaned sequences Phylip (PHYLIP)
 * FastME:
   - Output logs (TXT)
   - Distance Matrix (TXT)
@@ -158,10 +160,11 @@ Workflow outputs:
   - Alignment (FASTA)
   - Guide Tree (TXT)
   - Output logs (TXT
-* Gblocks:
-  - Output logs (TXT)
-  - Gblocks Cleaned alignment (FASTA)
-  - Gblocks alignment informations (HTML)
+* BMGE:
+  - Cleaned sequences Html (HTML)
+  - Cleaned sequences Nexus (NEXUS)
+  - Cleaned sequences Fasta (FASTA)
+  - Cleaned sequences Phylip (PHYLIP)
 * FastTree:
   - Output logs (TXT)
   - Output tree (NEWICK)
@@ -180,14 +183,16 @@ Workflow outputs:
 - Reorder output: `No`
 - Output format: `FASTA`
 
-#### Gblocks
+#### BMGE
 
-- Minimum number of sequences for a conserved position : `50%+1`
-- Minimum number of sequences for a flank position : `85%`
-- Maximum number of contiguous non-conserved positions:  `8`
-- Minimum length of a block: `10`
-- Running average over X columns: `1`
-- Allowed gap positions: `None`
+- Sliding window size: `3`
+- Maximum entropy threshold: `0.5`
+- Gap rate cutoff: `0.5`
+- Minimum block size: `5`
+- If sequence type is DNA:
+  - Matrix: `PAM250`
+- If sequence type is Protein or Codon:
+  - Matrix: `BLOSUM62`
 
 #### PhyML-SMS
 
@@ -231,7 +236,7 @@ Workflow outputs:
 - Use Gamma distribution: `Yes`
 - Branch support: `No Branch Support`
 
-## [Advanced workflows]({% url 'workflows_advanced' %})
+## Advanced workflows
 Advanced workflows are accessible via the "Phylogeny Analysis/Advanced workflows" link on the tool bar:
 
 ![Advanced workflows]({% static 'images/doc/menu_aw_1.png' %})
@@ -248,42 +253,50 @@ In particular, it is possible to perform specific bootstrap analyses:
     * SH-like
     * aBayes
 
-## [Build custom workflows]({% url 'workflows_alacarte' %})
+## Workflow Maker
 The workflow maker is accessible via the "Phylogeny Analysis/Workflow maker" link on the tool bar:
 
 ![Workflow Maker]({% static 'images/doc/menu_wm_1.png' %})
 
 In this mode, users can choose the tool they want to run at each step of the workflow:
 
-1. Multiple alignment
-    - Clustal omega
-    - MAFFT
-    - MUSCLE
-2. Alignment curation
-    - BMGE
-    - Gblocks
-    - Noisy
-3. Phylogeny
-    - FastME
-    - FastTree
-    - MrBayes
-    - PhyML-SMS
-    - PhyML
-    - TNT
-4. Tree rendering
-    - Newick Display
+1. Multiple alignment: Clustal omega; MAFFT; MUSCLE;
+2. Alignment curation: BMGE; Gblocks; Noisy;
+3. Tree inference: FastME; FastTree; MrBayes; PhyML-SMS; PhyML; TNT;
+4. Tree rendering: Newick Display.
 
-In addition, parameters of each step can be specified.
+In addition, parameters of each step should be specified.
 
-## [Launch individual tools]({% url 'tools' %})
+## Launch individual tools
 Tools that make up the workflows can be configured and run independently. They are available via the "tools" link on the toolbar:
 
 ![Workflow Maker]({% static 'images/doc/menu_tools_1.png' %})
 
+## BlastXPlorer
+BlastXPlorer is accessible via the "Phylogeny Analysis/Blast" link on the tool bar:
+
+![Workflow Maker]({% static 'images/doc/menu_blast_1.png' %})
+
+User just have to paste an input sequence, and specify a few options:
+
+1. Program: blastp, blastn, blastx, tblastn;
+2. Database: refseq, swissprot, nr, etc.;
+3. Max number of results: Only the specified number of closest sequences will be taken into account (based on bitscore);
+4. E.Value threshold;
+5. Query coverage threshold: percentage of aligned sequence compared to query length;
+6. Contact Email: Optional parameter, to be notified when analysis is over.
+
+A Blast run will be launched on the Galaxy instance. The given number of best matches will be treated, and a neighbor joining tree will be computed from a distance matrix (Kimura distance for DNA sequences and Jukes Cantor distance for Protein sequences).
+
+Once the neighbor joining tree is computed, it is displayed in a dynamic visualizer in which clades to remove can be selected individually. Clicking the "Delete selected sequences" button with then remove the sequences from the dataset.
+
+This sequences can be used as input of any phylogenetic workflows by selecting the given blast analysis in the input panel, and then submiting the job:
+<center>![Blast Run as Input]({% static 'images/doc/blast_run_as_input.png' %})</center>
+
 
 ## Typical analysis
 
-Once the workflow is configured and launched, user is redirected to a waiting page giving informations about the run:
+Once the phylogenetic workflow is configured and launched, user is redirected to a waiting page giving informations about the run:
 
 ![Workflow Maker]({% static 'images/doc/typical_wf.png' %})
 

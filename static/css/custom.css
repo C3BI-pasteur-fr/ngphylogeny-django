@@ -308,6 +308,23 @@ a.btn.btn-toolbar {
     font-size:14px;
 }
 
+a.anchor-title{
+    color: inherit;
+    text-decoration: none;
+    margin-left: -1em;
+    padding-left: 15px;
+    background-image: url("/static/images/link.png");
+    background-size: 0px 0px;
+    background-repeat: no-repeat;
+    background-position: left center;
+}
+
+a.anchor-title:hover{
+    text-decoration: none;
+    color: inherit;
+    background-size: 15px 15px;
+}
+
 div#toc {
     border: 1px solid #ccc;
     border-radius: 4px;
@@ -322,4 +339,6 @@ p.toc-H2{
 
 p.toc-H3{
     text-indent: 15px;
+    font-size: 12px;
+   
 }
