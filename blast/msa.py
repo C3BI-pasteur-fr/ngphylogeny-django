@@ -15,7 +15,13 @@ class PseudoMSA:
     query_id = ""
     query_seq = ""
     blast_prog = ""
+    # Subject Sequences without insertions compared to query sequence
     sequences = dict()  # Dict: key: seqname, value: sequence
+    # insertions: key=seqname, value=array of insertions
+    # If there is an insertion in the subject (gap in the query)
+    # then the insertion is appended at the given position in this
+    # array
+    insertions=dict()
     scores = dict()  # Dict: key: seqname, value: blast score
     frame = 0
 
@@ -36,11 +42,14 @@ class PseudoMSA:
         """
         if ((self.blast_prog != "blastx" and self.blast_prog != "tblastx")  or hsp.frame[0] == self.frame):
             seq = self.sequences.get(str(sbjct_name))
+            ins = self.insertions.get(str(sbjct_name))
             sco = self.scores.get(str(sbjct_name))
             if seq is None:
-                seq = list("-" * len(self.query_seq))
+                seq = ["-"] * len(self.query_seq)
             if sco is None:
                 sco = 0
+            if ins is None:
+                ins =  [""] * (len(self.query_seq) + 1)
             start = hsp.query_start
 
             if self.blast_prog=='blastx' or self.blast_prog=='tblastx':
@@ -52,13 +61,20 @@ class PseudoMSA:
 
             position = start-1
 
+            gapstart = -1
             for p in range(0, len(hsp.sbjct)):
                 # If no gap in the query at that position
                 if hsp.query[p] != '-':
+                    gapstart=-1
                     if hsp.sbjct[p] != '-':
                         seq[position] = hsp.sbjct[p]
                     position += 1
+                else:
+                    if gapstart==-1:
+                        gapstart=position
+                    ins[gapstart] += hsp.sbjct[p]
             self.sequences[str(sbjct_name)] = seq
+            self.insertions[str(sbjct_name)] = ins
             self.scores[str(sbjct_name)] = max(sco, hsp.score)
             
     def all_sequences(self):
@@ -72,9 +88,14 @@ class PseudoMSA:
                 break
             else:
                 seq = self.sequences.get(str(key))
-                yield (str(key), "".join(seq))
+                ins = self.insertions.get(str(key))
+                fullseq = list(seq)
+                fullseq[0] = ins[0] + fullseq[0]
+                for i in range(1,len(ins)):
+                    fullseq[i-1] += ins[i]
+                yield (str(key), "".join(seq), "".join(fullseq))
                 nseqs = nseqs+1
-            
+
     def to_string(self):
         msa = ">%s\n%s\n" % (self.query_id, "".join(self.query_seq))
         for id, seq in self.sequences.iteritems():

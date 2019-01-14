@@ -85,9 +85,10 @@ def launch_ncbi_blast(blastrunid, sequence, prog, db, evalue, coverage, maxseqs)
                         if e_val < evalue and leng >= coverage:
                             ms.add_hsp(alignment.title.split(" ")[0], hsp)
 
-            for id, seq in ms.first_n_max_score_sequences(maxseqs):
+            for id, seq, fullseq in ms.first_n_max_score_sequences(maxseqs):
                 s = BlastSubject(subject_id=id,
                                  subject_seq=seq,
+                                 subject_fullseq=fullseq,
                                  blastrun=b)
                 s.save()
 
@@ -281,9 +282,10 @@ def checkblastruns():
                             if e_val < b.evalue and leng >= b.coverage:
                                 ms.add_hsp(newick_clean(alignment.title), hsp)
 
-                for id, seq in ms.first_n_max_score_sequences(b.maxseqs):
+                for id, seq, fullseq in ms.first_n_max_score_sequences(b.maxseqs):
                     s = BlastSubject(subject_id=id,
                                      subject_seq=seq,
+                                     subject_fullseq=fullseq,
                                      blastrun=b)
                     s.save()
                 

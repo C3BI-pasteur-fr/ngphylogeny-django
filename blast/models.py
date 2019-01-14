@@ -59,11 +59,15 @@ class BlastRun(models.Model):
         return ('\n'.join(textwrap.wrap(self.query_seq, 60))).rstrip()
 
     def to_fasta(self):
+        """
+        Returns all full sequences in Fasta format.
+        Considers also insertions in query sequence
+        """
         fasta = ">%s\n" % self.query_id
         fasta += "%s\n" % self.format_sequence()
         for s in self.blastsubject_set.all():
             fasta += ">%s\n" % s.subject_id
-            fasta += "%s\n" % s.format_sequence()
+            fasta += "%s\n" % s.format_fullsequence()
         return fasta
 
     def status_str(self):
@@ -77,7 +81,7 @@ class BlastRun(models.Model):
             if self.status == code:
                 return desc
         return 'Error'
-    
+
     def finished(self):
         '''
         Nor running anymore (success or error)
@@ -180,12 +184,17 @@ class BlastRun(models.Model):
                         with open(filestr, "r") as f:
                             context.append(f.read())
         return context
-    
+
 class BlastSubject(models.Model):
     subject_id = models.CharField(max_length=1000)
     subject_seq = models.TextField()
+    subject_fullseq = models.TextField()
     blastrun = models.ForeignKey(BlastRun, on_delete=models.CASCADE)
 
     def format_sequence(self):
         unalignseq = self.subject_seq.replace("-", "")
+        return ('\n'.join(textwrap.wrap(unalignseq, 60))).rstrip()
+
+    def format_fullsequence(self):
+        unalignseq = self.subject_fullseq.replace("-", "")
         return ('\n'.join(textwrap.wrap(unalignseq, 60))).rstrip()
