@@ -171,6 +171,20 @@ class BlastRun(models.Model):
         return None
 
     @staticmethod
+    def blast_inputtype(server, prog):
+        """
+        returns the input type of the given program
+        Ex: blast_inputtype(BlastRun.PASTEUR, "blastx") returns "nt"
+        """
+        blast = settings.BLASTS.get(server)
+        if blast is not None and blast.get('activated'):
+            blastprog = blast.get('progs').get(prog)
+            if blastprog is not None:
+                inputtype = blastprog.get('input')
+                return inputtype
+        return None
+    
+    @staticmethod
     def blast_example(server, prog):
         context = []
         blast = settings.BLASTS.get(server)

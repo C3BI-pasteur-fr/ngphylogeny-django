@@ -12,6 +12,7 @@ from Bio.Blast import NCBIXML
 from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.Alphabet import generic_dna
+from Bio.Alphabet.IUPAC import *
 
 from io import StringIO
 import shutil
@@ -61,40 +62,57 @@ def launch_ncbi_blast(blastrunid, sequence, prog, db, evalue, coverage, maxseqs)
             b.status = BlastRun.RUNNING
             b.save()
 
-            rh = NCBIWWW.qblast(prog, db, sequence)
-            tmp_file = tempfile.NamedTemporaryFile()
-            shutil.copyfileobj(rh, tmp_file)
-            tmp_file.flush()
-
+            blast_inputtype = BlastRun.blast_inputtype(BlastRun.NCBI, prog)
             blast_type = BlastRun.blast_type(BlastRun.NCBI, prog)
-            query_seq_bk = b.query_seq
-            frame = 1
-            if blast_type == 'blastx' or blast_type == 'tblastx' :
-                frame=majorityQueryFrame(tmp_file.name)
-                b.query_seq = translate(b.query_seq, frame)
-                b.save()
 
-            result_handle = open(tmp_file.name, "r")
-            blast_records = NCBIXML.parse(result_handle)
-            ms = PseudoMSA(b.query_id, b.query_seq, query_seq_bk, frame, blast_type)
-            for blast_record in blast_records:
-                for alignment in blast_record.alignments:
-                    for hsp in alignment.hsps:
-                        e_val = hsp.expect
-                        leng = float(hsp.align_length) / float(len(b.query_seq))
-                        if e_val < evalue and leng >= coverage:
-                            ms.add_hsp(alignment.title.split(" ")[0], hsp)
+            # We check alphabet of given sequence
+            if ((blast_inputtype == "nt" and not check_nt(b.query_seq)) or
+                (blast_inputtype == "aa" and not check_aa(b.query_seq))):
+                b.status = BlastRun.ERROR
+                b.message = "The given sequence has the wrong alphabet. Program %s expects %s sequence" % (
+                    blast_type, blast_inputtype)
+            else:
+                rh = NCBIWWW.qblast(prog, db, sequence)
+                tmp_file = tempfile.NamedTemporaryFile()
+                shutil.copyfileobj(rh, tmp_file)
+                tmp_file.flush()
+    
+                query_seq_bk = b.query_seq
+                frame = 1
+                if blast_type == 'blastx' or blast_type == 'tblastx' :
+                    frame=majorityQueryFrame(tmp_file.name)
+                    b.query_seq = translate(b.query_seq, frame)
+                    b.save()
+    
+                result_handle = open(tmp_file.name, "r")
+                blast_records = NCBIXML.parse(result_handle)
+                ms = PseudoMSA(b.query_id, b.query_seq, query_seq_bk, frame, blast_type)
+                for blast_record in blast_records:
+                    for alignment in blast_record.alignments:
+                        for hsp in alignment.hsps:
+                            e_val = hsp.expect
+                            leng = float(hsp.align_length) / float(len(b.query_seq))
+                            if e_val < evalue and leng >= coverage:
+                                ms.add_hsp(alignment.title.split(" ")[0], hsp)
 
-            for id, seq, fullseq in ms.first_n_max_score_sequences(maxseqs):
-                s = BlastSubject(subject_id=id,
-                                 subject_seq=seq,
-                                 subject_fullseq=fullseq,
-                                 blastrun=b)
-                s.save()
+                nseq=0
+                for id, seq, fullseq in ms.first_n_max_score_sequences(maxseqs):
+                    s = BlastSubject(subject_id=id,
+                                     subject_seq=seq,
+                                     subject_fullseq=fullseq,
+                                     blastrun=b)
+                    s.save()
+                    nseq+=1
 
-            b.tree = b.build_nj_tree()
-            b.status = BlastRun.FINISHED
-            b.save()
+                if nseq>0:
+                    b.tree = b.build_nj_tree()
+                    b.status = BlastRun.FINISHED
+                    b.save()
+                else:
+                    b.status = BlastRun.ERROR
+                    b.message = "Blast Search returned no results"
+                    b.save()
+                    
         else:
             b.status = BlastRun.ERROR
             b.message = "More than one record in the fasta file! %d" % (
@@ -158,8 +176,15 @@ def launch_pasteur_blast(blastrunid, sequence, prog, db, evalue, coverage, maxse
             b.save()
 
             blast_type = BlastRun.blast_type(BlastRun.PASTEUR, prog)
-
-            if blast_type is not None:
+            blast_inputtype = BlastRun.blast_inputtype(BlastRun.PASTEUR, prog)
+            
+            # We check alphabet of given sequence
+            if ((blast_inputtype == "nt" and not check_nt(b.query_seq)) or
+                (blast_inputtype == "aa" and not check_aa(b.query_seq))):
+                b.status = BlastRun.ERROR
+                b.message = "The given sequence has the wrong alphabet. Program %s expects %s sequence" % (
+                    blast_type, blast_inputtype)
+            elif blast_type is not None:
                 tmp_file = tempfile.NamedTemporaryFile()
                 tmp_file.write(sequence)
                 tmp_file.flush()
@@ -183,7 +208,6 @@ def launch_pasteur_blast(blastrunid, sequence, prog, db, evalue, coverage, maxse
             else:
                 b.status=BlastRun.ERROR
                 b.message="Wrong blast program %s" % (prog)
-
             b.save()
         else:
             b.status = BlastRun.ERROR
@@ -282,16 +306,23 @@ def checkblastruns():
                             if e_val < b.evalue and leng >= b.coverage:
                                 ms.add_hsp(newick_clean(alignment.title), hsp)
 
+                nseq=0
                 for id, seq, fullseq in ms.first_n_max_score_sequences(b.maxseqs):
                     s = BlastSubject(subject_id=id,
                                      subject_seq=seq,
                                      subject_fullseq=fullseq,
                                      blastrun=b)
                     s.save()
-                
-                b.tree = b.build_nj_tree()
-                b.status = BlastRun.FINISHED
-                b.save()
+                    nseq+=1
+
+                if nseq>0:
+                    b.tree = b.build_nj_tree()
+                    b.status = BlastRun.FINISHED
+                    b.save()
+                else:
+                    b.status = BlastRun.ERROR
+                    b.message = "Blast Search returned no results"
+                    b.save()
             elif state == 'queued' or state == 'new':
                 b.status=BlastRun.PENDING
             elif state == 'running':
@@ -448,3 +479,27 @@ def translate(sequence, frame):
         my_dna = my_dna.reverse_complement()
     my_dna = Seq(str(my_dna)[abs(frame)-1:])
     return str(my_dna.translate())
+
+
+def check_nt(sequence):
+    """
+    Returns True if the sequence can be considered as nucleotidic
+    """
+    alphabets = [ambiguous_dna, unambiguous_dna, extended_dna, ambiguous_rna, unambiguous_rna]
+    for alphabet in alphabets:
+        leftover = set(str(sequence).upper()) - set(alphabet.letters)
+        if not leftover:
+            return True
+    return False
+
+def check_aa(sequence):
+    """
+    Returns True if the sequence can be considered as proteic
+    """
+    alphabets = [extended_protein]
+    for alphabet in alphabets:
+        leftover = set(str(sequence).upper()) - set(alphabet.letters)
+        if not leftover:
+            return True
+    return False
+    
