@@ -8,4 +8,4 @@ python-slugify
 bibtexparser
 celery[redis]
 uwsgi
-
+django-simple-captcha

@@ -17,7 +17,6 @@ class FeedbackCreateView(CreateView):
     success_url = reverse_lazy('feedback_success')
 
 
-
 class FeedbackSuccessView(TemplateView):
 
     template_name = "surveys/thankfeedback.html"

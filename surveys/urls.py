@@ -14,10 +14,12 @@ Including another URLconf
     2. Add a URL to urlpatterns:  url(r'^blog/', include('blog.urls'))
 """
 from django.conf.urls import url
+from django.conf.urls import include
 
 from .views import FeedbackCreateView, FeedbackSuccessView
 
 urlpatterns = [
     url(r'feedback$', FeedbackCreateView.as_view(), name="feedback"),
     url(r'feedback/thankyou$', FeedbackSuccessView.as_view(), name="feedback_success"),
+    url(r'^captcha/', include('captcha.urls')),
 ]
