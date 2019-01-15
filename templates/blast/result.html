@@ -109,15 +109,16 @@
 </div>
 {% endif %}
 <h4>Query</h4>
-<pre>&gt;{{ object.query_id }}
-{{ object.format_sequence }}</pre></li>
+<div class="fastaobj">
+  {{ object.query_id }}
+  <textarea class="fastaseq" readonly>{{ object.sequence }}</textarea>
+</div>
 
 <h4>Results</h4>
 {% for s in object.blastsubject_set.all %}
-<div>
-
-  <pre><a href="{% url 'blast_subject_delete' s.id %}" class="btn btn-danger btn-xs"><span class="glyphicon glyphicon-remove"></span>Delete</a>&gt;{{ s.subject_id }}
-{{ s.format_fullsequence }}</pre>
+<div class="fastaobj">
+  <a href="{% url 'blast_subject_delete' s.id %}" class="btn btn-danger btn-xs"><span class="glyphicon glyphicon-remove"></span>Delete</a> {{ s.subject_id }}
+  <textarea class="fastaseq" readonly>{{ s.fullsequence }}</textarea>
 </div>
 {% endfor %}
 

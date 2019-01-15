@@ -58,6 +58,9 @@ class BlastRun(models.Model):
     def format_sequence(self):
         return ('\n'.join(textwrap.wrap(self.query_seq, 60))).rstrip()
 
+    def sequence(self):
+        return self.query_seq.rstrip()
+        
     def to_fasta(self):
         """
         Returns all full sequences in Fasta format.
@@ -212,3 +215,8 @@ class BlastSubject(models.Model):
     def format_fullsequence(self):
         unalignseq = self.subject_fullseq.replace("-", "")
         return ('\n'.join(textwrap.wrap(unalignseq, 60))).rstrip()
+
+    def fullsequence(self):
+        unalignseq = self.subject_fullseq.replace("-", "")
+        return unalignseq.rstrip()
+    
