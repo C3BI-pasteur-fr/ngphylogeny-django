@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'formtools',
+    'captcha',
     'crispy_forms',
     'account.apps.AccountConfig',
     'galaxy.apps.GalaxyConfig',
