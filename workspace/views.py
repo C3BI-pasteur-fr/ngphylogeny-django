@@ -4,7 +4,7 @@ from django.http import HttpResponse
 from django.urls import reverse_lazy
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
-from django.views.generic import RedirectView, ListView, DeleteView, UpdateView, DetailView, View
+from django.views.generic import TemplateView, ListView, DeleteView, UpdateView, DetailView, View
 from django.views.generic.edit import SingleObjectMixin
 from bioblend.galaxy.client import ConnectionError
 from django.shortcuts import render, redirect
@@ -171,14 +171,30 @@ def get_dataset_citations(request, history_id):
 
 
 @method_decorator(connection_galaxy, name="dispatch")
-class GalaxyErrorView(RedirectView):
+class GalaxyErrorView(TemplateView):
     """
     Redirect to Galaxy server error page
     """
-
-    def get_redirect_url(self, *args, **kwargs):
-        return "%s/dataset/errors?id=%s" % (self.request.galaxy_server.url, kwargs.get('id'))
-
+    template_name='display_galaxyerror.html'
+    def get_context_data(self, *args, **kwargs):
+        gi = self.request.galaxy
+	context = super(GalaxyErrorView, self).get_context_data(*args, **kwargs)
+        dsid = kwargs.get('id')
+        ds = gi.datasets.show_dataset(dsid)
+        state = ''
+        name = ''
+        errormessage = ''
+        hid=''
+        if ds is not None:
+            state = ds.get('state')
+            errormessage = ds.get('misc_info')
+            hid = ds.get('history_id')
+            name = ds.get('name')
+	context['state'] = state
+        context['error'] = errormessage
+        context['history_id'] = hid
+        context['jobname'] = name
+	return context
 
 @method_decorator(connection_galaxy, name="dispatch")
 class PreviousHistoryListView(ListView):

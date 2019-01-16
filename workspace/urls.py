@@ -41,6 +41,6 @@ urlpatterns = [
     url(r'^history/citations/(?P<history_id>[\w-]+)$',
         get_dataset_citations, name="get_dataset_citations"),
     url(r'^history/galaxyerror/(?P<id>[\w-]+)$',
-        GalaxyErrorView.as_view(url='/dataset/errors?id=%(id)s'),
+        GalaxyErrorView.as_view(),
         name="galaxy_error_url"),
 ]
