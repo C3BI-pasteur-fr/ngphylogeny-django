@@ -3,6 +3,7 @@ from django.http import HttpResponseRedirect
 from django.utils.decorators import method_decorator
 from django.utils.functional import cached_property
 from django.views.generic import ListView, DetailView
+from django.db.models import Q
 
 from data.views import UploadView
 from galaxy.decorator import connection_galaxy
@@ -24,7 +25,7 @@ class WorkflowListView(ListView):
     def workflow_list(self):
         gi = self.request.galaxy
         workflow_queryset = Workflow.objects.filter(
-            galaxy_server__current=True).select_related()
+            galaxy_server__current=True).filter(~Q(category='automaker')).select_related()
 
         for workflow in workflow_queryset:
             workflow.fetch_details(gi, self.restricted_toolset)

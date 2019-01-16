@@ -7,7 +7,7 @@ from django.db import models
 
 from galaxy.models import Server
 from tools.models import Tool, ToolOutputData
-
+from datetime import datetime
 
 class Workflow(models.Model):
     """
@@ -22,18 +22,28 @@ class Workflow(models.Model):
     description = models.CharField(max_length=250)
     slug = models.SlugField(max_length=100, unique=True)
     rank = models.IntegerField(default=999, help_text="Workflows order")
-
+    # Date added
+    date = models.DateTimeField(default=datetime.now, blank=True)
+    deleted = models.BooleanField(default=False)
+    tooldesc = models.CharField(max_length=250,blank=True, default="")
     # Json representation of the workflow
     json = None
     # Details about Steps (WorkflowStepInformation.sorted_tool_list)
     detail = None
-
+    
     def fetch_details(self, galaxyinstance, toolset=None):
         self.json = galaxyinstance.workflows.show_workflow(
             workflow_id=self.id_galaxy)
         self.detail = WorkflowStepInformation(
             self.json,
             tools=toolset).sorted_tool_list
+        self.tooldesc = ""
+        i=0
+        for step, tool in self.detail:
+            if i>0:
+                self.tooldesc+=','
+            self.tooldesc+= "%s.%s" % (step, tool.name)
+            i+=1
 
     def duplicate(self, galaxyinstance):
         """

@@ -50,7 +50,7 @@ INSTALLED_APPS = [
     'tools.apps.ToolsConfig',
     'workspace',
     'surveys.apps.SurveysConfig',
-    'workflows.apps.WorkflowsConfig',
+    'workflows',
     # 'workspace.apps.WorkspaceConfig',
     'markdown_deux',
     'blast.apps.BlastConfig',
@@ -194,6 +194,7 @@ CELERY_ROUTES = {
     'workspace.tasks.monitorworkspace': {'queue': 'default'},
     'workspace.tasks.deletegalaxyhistory': {'queue': 'default'},
     'workspace.tasks.deleteoldgalaxyhistory': {'queue': 'default'},
+    'workflows.tasks.deleteoldgalaxyworkflows': {'queue': 'default'},
 }
 
 BLASTS = {

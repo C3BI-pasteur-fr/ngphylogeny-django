@@ -75,7 +75,7 @@ class WorkflowAdvancedListView(WorkflowListView):
     """
     template_name = 'workflows/workflows_advanced_list.html'
     restricted_toolset = Tool.objects.filter(toolflag__name=WORKFLOW_ADV_FLAG)
-
+     
 
 @method_decorator(connection_galaxy, name="dispatch")
 class WorkflowAdvancedFormView(SingleObjectMixin,
@@ -213,7 +213,16 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
         gi = request.galaxy
 
         # Get a copy of the workflow with full details
-        workflow = self.get_object().duplicate(gi)
+        wf = self.get_object()
+        # If the workflow is not built by the user:
+        # (ngphylogeny basic workflows) then we make a copy
+        # otherwise we take the wf as is
+        # (it will be deleted at the end)
+        if wf.category == 'automaker':
+            workflow = wf
+        else:
+            workflow = wf.duplicate()
+
         workflow.fetch_details(gi, self.restricted_toolset)
 
         context = self.get_context_data(object=self.object)
