@@ -15,6 +15,8 @@ import textwrap
 import logging
 import StringIO
 
+import re
+
 from .trees import prot_dist, nucl_dist
 
 
@@ -56,10 +58,10 @@ class BlastRun(models.Model):
     tree = models.TextField(null=True)
 
     def format_sequence(self):
-        return ('\n'.join(textwrap.wrap(self.query_seq, 60))).rstrip()
+        return re.sub("\*$","",('\n'.join(textwrap.wrap(self.query_seq, 60)))).rstrip()
 
     def sequence(self):
-        return self.query_seq.rstrip()
+        return re.sub("\*$","",self.query_seq.rstrip())
         
     def to_fasta(self):
         """
