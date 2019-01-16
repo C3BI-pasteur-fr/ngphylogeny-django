@@ -18,7 +18,7 @@ def flush_transaction():
 logger = get_task_logger(__name__)
 
 # Every day at 2am, remove workflows (wkmaker) older than 1 day from galaxy
-@periodic_task(run_every=(crontab(hour="*", minute="*", day_of_week="*")))
+@periodic_task(run_every=(crontab(hour="02", minute="00", day_of_week="*")))
 def deleteoldgalaxyworkflows():
     logger.info("Start old workflow deletion task")
     datecutoff = datetime.now() - timedelta(seconds=60)
