@@ -96,6 +96,12 @@ def launch_ncbi_blast(blastrunid, sequence, prog, db, evalue, coverage, maxseqs)
                                 ms.add_hsp(alignment.title.split(" ")[0], hsp)
 
                 nseq=0
+                
+                if blast_type == 'blastx' or blast_type == 'tblastx' :
+                    ms.crop_alignment(maxseqs)
+                    b.query_seq = "".join(ms.query_seq)
+                    b.save()
+                
                 for id, seq, fullseq in ms.first_n_max_score_sequences(maxseqs):
                     s = BlastSubject(subject_id=id,
                                      subject_seq=seq,
@@ -287,7 +293,6 @@ def checkblastruns():
                 ## Download the result file from galaxy first...
                 tmp_file = tempfile.NamedTemporaryFile()
                 galaxycon.datasets.download_dataset(b.history_fileid,tmp_file.name,False)
-
                 query_seq_bk = b.query_seq
                 frame = 1
                 if blast_type == 'blastx' or blast_type == 'tblastx':
@@ -305,6 +310,11 @@ def checkblastruns():
                             leng = float(hsp.align_length) / float(len(b.query_seq))
                             if e_val < b.evalue and leng >= b.coverage:
                                 ms.add_hsp(newick_clean(alignment.title), hsp)
+
+                if blast_type == 'blastx' or blast_type == 'tblastx' :
+                    ms.crop_alignment(b.maxseqs)
+                    b.query_seq = "".join(ms.query_seq)
+                    b.save()
 
                 nseq=0
                 for id, seq, fullseq in ms.first_n_max_score_sequences(b.maxseqs):

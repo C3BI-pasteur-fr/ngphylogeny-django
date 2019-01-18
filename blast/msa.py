@@ -22,6 +22,8 @@ class PseudoMSA:
     # then the insertion is appended at the given position in this
     # array
     insertions=dict()
+    starts=dict()
+    ends=dict()
     scores = dict()  # Dict: key: seqname, value: blast score
     frame = 0
 
@@ -34,6 +36,8 @@ class PseudoMSA:
         self.query_seq_bk = query_seq_bk
         self.frame = frame
         self.blast_prog = blast_prog
+        # For croping query sequence at the end
+        # (only for blastx because we translate it)
 
     def add_hsp(self, sbjct_name, hsp):
         """
@@ -60,7 +64,7 @@ class PseudoMSA:
                     start = (len(self.query_seq_bk) - hsp.query_end + 1 + self.frame) / 3 + 1
 
             position = start-1
-
+            self.starts[str(sbjct_name)]=position
             gapstart = -1
             for p in range(0, len(hsp.sbjct)):
                 # If no gap in the query at that position
@@ -73,10 +77,37 @@ class PseudoMSA:
                     if gapstart==-1:
                         gapstart=position
                     ins[gapstart] += hsp.sbjct[p]
+            self.ends[str(sbjct_name)]=position-1
             self.sequences[str(sbjct_name)] = seq
             self.insertions[str(sbjct_name)] = ins
             self.scores[str(sbjct_name)] = max(sco, hsp.score)
+
+    def crop_alignment(self,maxseqs):
+        """
+        Will compute minstart and maxend to crop the query sequence
+        to remove parts that are not covered by the n max score subject sequences
+        useful with blastx when we need to translate the query sequence
+        """
+        minstart=-1
+        maxend=0
+        nseqs=0
+        for key, value in sorted(self.scores.iteritems(), reverse=True, key=lambda (k,v): (v,k)):
+            if nseqs >= maxseqs :
+                break
+            s=self.starts[str(key)]
+            e=self.ends[str(key)]
+            minstart = s if minstart==-1 or s<minstart else minstart
+            maxend = e if e>maxend else maxend
+            nseqs+=1
             
+        ids = self.sequences.keys()
+        for id in ids:
+            seq = self.sequences[id]
+            self.sequences[id] = seq[minstart:maxend+1]
+            ins = self.insertions[id]
+            self.insertions[id] = ins[minstart:maxend+2]
+        self.query_seq = self.query_seq[minstart:maxend+1]
+
     def all_sequences(self):
         for id, seq in self.sequences.iteritems():
             yield (str(id), "".join(seq))
