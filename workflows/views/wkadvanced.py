@@ -221,7 +221,7 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
         if wf.category == 'automaker':
             workflow = wf
         else:
-            workflow = wf.duplicate()
+            workflow = wf.duplicate(gi)
 
         workflow.fetch_details(gi, self.restricted_toolset)
 
