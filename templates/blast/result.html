@@ -26,12 +26,22 @@
 	}
 	setInterval(countdown, 1000);
 	{% if object.finished %}
+
+	function nodeStyler(element, node_object) {
+            if (node_object.name == "{{ object.query_id }}") {
+		var node_label = element.select("text");
+		node_label.attr("fill","blue");
+		node_label.attr("font-weight","bold");
+	    }
+	}
+	
 	$('#info-refresh').hide();
 	var tree = d3.layout.phylotree().svg(d3.select("#tree_display"));
 	tree.align_tips(false);
 	tree.spacing_y(50, true);
+	tree.style_nodes(nodeStyler)
 	tree("{{ object.tree.strip }}").layout();
-
+	
 
 	$("#submit").click(function(event){
 	    event.preventDefault();
