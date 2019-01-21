@@ -52,7 +52,7 @@ def launch_ncbi_blast(blastrunid, sequence, prog, db, evalue, coverage, maxseqs)
         fasta_io = StringIO(sequence)
         records = list(SeqIO.parse(fasta_io, "fasta"))
         if len(records) == 1:
-            b.query_id = records[0].id.split(" ")[0]
+            b.query_id = cleanseqname(records[0].id)
             b.query_seq = records[0].seq
             b.evalue = evalue
             b.coverage = coverage
@@ -171,7 +171,7 @@ def launch_pasteur_blast(blastrunid, sequence, prog, db, evalue, coverage, maxse
             history = galaxycon.histories.create_history(name="BlastXplorer")
             
             b.history = history.get("id")
-            b.query_id = records[0].id.split(" ")[0]
+            b.query_id = cleanseqname(records[0].id)
             b.query_seq = records[0].seq
             b.evalue = evalue
             b.coverage = coverage
@@ -437,6 +437,20 @@ def newick_clean(seqname):
     out = re.sub(r"_+","_",out)
     out = re.sub(r"_$","",out)
     
+    return out
+
+def cleanseqname(seqname):
+    out = seqname.split(" ")[0]
+    out = out.replace("[","_")
+    out = out.replace("]","_")
+    out = out.replace("(","_")
+    out = out.replace(")","_")
+    out = out.replace(",","_")
+    out = out.replace(";","_")
+    out = out.replace(" ","_")
+    out = out.replace(":","_")
+    out = re.sub(r"_+","_",out)
+    out = re.sub(r"_$","",out)
     return out
 
 @shared_task
