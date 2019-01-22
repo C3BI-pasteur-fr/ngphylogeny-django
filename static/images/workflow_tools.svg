@@ -90,10 +90,10 @@
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
      inkscape:zoom="1.9883516"
-     inkscape:cx="235.0163"
-     inkscape:cy="201.52194"
+     inkscape:cx="208.61252"
+     inkscape:cy="199.51022"
      inkscape:document-units="mm"
-     inkscape:current-layer="g6264"
+     inkscape:current-layer="layer1"
      showgrid="false"
      inkscape:window-width="2560"
      inkscape:window-height="1391"
@@ -113,7 +113,7 @@
         <dc:format>image/svg+xml</dc:format>
         <dc:type
            rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-        <dc:title></dc:title>
+        <dc:title />
       </cc:Work>
     </rdf:RDF>
   </metadata>
@@ -388,14 +388,14 @@
     <text
        id="text6250"
        y="50.690105"
-       x="14.737758"
+       x="13.150259"
        style="font-style:normal;font-weight:normal;font-size:10.58333302px;line-height:1.25;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332"
        xml:space="preserve"><tspan
          style="font-size:3.52777767px;stroke-width:0.26458332"
          y="50.690105"
-         x="14.737758"
+         x="13.150259"
          id="tspan6248"
-         sodipodi:role="line">BlastXplorer</tspan></text>
+         sodipodi:role="line">BlastAnalysis</tspan></text>
     <g
        transform="translate(2.6361371,-0.85808693)"
        id="g6264">
