@@ -46,11 +46,11 @@ class ToolAdmin(admin.ModelAdmin):
 
     """
 
-    list_display = ['name', 'version', 'id_galaxy', 'galaxy_server', 'visible', 'toolflags', 'citations']
+    list_display = ['name', 'version', 'id_galaxy', 'galaxy_server', 'visible', 'toolflags','citations']
     list_filter = ['galaxy_server', 'toolshed']
     search_fields = ('name',)
 
-    fields = ('name', 'version', 'oneclick', 'galaxy_server', 'toolshed', 'id_galaxy',)
+    fields = ('name', 'version', 'oneclick', 'galaxy_server', 'toolshed', 'id_galaxy', 'rank')
     inlines = [
         ToolInputDataInline,
         ToolOutputDataInline,

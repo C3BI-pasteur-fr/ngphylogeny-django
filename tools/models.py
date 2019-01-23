@@ -25,6 +25,7 @@ class Tool(models.Model):
     visible = models.BooleanField(
         default=True, help_text="Display this tool on the user web interface")
     oneclick = models.BooleanField(default=False)
+    rank = models.IntegerField(default=0, help_text="tool order")
 
     @property
     def toolflags(self):

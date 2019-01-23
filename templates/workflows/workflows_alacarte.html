@@ -87,7 +87,7 @@
             <hr>
             <div class="row"></div>
             <div class="btn-group-vertical" role="group">
-                {% for tool in e.tools %}
+                {% for tool in e.tools|dictsort:"rank" %}
                 <label class="btn btn-default workflow-tool" type="button" for="radio-{{ tool.pk }}">
                     <input type="radio"
                            id="radio-{{ tool.pk }}"
