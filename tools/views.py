@@ -92,8 +92,6 @@ def tool_exec_view(request, pk, store_output=None):
                         tool_inputs.set_param(fields.get(key), value)
                 if not boot:
                     nboot = 0
-
-                print nboot
                 for inputfile in inputs_data:
                     outputs = ""
                     uploaded_file = ""

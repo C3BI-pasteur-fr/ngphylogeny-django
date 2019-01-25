@@ -134,12 +134,13 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
             tmp_file.write(file_to_upload)
             tmp_file.flush()
 
-            # Check that input file is Fasta and is not empty
-        if not valid_fasta(tmp_file.name):
+        # Check that input file is Fasta and is not empty
+        nseq, length = valid_fasta(tmp_file.name)
+        if nseq < 4 :
             raise WorkflowInputFileFormatError(
                 "Input data is malformed or contain less than 4 sequences"
             )
-        return tmp_file, uploadfile_name
+        return tmp_file, uploadfile_name, nseq, length
 
     def check_form_validity(self, request, context):
         for form in context['form_list']:
@@ -147,22 +148,35 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
                 return False
         return True
 
-    def analyze_forms(self, request, context, workflow, params, gi, wksph):
+    def analyze_forms(self, request, context, workflow, params, gi, wksph, nseq, length):
         steps = workflow.json['steps']
         step_id = u'0'
         for tool_form in context['form_list']:
             if not tool_form.is_valid():
                 raise WorkflowInvalidFormError(
                     "One form is invalid %s " % (tool_form.prefix))
-
+            tid = getattr(tool_form, 'tool_id', 'null')
+            t=Tool.objects.get(id_galaxy=tid)
             tool_inputs = inputs()
             # mapping between form id to galaxy params names
             fields = tool_form.fields_ids_mapping
             inputs_data = set(tool_form.input_file_ids)
             # set the Galaxy parameter (name, value)
+            nboot = 0
+            boot = False
             for key, value in tool_form.cleaned_data.items():
                 if key not in inputs_data:
+                    if fields.get(key,"") == 'bootstrap|replicates':
+                        nboot = value
+                    if fields.get(key,"") == 'bootstrap|do_bootstrap':
+                        boot = True
                     tool_inputs.set_param(fields.get(key), value)
+            if not boot:
+                nboot = 0
+            if not t.can_run_on_data(nseq, length, nboot):
+                raise WorkflowInputFileFormatError(
+                    "Input data is too large for the workflow"
+                )
             for inputfile in inputs_data:
                 uploaded_file = ""
                 if request.FILES:
@@ -244,8 +258,10 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
             workflow.delete(gi)
             return render(request, self.template_name, context)
         # Then we check input file format
+        nseq=0
+        length=0
         try:
-            tmp_file, uploadfile_name = self.process_file_to_upload(
+            tmp_file, uploadfile_name, nseq, length = self.process_file_to_upload(
                 uploaded_file)
         except WorkflowInputFileFormatError as e:
             context = self.get_context_data(object=self.object)
@@ -271,12 +287,17 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
         # We analyze submited forms and upload files to
         # galaxy
         try:
-            self.analyze_forms(request, context, workflow, params, gi, wksph)
+            self.analyze_forms(request, context, workflow, params, gi, wksph, nseq, length)
         except WorkflowInvalidFormError as e:
             # if one form is not valid
             workflow.delete(gi)
             delete_history(wksph.history)
             return self.get(request, *args, **kwargs)
+        except WorkflowInputFileFormatError as e:
+            context = self.get_context_data(object=self.object)
+            context['fileerror'] = str(e)
+            workflow.delete(gi)
+            return render(request, self.template_name, context)
 
         # We run the galaxy workflow
         try:
@@ -309,6 +330,9 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
 def valid_fasta(fasta_file):
     # Check uploaded file or pasted content
     nbseq = 0
+    length = 0
     for r in SeqIO.parse(fasta_file, "fasta"):
+        tlen = len(r.seq)
+        length = tlen if tlen > length else length
         nbseq += 1
-    return nbseq > 3
+    return (nbseq, length)
