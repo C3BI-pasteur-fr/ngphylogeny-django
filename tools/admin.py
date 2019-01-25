@@ -50,7 +50,7 @@ class ToolAdmin(admin.ModelAdmin):
     list_filter = ['galaxy_server', 'toolshed']
     search_fields = ('name',)
 
-    fields = ('name', 'version', 'oneclick', 'galaxy_server', 'toolshed', 'id_galaxy', 'rank')
+    fields = ('name', 'version', 'oneclick', 'galaxy_server', 'toolshed', 'id_galaxy', 'rank', 'max_nbseq', 'max_boot', 'max_lengthxnbseq', 'max_nbseqxboot', 'max_lengthxnbseqxboot')
     inlines = [
         ToolInputDataInline,
         ToolOutputDataInline,

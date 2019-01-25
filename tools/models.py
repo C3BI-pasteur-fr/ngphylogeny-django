@@ -26,7 +26,12 @@ class Tool(models.Model):
         default=True, help_text="Display this tool on the user web interface")
     oneclick = models.BooleanField(default=False)
     rank = models.IntegerField(default=0, help_text="tool order")
-
+    max_nbseq = models.IntegerField(default=-1, help_text="max length")
+    max_boot = models.IntegerField(default=-1, help_text="max boot replicates")
+    max_lengthxnbseq = models.IntegerField(default=-1, help_text="max length x nbseq")
+    max_nbseqxboot = models.IntegerField(default=-1, help_text="max nbseq x boot")
+    max_lengthxnbseqxboot = models.IntegerField(default=-1, help_text="max length x nbseq x boot")
+    
     @property
     def toolflags(self):
         return ",".join(self.toolflag_set.all().values_list('verbose_name', flat=True))
@@ -51,6 +56,25 @@ class Tool(models.Model):
                                              params={'err_msg': self.tool_json.get('err_msg'), })})
         else:
             self.import_tool(self.tool_json)
+
+    def can_run_on_data(self, nseq, length, nboot):
+        """
+        Returns true if the tool can is authorized to run on 
+        data of the given size false otherwise
+        """
+        print self.max_boot
+        print nboot
+        if self.max_nbseq > 0 and nseq > self.max_nbseq :
+            return False
+        if self.max_boot > 0 and nboot > self.max_boot :
+            return False
+        if self.max_lengthxnbseq > 0 and length*nseq > self.max_lengthxnbseq:
+            return False
+        if self.max_nbseqxboot > 0 and nseq*nboot > self.max_nbseqxboot:
+            return False
+        if self.max_lengthxnbseqxboot > 0 and length*nseq*nboot > self.max_lengthxnbseqxboot:
+            return False
+        return True
 
     def save(self, *args, **kwargs):
 

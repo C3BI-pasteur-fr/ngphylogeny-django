@@ -81,11 +81,19 @@ def tool_exec_view(request, pk, store_output=None):
                 exts = tool_form.fields_ext_mapping
 
                 inputs_data = set(tool_form.input_file_ids)
-
+                nboot = 0
+                boot = False
                 for key, value in request.POST.items():
                     if not key in inputs_data:
+                        if fields.get(key,"") == 'bootstrap|replicates':
+                            nboot = value
+                        if fields.get(key,"") == 'bootstrap|do_bootstrap':
+                            boot = True
                         tool_inputs.set_param(fields.get(key), value)
+                if not boot:
+                    nboot = 0
 
+                print nboot
                 for inputfile in inputs_data:
                     outputs = ""
                     uploaded_file = ""
@@ -99,9 +107,12 @@ def tool_exec_view(request, pk, store_output=None):
                         # send file to galaxy after verifying the
                         # allowed extensions
                         type = detect_type(tmp_file.name)
-                        if type in ["fasta", "phylip"] and nb_sequences(tmp_file.name, type) <= 3:
+                        nseq, length = nb_sequences(tmp_file.name, type)
+                        if type in ["fasta", "phylip"] and nseq <= 3:
                             raise ValueError('Sequence file %s should contain more than 3 sequences for field %s' % (
                                 uploaded_file.name, fields.get(inputfile)))
+                        if type in ["fasta", "phylip"] and not tool_obj.can_run_on_data(nseq, length, nboot):
+                            raise ValueError('Given data is too large to run with this tool')
                         if type in exts.get(inputfile, ""):
                             if wksph is None:
                                 wksph = create_history(request, name="Analyse with " + tool_obj.name)
@@ -269,17 +280,22 @@ def detect_type(filename):
 
 def nb_sequences(filename, format):
     nbseq = 0
+    length = 0
     if format == 'fasta':
         try:
             for r in SeqIO.parse(filename, "fasta"):
+                tlen = len(r.seq)
+                length = tlen if tlen > length else length
                 nbseq += 1
         except Exception:
             pass
     elif format == 'phylip':
         try:
             for r in SeqIO.parse(filename, "phylip"):
+                tlen = len(r.seq)
+                length = tlen if tlen > length else length
                 nbseq += 1
         except Exception:
             pass
 
-    return nbseq
+    return (nbseq,length)
