@@ -168,7 +168,7 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
                 if key not in inputs_data:
                     if fields.get(key,"") == 'bootstrap|replicates':
                         nboot = value
-                    if fields.get(key,"") == 'bootstrap|do_bootstrap':
+                    if fields.get(key,"") == 'bootstrap|do_bootstrap' and value == 'true':
                         boot = True
                     tool_inputs.set_param(fields.get(key), value)
             if not boot:

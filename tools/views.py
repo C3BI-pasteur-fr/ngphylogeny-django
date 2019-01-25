@@ -87,7 +87,7 @@ def tool_exec_view(request, pk, store_output=None):
                     if not key in inputs_data:
                         if fields.get(key,"") == 'bootstrap|replicates':
                             nboot = value
-                        if fields.get(key,"") == 'bootstrap|do_bootstrap':
+                        if fields.get(key,"") == 'bootstrap|do_bootstrap' and value == 'true':
                             boot = True
                         tool_inputs.set_param(fields.get(key), value)
                 if not boot:
