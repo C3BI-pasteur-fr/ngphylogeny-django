@@ -3,7 +3,7 @@ from django.utils.text import slugify
 from django.shortcuts import render
 from django.views.generic import View
 from django.views.generic.detail import SingleObjectMixin
-from django.core.files.uploadedfile import InMemoryUploadedFile
+from django.core.files.uploadedfile import InMemoryUploadedFile, TemporaryUploadedFile
 from django.core.urlresolvers import reverse_lazy
 from django.http import HttpResponseRedirect
 
@@ -122,7 +122,7 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
     # file to upload on galaxy server
     def process_file_to_upload(self, file_to_upload):
         uploadfile_name = ""
-        if isinstance(file_to_upload, InMemoryUploadedFile):
+        if isinstance(file_to_upload, InMemoryUploadedFile) or isinstance(file_to_upload, TemporaryUploadedFile):
             tmp_file = tempfile.NamedTemporaryFile()
             for chunk in file_to_upload.chunks():
                 tmp_file.write(chunk)

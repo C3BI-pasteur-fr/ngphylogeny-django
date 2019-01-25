@@ -54,19 +54,19 @@
             fileInput.change(function (evt) {
 
                 var fileDisplayArea = parentFileDiv.find('textarea');
-                var reader = new FileReader();
+                // var reader = new FileReader();
 
-                reader.onload = function (e) {
-                    fileDisplayArea.val(reader.result);
-		    $("#id_blast_run").val("--");
-                };
+                // reader.onload = function (e) {
+                // fileDisplayArea.val(reader.result);
+		// $("#id_blast_run").val("--");
+                // };
 
-                if (evt.target.files[0]) {
-                    reader.readAsText(evt.target.files[0]);
-                } else {
+                // if (evt.target.files[0]) {
+                //     reader.readAsText(evt.target.files[0]);
+                // } else {
                     parentFileDiv.find('textarea').val("");
 		    $("#id_blast_run").val("--");
-                }
+                // }
 
             });
             parentFileDiv.find('textarea').change(function () {
