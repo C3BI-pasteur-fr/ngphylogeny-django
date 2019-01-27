@@ -4,13 +4,20 @@ from django.utils.decorators import method_decorator
 from django.utils.functional import cached_property
 from django.views.generic import ListView, DetailView
 from django.db.models import Q
+from django.core.files.uploadedfile import InMemoryUploadedFile, TemporaryUploadedFile
 
 from data.views import UploadView
 from galaxy.decorator import connection_galaxy
 from workflows.models import Workflow, WorkflowStepInformation
 from workspace.views import create_history
+from tools.models import Tool
 from blast.models import BlastRun
 from workspace.tasks import initializeworkspacejob
+from Bio import SeqIO
+
+
+import tempfile
+import StringIO
 
 @method_decorator(connection_galaxy, name="dispatch")
 class WorkflowListView(ListView):
@@ -79,16 +86,38 @@ class WorkflowFormView(UploadView, DetailView):
         workflow = wk.duplicate(gi)
         workflow.fetch_details(gi, self.restricted_toolset)
         # create new history
+    
+        # upload user file or pasted content
+        submitted_file = form.cleaned_data.get('input_file')
+        pasted_text = form.cleaned_data.get('pasted_text')
+        blast_run   = form.cleaned_data.get('blast_run')
+
+        # We check that all the tools of the workflow oneclick are allowed to
+        # run on this size of data
+        if submitted_file:
+            submitted_file.seek(0)
+            nseq, length = valid_fasta(submitted_file)
+            submitted_file.seek(0)
+        elif pasted_text:
+            nseq, length = valid_fasta(StringIO.StringIO(pasted_text))
+        elif blast_run != '--':
+            nseq, length = valid_fasta(StringIO.StringIO(blast_run.to_fasta()))
+
+        for k,v in workflow.json.get('steps',dict()).items():
+             tid = v.get('tool_id',None)
+             if tid :
+                 t = Tool.objects.get(id_galaxy=tid)
+                 if not t.can_run_on_data( nseq, length, -1):
+                     form.add_error(
+                         'input_file',"Input data is too large for the workflow")
+                     workflow.delete(gi)
+                     return self.form_invalid(form)
+
         wksph = create_history(
             self.request,
             name="NGPhylogeny Analyse - " + workflow.name,
         )
 
-        # upload user file or pasted content
-        submitted_file = form.cleaned_data.get('input_file')
-        pasted_text = form.cleaned_data.get('pasted_text')
-        blast_run   = form.cleaned_data.get('blast_run')
-        
         if submitted_file:
             u_file = self.upload_file(submitted_file, wksph.history)
         # or upload user pasted content
@@ -100,6 +129,7 @@ class WorkflowFormView(UploadView, DetailView):
             
         file_id = u_file.get('outputs')[0].get('id')
         i_input = workflow.json['inputs'].keys()[0]
+        
         # input file
         dataset_map = dict()
         dataset_map[i_input] = {'id': file_id, 'src': 'hda'}
@@ -121,3 +151,14 @@ class WorkflowFormView(UploadView, DetailView):
         initializeworkspacejob.delay(wksph.history)
         wksph.save()
         return HttpResponseRedirect(self.get_success_url())
+
+def valid_fasta(fasta_file):
+    # Check uploaded file or pasted content
+    nbseq = 0
+    length = 0
+    for r in SeqIO.parse(fasta_file, "fasta"):
+        print r.seq
+        tlen = len(r.seq)
+        length = tlen if tlen > length else length
+        nbseq += 1
+    return (nbseq, length)

@@ -62,8 +62,6 @@ class Tool(models.Model):
         Returns true if the tool can is authorized to run on 
         data of the given size false otherwise
         """
-        print self.max_boot
-        print nboot
         if self.max_nbseq > 0 and nseq > self.max_nbseq :
             return False
         if self.max_boot > 0 and nboot > self.max_boot :

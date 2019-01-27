@@ -9,6 +9,7 @@ from galaxy.models import Server
 from tools.models import Tool, ToolOutputData
 from datetime import datetime
 
+
 class Workflow(models.Model):
     """
     Galaxy Workflow information
