@@ -23,6 +23,8 @@ from workspace.tasks import initializeworkspacejob
 
 from bioblend.galaxy.tools.inputs import inputs
 from Bio import SeqIO
+from Bio.Alphabet import generic_dna
+from Bio.Alphabet.IUPAC import *
 
 WORKFLOW_ADV_FLAG = "wadv"
 
@@ -135,7 +137,7 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
             tmp_file.flush()
 
         # Check that input file is Fasta and is not empty
-        nseq, length = valid_fasta(tmp_file.name)
+        nseq, length, seqaa = valid_fasta(tmp_file.name)
         if nseq < 4 :
             raise WorkflowInputFileFormatError(
                 "Input data is malformed or contain less than 4 sequences"
@@ -148,7 +150,7 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
                 return False
         return True
 
-    def analyze_forms(self, request, context, workflow, params, gi, wksph, nseq, length):
+    def analyze_forms(self, request, context, workflow, params, gi, wksph, nseq, length, seqaa):
         steps = workflow.json['steps']
         step_id = u'0'
         for tool_form in context['form_list']:
@@ -173,7 +175,7 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
                     tool_inputs.set_param(fields.get(key), value)
             if not boot:
                 nboot = 0
-            if not t.can_run_on_data(nseq, length, nboot):
+            if not t.can_run_on_data(nseq, length, nboot, seqaa):
                 raise WorkflowInputFileFormatError(
                     "Input data is too large for the workflow"
                 )
@@ -260,8 +262,9 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
         # Then we check input file format
         nseq=0
         length=0
+        seqaa=False
         try:
-            tmp_file, uploadfile_name, nseq, length = self.process_file_to_upload(
+            tmp_file, uploadfile_name, nseq, length, seqaa = self.process_file_to_upload(
                 uploaded_file)
         except WorkflowInputFileFormatError as e:
             context = self.get_context_data(object=self.object)
@@ -287,7 +290,7 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
         # We analyze submited forms and upload files to
         # galaxy
         try:
-            self.analyze_forms(request, context, workflow, params, gi, wksph, nseq, length)
+            self.analyze_forms(request, context, workflow, params, gi, wksph, nseq, length, seqaa)
         except WorkflowInvalidFormError as e:
             # if one form is not valid
             workflow.delete(gi)
@@ -331,8 +334,22 @@ def valid_fasta(fasta_file):
     # Check uploaded file or pasted content
     nbseq = 0
     length = 0
+    seqaa=False
     for r in SeqIO.parse(fasta_file, "fasta"):
         tlen = len(r.seq)
         length = tlen if tlen > length else length
         nbseq += 1
-    return (nbseq, length)
+        if check_aa(r.seq):
+            seqaa = True
+    return (nbseq, length, seqaa)
+
+def check_aa(sequence):
+    """
+    Returns True if the sequence can be considered as proteic
+    """
+    alphabets = [extended_protein]
+    for alphabet in alphabets:
+        leftover = set(str(sequence).upper()) - set(alphabet.letters)
+        if not leftover:
+            return True
+    return False

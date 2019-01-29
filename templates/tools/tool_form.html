@@ -62,21 +62,7 @@
             //fileInput.attr('required', false);
             //read file
             fileInput.change(function (evt) {
-
-                var fileDisplayArea = parentFileDiv.find('textarea');
-                var reader = new FileReader();
-
-                reader.onload = function (e) {
-                    fileDisplayArea.val(reader.result);
-                };
-
-                if (evt.target.files[0]){
-                reader.readAsText(evt.target.files[0]);
-                } else {
-                    parentFileDiv.find('textarea').val("");
-
-                }
-
+                parentFileDiv.find('textarea').val("");
             });
             parentFileDiv.find('textarea').change(function() {
                 fileInput.val('');

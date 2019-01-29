@@ -18,6 +18,8 @@ from .models import Tool, ToolFieldWhiteList, ToolFlag
 from workspace.tasks import initializeworkspacejob
 
 from Bio import SeqIO, Phylo
+from Bio.Alphabet import generic_dna
+from Bio.Alphabet.IUPAC import *
 
 
 class ToolListView(ListView):
@@ -105,11 +107,11 @@ def tool_exec_view(request, pk, store_output=None):
                         # send file to galaxy after verifying the
                         # allowed extensions
                         type = detect_type(tmp_file.name)
-                        nseq, length = nb_sequences(tmp_file.name, type)
+                        nseq, length, seqaa = nb_sequences(tmp_file.name, type)
                         if type in ["fasta", "phylip"] and nseq <= 3:
                             raise ValueError('Sequence file %s should contain more than 3 sequences for field %s' % (
                                 uploaded_file.name, fields.get(inputfile)))
-                        if type in ["fasta", "phylip"] and not tool_obj.can_run_on_data(nseq, length, nboot):
+                        if type in ["fasta", "phylip"] and not tool_obj.can_run_on_data(nseq, length, nboot, seqaa):
                             raise ValueError('Given data is too large to run with this tool')
                         if type in exts.get(inputfile, ""):
                             if wksph is None:
@@ -186,7 +188,7 @@ def tool_exec_view(request, pk, store_output=None):
             except TypeError as te:
                 message = str(te)
             except Exception as e:
-                raw_message = ast.literal_eval(e.body)
+                raw_message = ast.literal_eval(e)
                 reverse_dict_field = {
                     v: k for k, v in tool_form.fields_ids_mapping.items()}
                 err_data = raw_message.get('err_data')
@@ -279,13 +281,17 @@ def detect_type(filename):
 def nb_sequences(filename, format):
     nbseq = 0
     length = 0
+    seqaa = False
     if format == 'fasta':
         try:
             for r in SeqIO.parse(filename, "fasta"):
                 tlen = len(r.seq)
                 length = tlen if tlen > length else length
                 nbseq += 1
-        except Exception:
+                if check_aa(r.seq):
+                    seqaa = True
+        except Exception as e:
+            print e
             pass
     elif format == 'phylip':
         try:
@@ -293,7 +299,20 @@ def nb_sequences(filename, format):
                 tlen = len(r.seq)
                 length = tlen if tlen > length else length
                 nbseq += 1
+                if check_aa(r.seq):
+                    seqaa = True
         except Exception:
             pass
+    return (nbseq, length, seqaa)
 
-    return (nbseq,length)
+
+def check_aa(sequence):
+    """
+    Returns True if the sequence can be considered as proteic
+    """
+    alphabets = [extended_protein]
+    for alphabet in alphabets:
+        leftover = set(str(sequence).upper()) - set(alphabet.letters)
+        if not leftover:
+            return True
+    return False

@@ -74,13 +74,6 @@ class Workflow(models.Model):
                                  slug=self.name+"_copy")
         return workflow_copy
 
-    def can_run_on_data(self, nseq, length, nboot):
-        """
-        Returns true if the workflow is authorized to run on
-        data of the given size false otherwise
-        """
-        print self.json
-        
     def delete(self, galaxyinstance):
         """
         Deletes the given workflow from galaxy server

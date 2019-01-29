@@ -4,7 +4,6 @@ from django.utils.decorators import method_decorator
 from django.utils.functional import cached_property
 from django.views.generic import ListView, DetailView
 from django.db.models import Q
-from django.core.files.uploadedfile import InMemoryUploadedFile, TemporaryUploadedFile
 
 from data.views import UploadView
 from galaxy.decorator import connection_galaxy
@@ -14,6 +13,8 @@ from tools.models import Tool
 from blast.models import BlastRun
 from workspace.tasks import initializeworkspacejob
 from Bio import SeqIO
+from Bio.Alphabet import generic_dna
+from Bio.Alphabet.IUPAC import *
 
 
 import tempfile
@@ -99,15 +100,15 @@ class WorkflowFormView(UploadView, DetailView):
             nseq, length = valid_fasta(submitted_file)
             submitted_file.seek(0)
         elif pasted_text:
-            nseq, length = valid_fasta(StringIO.StringIO(pasted_text))
+            nseq, length, seqaa = valid_fasta(StringIO.StringIO(pasted_text))
         elif blast_run != '--':
-            nseq, length = valid_fasta(StringIO.StringIO(blast_run.to_fasta()))
+            nseq, length, seqaa = valid_fasta(StringIO.StringIO(blast_run.to_fasta()))
 
         for k,v in workflow.json.get('steps',dict()).items():
              tid = v.get('tool_id',None)
              if tid :
                  t = Tool.objects.get(id_galaxy=tid)
-                 if not t.can_run_on_data( nseq, length, -1):
+                 if not t.can_run_on_data( nseq, length, -1, seqaa):
                      form.add_error(
                          'input_file',"Input data is too large for the workflow")
                      workflow.delete(gi)
@@ -156,9 +157,24 @@ def valid_fasta(fasta_file):
     # Check uploaded file or pasted content
     nbseq = 0
     length = 0
+    seqaa = False
     for r in SeqIO.parse(fasta_file, "fasta"):
         print r.seq
         tlen = len(r.seq)
         length = tlen if tlen > length else length
         nbseq += 1
-    return (nbseq, length)
+        if check_aa(r.seq):
+            seqaa = True
+    return (nbseq, length, seqaa)
+
+def check_aa(sequence):
+    """
+    Returns True if the sequence can be considered as proteic
+    """
+    alphabets = [extended_protein]
+    for alphabet in alphabets:
+        leftover = set(str(sequence).upper()) - set(alphabet.letters)
+        if not leftover:
+            return True
+    return False
+    

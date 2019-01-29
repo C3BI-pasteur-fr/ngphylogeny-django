@@ -28,10 +28,12 @@ class Tool(models.Model):
     rank = models.IntegerField(default=0, help_text="tool order")
     max_nbseq = models.IntegerField(default=-1, help_text="max length")
     max_boot = models.IntegerField(default=-1, help_text="max boot replicates")
-    max_lengthxnbseq = models.IntegerField(default=-1, help_text="max length x nbseq")
-    max_nbseqxboot = models.IntegerField(default=-1, help_text="max nbseq x boot")
-    max_lengthxnbseqxboot = models.IntegerField(default=-1, help_text="max length x nbseq x boot")
-    
+    max_lengthxnbseqsquared = models.IntegerField(default=-1, help_text="max length x nbseq^2")
+    max_nbseqsquaredxboot = models.IntegerField(default=-1, help_text="max nbseq^2 x boot")
+    max_lengthxnbseqsquaredxboot = models.IntegerField(default=-1, help_text="max length x nbseq^2 x boot")
+    # If input data is aa : limits are divided by this scaling factor
+    aa_scale_factor =  models.IntegerField(default=1, help_text="limit scaling for amino acid")
+
     @property
     def toolflags(self):
         return ",".join(self.toolflag_set.all().values_list('verbose_name', flat=True))
@@ -57,20 +59,26 @@ class Tool(models.Model):
         else:
             self.import_tool(self.tool_json)
 
-    def can_run_on_data(self, nseq, length, nboot):
+    def can_run_on_data(self, nseq, length, nboot, seqaa):
         """
         Returns true if the tool can is authorized to run on 
         data of the given size false otherwise
         """
-        if self.max_nbseq > 0 and nseq > self.max_nbseq :
+        if (self.max_nbseq > 0 and
+            ((nseq > self.max_nbseq) or
+             (seqaa and nseq > self.max_nbseq/self.aa_scale_factor))):
             return False
         if self.max_boot > 0 and nboot > self.max_boot :
             return False
-        if self.max_lengthxnbseq > 0 and length*nseq > self.max_lengthxnbseq:
+        if (self.max_lengthxnbseqsquared > 0 and
+            ((length*nseq > self.max_lengthxnbseqsquared) or
+             (seqaa and length*nseq > self.max_lengthxnbseqsquared/self.aa_scale_factor))):
             return False
-        if self.max_nbseqxboot > 0 and nseq*nboot > self.max_nbseqxboot:
+        if self.max_nbseqsquaredxboot > 0 and nseq*nboot > self.max_nbseqsquaredxboot:
             return False
-        if self.max_lengthxnbseqxboot > 0 and length*nseq*nboot > self.max_lengthxnbseqxboot:
+        if (self.max_lengthxnbseqsquaredxboot > 0 and
+            ((length*nseq*nboot > self.max_lengthxnbseqsquaredxboot) or
+             (seqaa and length*nseq*nboot > self.max_lengthxnbseqsquaredxboot/self.aa_scale_factor))):
             return False
         return True
 
