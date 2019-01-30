@@ -142,7 +142,7 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
             raise WorkflowInputFileFormatError(
                 "Input data is malformed or contain less than 4 sequences"
             )
-        return tmp_file, uploadfile_name, nseq, length
+        return tmp_file, uploadfile_name, nseq, length, seqaa
 
     def check_form_validity(self, request, context):
         for form in context['form_list']:
