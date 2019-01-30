@@ -102,7 +102,8 @@ class WorkflowFormView(UploadView, DetailView):
         elif pasted_text:
             nseq, length, seqaa = valid_fasta(StringIO.StringIO(pasted_text))
         elif blast_run != '--':
-            nseq, length, seqaa = valid_fasta(StringIO.StringIO(blast_run.to_fasta()))
+            b = BlastRun.objects.get(pk=blast_run)
+            nseq, length, seqaa = valid_fasta(StringIO.StringIO(b.to_fasta()))
 
         for k,v in workflow.json.get('steps',dict()).items():
              tid = v.get('tool_id',None)
@@ -125,7 +126,6 @@ class WorkflowFormView(UploadView, DetailView):
         elif pasted_text:
             u_file = self.upload_content(pasted_text)
         elif blast_run :
-            b = BlastRun.objects.get(pk=blast_run)
             u_file = self.upload_content(b.to_fasta(),name="Blast_%s_%s" % (b.query_id,str(blast_run)))
             
         file_id = u_file.get('outputs')[0].get('id')
