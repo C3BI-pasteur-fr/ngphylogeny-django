@@ -97,7 +97,7 @@ class WorkflowFormView(UploadView, DetailView):
         # run on this size of data
         if submitted_file:
             submitted_file.seek(0)
-            nseq, length = valid_fasta(submitted_file)
+            nseq, length, seqaa = valid_fasta(submitted_file)
             submitted_file.seek(0)
         elif pasted_text:
             nseq, length, seqaa = valid_fasta(StringIO.StringIO(pasted_text))
