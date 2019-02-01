@@ -8,6 +8,7 @@ from django.core.urlresolvers import reverse_lazy
 from django.http import HttpResponseRedirect
 
 import tempfile
+import StringIO
 
 from galaxy.decorator import connection_galaxy
 from tools.models import Tool
@@ -122,16 +123,13 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
 
     # Copies and checks format of input
     # file to upload on galaxy server
-    def process_file_to_upload(self, file_to_upload):
-        uploadfile_name = ""
+    def process_file_to_upload(self, file_to_upload, uploadfile_name):
         if isinstance(file_to_upload, InMemoryUploadedFile) or isinstance(file_to_upload, TemporaryUploadedFile):
             tmp_file = tempfile.NamedTemporaryFile()
             for chunk in file_to_upload.chunks():
                 tmp_file.write(chunk)
             tmp_file.flush()
-            uploadfile_name = str(file_to_upload.name)
         else:
-            uploadfile_name = "Upload File"
             tmp_file = tempfile.NamedTemporaryFile()
             tmp_file.write(file_to_upload)
             tmp_file.flush()
@@ -253,19 +251,31 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
         # Handle workflow main input file
         # before creating the workspace etc.
         uploaded_file = request.FILES.get("file") or request.POST.get("file")
+        blastrun = request.POST.get("blastrun")
         # We check that a file has been given
-        if not uploaded_file:
+        if blastrun != "--":
+            b = BlastRun.objects.get(pk=blastrun)
+            uploaded_file = b.to_fasta()
+            upload_filename= "Blast_%s_%s" % (b.query_id,str(blastrun))
+        elif not uploaded_file:
             context = self.get_context_data(object=self.object)
             context['fileerror'] = "No input file given"
             workflow.delete(gi)
             return render(request, self.template_name, context)
+        elif isinstance(uploaded_file, InMemoryUploadedFile) or isinstance(uploaded_file, TemporaryUploadedFile):
+            upload_filename = str(uploaded_file.name)
+        else:
+            upload_filename = "uploaded_content"
+            
         # Then we check input file format
         nseq=0
         length=0
         seqaa=False
         try:
             tmp_file, uploadfile_name, nseq, length, seqaa = self.process_file_to_upload(
-                uploaded_file)
+                uploaded_file,
+                upload_filename,
+            )
         except WorkflowInputFileFormatError as e:
             context = self.get_context_data(object=self.object)
             context['fileerror'] = str(e)
