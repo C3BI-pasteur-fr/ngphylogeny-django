@@ -52,22 +52,9 @@
             //fileInput.attr('required', false);
             //read file
             fileInput.change(function (evt) {
-
                 var fileDisplayArea = parentFileDiv.find('textarea');
-                // var reader = new FileReader();
-
-                // reader.onload = function (e) {
-                // fileDisplayArea.val(reader.result);
-		// $("#id_blast_run").val("--");
-                // };
-
-                // if (evt.target.files[0]) {
-                //     reader.readAsText(evt.target.files[0]);
-                // } else {
-                    parentFileDiv.find('textarea').val("");
-		    $("#id_blast_run").val("--");
-                // }
-
+                parentFileDiv.find('textarea').val("");
+		$("#id_blast_run").val("--");
             });
             parentFileDiv.find('textarea').change(function () {
         	fileInput.val('');
@@ -77,24 +64,9 @@
 	    // If select changes, we fill the textarea with blast result
 	    // fasta file
 	    $("#id_blast_run").on('change', function (e) {
-	    	var val = $(e.target).val();
-	    	
-	    	if(val == "--"){
 	    	    var fileDisplayArea = parentFileDiv.find('textarea');
 	    	    fileDisplayArea.val("");
-	    	}else{
-	    	    $.ajax({
-	    		// Blast result fasta api entry point
-	    		url: '/blast/'+val+'/fasta',
-	    		timeout: 4000,
-	    		
-	    		success: function (data) {
-	    		    var fileDisplayArea = parentFileDiv.find('textarea');
-			    fileDisplayArea.val(data);
-			    fileInput.val('');
-	    		},
-	    	    });
-	    	}
+	            fileInput.val('');
 	    });
 
             parentFileDiv.append("<button id='cleanTextarea" + fileInput.attr('name') + "' type='button' class='btn btn-default'><span class='glyphicon glyphicon-trash'></span></button>");
