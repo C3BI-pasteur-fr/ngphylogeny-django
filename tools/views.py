@@ -1,3 +1,5 @@
+from __future__ import unicode_literals
+
 import ast
 import json
 import tempfile
@@ -89,7 +91,8 @@ def tool_exec_view(request, pk, store_output=None):
                     if not key in inputs_data:
                         if fields.get(key,"") == 'bootstrap|replicates':
                             nboot = value
-                        if fields.get(key,"") == 'bootstrap|do_bootstrap' and value == 'true':
+                        if (fields.get(key,"") == 'bootstrap|do_bootstrap' and value == 'true' or
+                            fields.get(key,"") == 'bootstrap|support' and (value == 'boot' or value == '1')):
                             boot = True
                         tool_inputs.set_param(fields.get(key), value)
                 if not boot:
@@ -109,8 +112,9 @@ def tool_exec_view(request, pk, store_output=None):
                         type = detect_type(tmp_file.name)
                         nseq, length, seqaa = nb_sequences(tmp_file.name, type)
                         if type in ["fasta", "phylip"] and nseq <= 3:
-                            raise ValueError('Sequence file %s should contain more than 3 sequences for field %s' % (
-                                uploaded_file.name, fields.get(inputfile)))
+                            msg='Input Sequence file should contain more than 3 sequences for field %s' % (
+                                fields.get(inputfile))
+                            raise ValueError(msg)
                         if type in ["fasta", "phylip"] and not tool_obj.can_run_on_data(nseq, length, nboot, seqaa):
                             raise ValueError('Given data is too large to run with this tool')
                         if type in exts.get(inputfile, ""):
@@ -151,7 +155,11 @@ def tool_exec_view(request, pk, store_output=None):
                             if galaxyfile:
                                 file_id = galaxyfile
                                 hid[inputfile] = file_id
-
+                            elif inputfile == "1":
+                                # It should be the initial input file
+                                # and is required
+                                raise ValueError('No input file given')
+                                
                     if outputs:
                         file_id = outputs.get('outputs')[0].get('id')
                         hid[inputfile] = file_id

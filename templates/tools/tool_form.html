@@ -5,14 +5,6 @@
     <link href="https://gitcdn.github.io/bootstrap-toggle/2.2.2/css/bootstrap-toggle.min.css" rel="stylesheet">
     <script src="https://gitcdn.github.io/bootstrap-toggle/2.2.2/js/bootstrap-toggle.min.js"></script>
     <script>
-        function boolean_checkbox(element) {
-            if ($(element).prop('checked')) {
-                $(element).attr('value', $(element).attr("data-on-value"));
-            } else {
-                $(element).attr('value', $(element).attr("data-off-value"));
-            }
-        }
-
         function test_data_case(test_param, data_case) {
             if ($(data_case).attr('data-case') === test_param.val()) {
                 $(data_case).show();
@@ -22,7 +14,6 @@
         }
 
         function toggle_condition(test_field, toggle_elt) {
-            boolean_checkbox(test_field);
             test_data_case(test_field, toggle_elt);
         }
 
@@ -103,8 +94,9 @@
             //init input file
             init_input_file();
             //put label on the top of checkbox//
-            $('[data-toggle="toggle"]').each(function () {
+            $('[data-toggle="toggle"]').each(function (index, elt) {
                 if (this.id) {
+                    $(this).parent().prepend("<input type='hidden' value='false' name='"+ $(this).attr('name')+"'/>");
                     var checkbox_label = $('label[for="' + this.id + '"]>div');
                     var parent = checkbox_label.parent();
                     parent.after(checkbox_label).addClass('control-label');
@@ -114,7 +106,6 @@
 
             //hide or show conditionals fields
             $('[data-test]').each(function (index, elt) {
-
                 // search related test_param
                 var m_id = $(elt).attr("data-test");
                 var test_param = $('input[name="' + jq_conv_id(m_id) + '"], ' +
@@ -142,7 +133,6 @@
                         test_data_case(test_param.filter(':checked'), $(elt));
                     }
                     else if (test_param.length === 1) {
-
                         // if checkbox
                         if (test_param.attr("data-toggle")) {
                             toggle_condition(test_param, $(elt));

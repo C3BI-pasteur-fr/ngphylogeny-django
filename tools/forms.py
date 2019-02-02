@@ -15,12 +15,17 @@ def map_galaxy_tool_input(attr):
                  'help_text': attr.get('help', ""),
                  'label': attr.get('label', ""),
                  }
+    
     if attr.get("type", "") == "select":
         field_map['choices'] = []
         for opt in attr.get("options", ""):
             # We filter configuration file in seqtype input
             if opt[1] != 'cfg':
                 field_map['choices'].append((opt[1], opt[0]))
+
+    if attr.get("type", "") == "boolean":
+        default = attr.get("value", "false")
+        field_map['initial'] = (default=="true")
 
     if attr.get("type", "") == "data":
 
@@ -81,20 +86,21 @@ class ToolForm(forms.Form):
             else:
                 self.fields[field_id] = forms.ChoiceField(
                     **map_galaxy_tool_input(attrfield))
-
+                
         elif fieldtype == "boolean":
-            data_onvalue = attrfield.get("truevalue", None)
-            data_offvalue = attrfield.get("falsevalue", None)
-
-            self.fields[field_id] = forms.CharField(widget=forms.CheckboxInput(
-                attrs={'data-toggle': "toggle",
-                       'data-on': 'Yes',
-                       'data-off': 'No',
-                       'data-on-value': data_onvalue,
-                       'data-off-value': data_offvalue,
-                       }),
+            default = attrfield.get("value", "false")
+            checkattr = {
+                'data-toggle': "toggle",
+                'data-on': 'true',
+                'data-off': 'false',
+                'value' : 'true',
+            }
+            if default == "true":
+                checkattr['checked']=True
+            self.fields[field_id] = forms.BooleanField(widget=forms.CheckboxInput(
+                attrs=checkattr),
                 **map_galaxy_tool_input(attrfield))
-
+            
         elif fieldtype == "text":
             self.fields[field_id] = forms.CharField(
                 **map_galaxy_tool_input(attrfield))

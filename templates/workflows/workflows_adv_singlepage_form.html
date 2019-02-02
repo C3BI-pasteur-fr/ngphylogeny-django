@@ -9,15 +9,6 @@
     <link rel="stylesheet" href="{% static 'css/jquery.filer.css' %}"/>
     <link rel="stylesheet" href="{% static 'css/workflows_form.css' %}"/>
     <script type="text/javascript">
-
-        function boolean_checkbox(element) {
-            if ($(element).prop('checked')) {
-                $(element).attr('value', $(element).attr("data-on-value"));
-            } else {
-                $(element).attr('value', $(element).attr("data-off-value"));
-            }
-        }
-
         function test_data_case(test_param, data_case) {
             if ($(data_case).attr('data-case') === test_param.val()) {
                 $(data_case).show();
@@ -27,7 +18,6 @@
         }
 
         function toggle_condition(test_field, toggle_elt) {
-            boolean_checkbox(test_field);
             test_data_case(test_field, toggle_elt);
         }
 
@@ -101,7 +91,8 @@
 
             //put label on the top of checkbox//
             $('[data-toggle="toggle"]').each(function () {
-                if (this.id) {
+		if (this.id) {
+	            $(this).parent().prepend("<input type='hidden' value='false' name='"+ $(this).attr('name')+"'/>");
                     var checkbox_label = $('label[for="' + this.id + '"]>div');
                     var parent = checkbox_label.parent();
                     parent.after(checkbox_label).addClass('control-label');
