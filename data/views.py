@@ -103,6 +103,8 @@ def download_file(request, file_id):
     if isinstance(data, dict):
         dlurl = data.get('download_url')
         name = data.get('name')
+        name = name.replace(" ","_")
+        name = name + "." + data.get('file_ext')
         if not name:
             name = "download"
         if dlurl:
