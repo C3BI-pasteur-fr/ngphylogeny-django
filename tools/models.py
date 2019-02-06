@@ -391,6 +391,22 @@ class Citation(models.Model):
             f.append(authors + "("+year+"). "+title+" . "+journal+" <a href=\"https://doi.org/"+doi+"\">doi</a>\n")
         return f
 
+    def txt(self):
+        bib_database = bibtexparser.loads(self.reference)
+        f = ""
+        for k, v in bib_database.entries_dict.iteritems():
+            journal = v.get('journal','')
+            title = v.get('title','')
+            year = v.get('year','')
+            authors = v.get('author','')
+            doi = v.get('doi','')
+            volume = v.get('volume','')
+            pages = v.get('pages','')
+           
+            f=f+authors + "("+year+"). "+title+" . "+journal+", "+volume+":"+pages+" - doi:"+doi+"\n"
+        return f
+
+    
 class ToolFlag(models.Model):
     """
     Flag tools by category

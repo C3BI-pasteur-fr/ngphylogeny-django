@@ -17,7 +17,7 @@ from django.conf.urls import url
 
 from .views import HistoryDetailView, PreviousHistoryListView, \
     get_dataset_toolprovenance, GalaxyErrorView, \
-    get_dataset_citations, \
+    get_dataset_citations, get_dataset_citations_bibtex, get_dataset_citations_txt, \
     WorkspaceDeleteView, WorkspaceRenameView, \
     WorkspaceChangeEmailView, DeleteAllHistories
 
@@ -40,6 +40,10 @@ urlpatterns = [
         get_dataset_toolprovenance, name="get_dataset_tool"),
     url(r'^history/citations/(?P<history_id>[\w-]+)$',
         get_dataset_citations, name="get_dataset_citations"),
+    url(r'^history/citations/bibtex/(?P<history_id>[\w-]+)$',
+        get_dataset_citations_bibtex, name="get_dataset_citations_bibtex"),
+    url(r'^history/citations/text/(?P<history_id>[\w-]+)$',
+        get_dataset_citations_txt, name="get_dataset_citations_txt"),
     url(r'^history/galaxyerror/(?P<id>[\w-]+)$',
         GalaxyErrorView.as_view(),
         name="galaxy_error_url"),

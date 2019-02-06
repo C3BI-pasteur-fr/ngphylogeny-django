@@ -1,3 +1,4 @@
+from __future__ import unicode_literals
 import json
 
 from django.http import HttpResponse
@@ -168,6 +169,64 @@ def get_dataset_citations(request, history_id):
         pass
     context.update({'citations': refs})
     return HttpResponse(json.dumps(context), content_type='application/json')
+
+@connection_galaxy
+def get_dataset_citations_bibtex(request, history_id):
+    """
+    Ajax: return citations of all tools used in the dataset
+    """
+    refs = ""
+    tools = []
+    gi = request.galaxy
+    try:
+        w = WorkspaceHistory.objects.get(history=history_id)
+        w.history_content = json.loads(w.history_content_json)
+        for file in w.history_content:
+            dataset_provenance = gi.histories.show_dataset_provenance(
+                history_id,
+                file.get('id'),
+                follow=False)
+            tools.append(dataset_provenance.get('tool_id'))
+        tools = list(set(tools))
+        for tid in tools:
+            try:
+                t = Tool.objects.get(id_galaxy=tid)
+                for b in t.citation_set.all():
+                    refs=refs+unicode(b.reference)+unicode("\n")
+            except Tool.DoesNotExist:
+                pass
+    except WorkspaceHistory.DoesNotExist:
+        pass
+    return HttpResponse(refs, content_type='text/plain; charset=utf-8')
+
+@connection_galaxy
+def get_dataset_citations_txt(request, history_id):
+    """
+    Ajax: return citations of all tools used in the dataset
+    """
+    refs = ""
+    tools = []
+    gi = request.galaxy
+    try:
+        w = WorkspaceHistory.objects.get(history=history_id)
+        w.history_content = json.loads(w.history_content_json)
+        for file in w.history_content:
+            dataset_provenance = gi.histories.show_dataset_provenance(
+                history_id,
+                file.get('id'),
+                follow=False)
+            tools.append(dataset_provenance.get('tool_id'))
+        tools = list(set(tools))
+        for tid in tools:
+            try:
+                t = Tool.objects.get(id_galaxy=tid)
+                for b in t.citation_set.all():
+                    refs=refs+unicode(b.txt())+unicode("\n")
+            except Tool.DoesNotExist:
+                pass
+    except WorkspaceHistory.DoesNotExist:
+        pass
+    return HttpResponse(refs, content_type='text/plain; charset=utf-8')
 
 
 @method_decorator(connection_galaxy, name="dispatch")
