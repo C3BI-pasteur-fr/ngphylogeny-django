@@ -3,6 +3,7 @@
 <script src="https://cdn.rawgit.com/zenorocha/clipboard.js/v1.7.1/dist/clipboard.min.js"></script>
 <script src="https://cdn.datatables.net/1.10.16/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.10.16/js/dataTables.bootstrap.min.js"></script>
+<link rel="stylesheet" type="text/css" href="{% static 'css/biblio.css' %}"/>
 <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.16/css/dataTables.bootstrap.min.css">
 {% endblock %}
 <script  type="text/javascript">
@@ -34,7 +35,7 @@
 			     items.push("<li>"+citation+"</li>");
 			     });
 			     });
-			     $("#references").html(items.join(""));
+			     $("#pub-container").html(items.join(""));
 			     });
     });
 </script>
@@ -297,9 +298,11 @@
 </div>
 <h4>References of tools to cite</h4>
 <a class="label label-success" href="{% url 'get_dataset_citations_bibtex' object.history_info.id %}" target="_blank">bibTeX</a> <a class="label label-info" href="{% url 'get_dataset_citations_txt' object.history_info.id %}" target="_blank">txt</a></h4>
-<ul id="references">
-  
-</ul>
+<article id="publications" class="list">
+  <ul id="pub-container" class="pubs">
+    
+  </ul>
+</article>
 <h4>Files stored in session</h4>
 <table  class="table table-striped ">
   <tr><th>File ID</th><th>File Name</th><th>History ID</th><th>Remove</th></tr>

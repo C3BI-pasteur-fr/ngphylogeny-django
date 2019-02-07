@@ -388,7 +388,19 @@ class Citation(models.Model):
             year = v.get('year','')
             authors = v.get('author','')
             doi = v.get('doi','')
-            f.append(authors + "("+year+"). "+title+" . "+journal+" <a href=\"https://doi.org/"+doi+"\">doi</a>\n")
+            volume = v.get('volume','')
+            pages = v.get('pages','')
+            html="""
+            <a target="_blank" href="https://doi.org/%s">
+            <div class="pub-date">%s</div>
+            <div class="pub-content clear">
+              <span class="pub-author-list">%s.</span>
+              <span class="pub-title">%s.</span>
+              <span class="pub-journal-name">%s, %s:%s </span>
+            </div>
+            </a>
+            """ % (doi, year, authors, title, journal, volume, pages)
+            f.append(html)                
         return f
 
     def txt(self):
