@@ -306,5 +306,26 @@ All workflows start by uploading input data to Institut Pasteur Galaxy server. E
 
 Once a step executed, corresponding result files are downloadable or viewable depending on the format. Images, trees, and alignments are viewable through specific viewers. In addition, trees may be uploaded to iTOL for further investigations.
 
+
+## Run NGPhylogeny.fr locally (Docker)
+
+It is possible to run NGPhylogeny.fr via two docker images:
+
+1. [NGphylgeny.fr docker image](https://hub.docker.com/r/evolbioinfo/ngphylogeny/) running a python/django web server;
+2. [Galaxy docker image](https://hub.docker.com/r/evolbioinfo/ngphylogeny-galaxy/) with all tools and workflows already installed (see this [github repo](https://github.com/C3BI-pasteur-fr/ngphylogeny-galaxy)).
+
+
+* Starting Galaxy
+
+`docker run --privileged=true -p 8080:80 -p 8121:21 -p 8122:22 evolbioinfo/ngphylogeny-galaxy`
+
+* Starting NGPhylogeny.fr (MacOS)
+
+`docker run -p 8000:8000 evolbioinfo/ngphylogeny admin admin@admin http://host.docker.internal:8080 admin`
+
+* Starting NGPhylogeny.fr (Linux)
+
+`docker run -p 8000:8000 --net=host evolbioinfo/ngphylogeny admin admin@admin http://localhost:8080 admin`
+
 {% endmarkdown %}
 {% endblock %}
