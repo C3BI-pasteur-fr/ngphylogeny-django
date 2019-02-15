@@ -16,6 +16,7 @@ from galaxy.decorator import connection_galaxy
 from .models import WorkspaceHistory
 from tools.models import Tool
 
+from utils import ip
 
 @connection_galaxy
 def create_history(request, name=''):
@@ -43,6 +44,7 @@ def create_history(request, name=''):
                             galaxy_server=server,
                             history_content_json = json.dumps(history),
                             history_info_json = json.dumps(history),
+                            source_ip=ip.get_client_ip(request),
                             )
     wsph.save()
 

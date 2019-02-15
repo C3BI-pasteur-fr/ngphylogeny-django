@@ -19,6 +19,7 @@ class WorkspaceHistory(models.Model):
     email = models.CharField(max_length=100)
     monitored = models.BooleanField(default=False)
     finished = models.BooleanField(default=False)
+    source_ip=models.CharField(max_length=20, default="")
     # If the galaxy history has been deleted
     # We keep the workspace on the django side but
     # describe it as deleted (it won't appear anymore
