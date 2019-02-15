@@ -74,7 +74,7 @@ class WorkflowFormView(UploadView, DetailView):
         # uses the name of the form's submit button
         form = self.get_form()
         # validate
-        if form.is_valid() and form.validate_form_inputs():
+        if form.is_valid():
             return self.form_valid(form)
         else:
             return self.form_invalid(form)

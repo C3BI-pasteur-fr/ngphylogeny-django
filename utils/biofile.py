@@ -14,11 +14,9 @@ def detect_type(filename):
 
     Tests formats using biopython SeqIO or Phylo
     """
- 
     mimetype=magic.from_file(filename,mime=True)
 
     if mimetype != "text/plain" :
-        print "mime: %s" % (mimetype)
         return mimetype
     
     # Check Fasta Format
@@ -89,6 +87,15 @@ def nb_sequences(filename, format):
                 if check_aa(r.seq):
                     seqaa = True
         except Exception:
+            try:
+                for r in SeqIO.parse(filename, "phylip-relaxed"):
+                    tlen = len(r.seq)
+                    length = tlen if tlen > length else length
+                    nbseq += 1
+                    if check_aa(r.seq):
+                        seqaa = True
+            except Exception:
+                pass
             pass
     return (nbseq, length, seqaa)
 
