@@ -75,7 +75,7 @@ def launch_ncbi_blast(blastrunid, sequence, prog, db, evalue, coverage, maxseqs)
                 tmp_file = tempfile.NamedTemporaryFile()
                 shutil.copyfileobj(rh, tmp_file)
                 tmp_file.flush()
-    
+
                 query_seq_bk = b.query_seq
                 frame = 1
                 if blast_type == 'blastx' or blast_type == 'tblastx' :
@@ -90,7 +90,7 @@ def launch_ncbi_blast(blastrunid, sequence, prog, db, evalue, coverage, maxseqs)
                     for alignment in blast_record.alignments:
                         for hsp in alignment.hsps:
                             e_val = hsp.expect
-                            leng = float(hsp.align_length) / float(len(b.query_seq))
+                            leng = float(hsp.align_length) / float(len(str(b.query_seq)))
                             if e_val < evalue and leng >= coverage:
                                 ms.add_hsp(alignment.title.split(" ")[0], hsp)
 
@@ -296,7 +296,7 @@ def checkblastruns():
                 frame = 1
                 if blast_type == 'blastx' or blast_type == 'tblastx' :
                     frame=majorityQueryFrame(tmp_file.name)
-                    b.query_seq = biofile.translate(b.query_seq, frame)
+                    b.query_seq = biofile.translate(str(b.query_seq), frame)
                     b.save()
                 
                 result_handle = open(tmp_file.name, "r")
@@ -407,7 +407,7 @@ def majorityQueryFrame(blastfile):
     max_frame = None
     nb_frames = 0
     for k,v in frames.items():
-        if nb_frames == 0 or max_frame<v:
+        if nb_frames == 0 or nb_frames<v:
             max_frame = k
             nb_frames = v
     return max_frame
