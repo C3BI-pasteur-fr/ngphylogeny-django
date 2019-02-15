@@ -2,8 +2,9 @@
 {% load crispy_forms_tags %}
 {% load static %}
 {% block stylesheet %}
-    <link href="https://gitcdn.github.io/bootstrap-toggle/2.2.2/css/bootstrap-toggle.min.css" rel="stylesheet">
-    <script src="https://gitcdn.github.io/bootstrap-toggle/2.2.2/js/bootstrap-toggle.min.js"></script>
+<link href="https://gitcdn.github.io/bootstrap-toggle/2.2.2/css/bootstrap-toggle.min.css" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="{% static 'css/biblio.css' %}"/>
+<script src="https://gitcdn.github.io/bootstrap-toggle/2.2.2/js/bootstrap-toggle.min.js"></script>
     <script>
         function test_data_case(test_param, data_case) {
             if ($(data_case).attr('data-case') === test_param.val()) {
@@ -167,12 +168,15 @@
     </div>
     <div class="row">
       <div class="col-md-6 col-md-offset-2">
-	<h3> References </h3>
-	<ul>
-	  {% for c in tool.citations %}
-	  <li>{{ c | safe }}</li>
-	  {% endfor %}
-	</ul>
+	<h3> References to cite</h3>
+	<article id="publications" class="list">
+	  <ul id="pub-container" class="pubs">
+	    {% for c in tool.citations %}
+	    <li>{{ c | safe }}</li>
+	    {% endfor %}
+	  </ul>
+	</article>
+	
       </div>
     </div>
     {% include "include/waiting_modal.html" %}
