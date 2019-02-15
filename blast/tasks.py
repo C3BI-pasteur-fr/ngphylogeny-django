@@ -10,9 +10,6 @@ from smtplib import SMTPException
 from Bio.Blast import NCBIWWW
 from Bio.Blast import NCBIXML
 from Bio import SeqIO
-from Bio.Seq import Seq
-from Bio.Alphabet import generic_dna
-from Bio.Alphabet.IUPAC import *
 
 from io import StringIO
 import shutil
@@ -34,6 +31,8 @@ from bioblend.galaxy.tools.inputs import inputs
 from .models import BlastRun, BlastSubject
 from .msa import PseudoMSA
 
+from utils import biofile
+
 logger = get_task_logger(__name__)
 
 LOCK_EXPIRE = 60 * 5 # Lock expires in 5 minutes
@@ -52,7 +51,7 @@ def launch_ncbi_blast(blastrunid, sequence, prog, db, evalue, coverage, maxseqs)
         fasta_io = StringIO(sequence)
         records = list(SeqIO.parse(fasta_io, "fasta"))
         if len(records) == 1:
-            b.query_id = cleanseqname(records[0].id)
+            b.query_id = biofile.cleanseqname(records[0].id)
             b.query_seq = records[0].seq
             b.evalue = evalue
             b.coverage = coverage
@@ -66,8 +65,8 @@ def launch_ncbi_blast(blastrunid, sequence, prog, db, evalue, coverage, maxseqs)
             blast_type = BlastRun.blast_type(BlastRun.NCBI, prog)
 
             # We check alphabet of given sequence
-            if ((blast_inputtype == "nt" and not check_nt(b.query_seq)) or
-                (blast_inputtype == "aa" and not check_aa(b.query_seq))):
+            if ((blast_inputtype == "nt" and not biofile.check_nt(b.query_seq)) or
+                (blast_inputtype == "aa" and not biofile.check_aa(b.query_seq))):
                 b.status = BlastRun.ERROR
                 b.message = "The given sequence has the wrong alphabet. Program %s expects %s sequence" % (
                     blast_type, blast_inputtype)
@@ -81,7 +80,7 @@ def launch_ncbi_blast(blastrunid, sequence, prog, db, evalue, coverage, maxseqs)
                 frame = 1
                 if blast_type == 'blastx' or blast_type == 'tblastx' :
                     frame=majorityQueryFrame(tmp_file.name)
-                    b.query_seq = translate(b.query_seq, frame)
+                    b.query_seq = biofile.translate(str(b.query_seq), frame)
                     b.save()
     
                 result_handle = open(tmp_file.name, "r")
@@ -171,7 +170,7 @@ def launch_pasteur_blast(blastrunid, sequence, prog, db, evalue, coverage, maxse
             history = galaxycon.histories.create_history(name="BlastXplorer")
             
             b.history = history.get("id")
-            b.query_id = cleanseqname(records[0].id)
+            b.query_id = biofile.cleanseqname(records[0].id)
             b.query_seq = records[0].seq
             b.evalue = evalue
             b.coverage = coverage
@@ -185,8 +184,8 @@ def launch_pasteur_blast(blastrunid, sequence, prog, db, evalue, coverage, maxse
             blast_inputtype = BlastRun.blast_inputtype(BlastRun.PASTEUR, prog)
             
             # We check alphabet of given sequence
-            if ((blast_inputtype == "nt" and not check_nt(b.query_seq)) or
-                (blast_inputtype == "aa" and not check_aa(b.query_seq))):
+            if ((blast_inputtype == "nt" and not biofile.check_nt(b.query_seq)) or
+                (blast_inputtype == "aa" and not biofile.check_aa(b.query_seq))):
                 b.status = BlastRun.ERROR
                 b.message = "The given sequence has the wrong alphabet. Program %s expects %s sequence" % (
                     blast_type, blast_inputtype)
@@ -194,7 +193,7 @@ def launch_pasteur_blast(blastrunid, sequence, prog, db, evalue, coverage, maxse
                 tmp_file = tempfile.NamedTemporaryFile()
                 tmp_file.write(sequence)
                 tmp_file.flush()
-                if is_fasta_one_seq(tmp_file.name):
+                if biofile.is_fasta_one_seq(tmp_file.name):
                     ## Upload input query file to galaxy
 	            outputs = galaxycon.tools.upload_file(path=tmp_file.name,file_name="blastinput.fasta",history_id=history.get("id"),file_type="fasta")
 	            file_id = outputs.get('outputs')[0].get('id')
@@ -295,9 +294,9 @@ def checkblastruns():
                 galaxycon.datasets.download_dataset(b.history_fileid,tmp_file.name,False)
                 query_seq_bk = b.query_seq
                 frame = 1
-                if blast_type == 'blastx' or blast_type == 'tblastx':
+                if blast_type == 'blastx' or blast_type == 'tblastx' :
                     frame=majorityQueryFrame(tmp_file.name)
-                    b.query_seq = translate(b.query_seq, frame)
+                    b.query_seq = biofile.translate(b.query_seq, frame)
                     b.save()
                 
                 result_handle = open(tmp_file.name, "r")
@@ -309,7 +308,7 @@ def checkblastruns():
                             e_val = hsp.expect
                             leng = float(hsp.align_length) / float(len(b.query_seq))
                             if e_val < b.evalue and leng >= b.coverage:
-                                ms.add_hsp(newick_clean(alignment.title), hsp)
+                                ms.add_hsp(biofile.newick_clean(alignment.title), hsp)
 
                 if blast_type == 'blastx' or blast_type == 'tblastx' :
                     ms.crop_alignment(b.maxseqs)
@@ -375,84 +374,6 @@ def checkblastruns():
     release_lock()
     logger.info("Pasteur blast runs checked")
 
-def is_fasta_one_seq(filename):
-    """
-    :param filename: File to read and detect the format
-    :return: true if format is fasta and contains only one sequence
-
-    Tests formats using biopython SeqIO
-    """
-    # Check Fasta Format
-    try:
-        nbseq = 0
-        for r in SeqIO.parse(filename, "fasta"):
-            nbseq += 1
-        if nbseq == 1:
-            return True
-    except Exception:
-        pass
-    return False
-
-
-def newick_clean(seqname):
-    """
-    Clean the sequence name to be compatible with newick format
-    Try to extract species name and gene name if possible
-    """
-    " Removing BL_ORD_ID if any"
-    seqname = re.sub(r"\s*(?i)[^\s]*\|BL_ORD_ID\|\d+\s*", "", seqname)
-    species = ""
-    m = re.search(r"(\[(.+?)\])", seqname)
-    if m is None:
-        m = re.search(r"(PREDICTED: (\w+ \w+))",seqname)
-    
-    if m is None:
-        m = re.search(r"^[^\s]+( (\w+ \w+))",seqname)
-    
-    if m is not None:
-        toremove= m.group(1)
-        species = "_"+m.group(2)
-        seqname = seqname.replace(toremove,"")
-    
-    species=re.sub(r"\s\(.*\)","",species)
-    
-    gene=""
-    m = re.search(r"sp\|[^\s]*\|([\w_]+)", seqname)
-    if m is not None:
-        gene = m.group(1)
-    else:
-        m = re.findall(r"\((\w+)\)", seqname)
-        if len(m) > 0:
-            gene = "_"+m[0]
-
-    out = seqname.split(" ")[0]+gene+species
-    out = out.replace("[","_")
-    out = out.replace("]","_")
-    out = out.replace("(","_")
-    out = out.replace(")","_")
-    out = out.replace(",","_")
-    out = out.replace(";","_")
-    out = out.replace(" ","_")
-    out = out.replace(":","_")
-    out = re.sub(r"_+","_",out)
-    out = re.sub(r"_$","",out)
-    
-    return out
-
-def cleanseqname(seqname):
-    out = seqname.split(" ")[0]
-    out = out.replace("[","_")
-    out = out.replace("]","_")
-    out = out.replace("(","_")
-    out = out.replace(")","_")
-    out = out.replace(",","_")
-    out = out.replace(";","_")
-    out = out.replace(" ","_")
-    out = out.replace(":","_")
-    out = re.sub(r"_+","_",out)
-    out = re.sub(r"_$","",out)
-    return out
-
 @shared_task
 def deletegalaxyhistory(historyid):
     """
@@ -491,39 +412,3 @@ def majorityQueryFrame(blastfile):
             nb_frames = v
     return max_frame
 
-def translate(sequence, frame):
-    """
-    It takes a sequence and translate it in the right frame.
-    if frame is
-     1,  2,  3: Just removes 0, 1, or 2 nt and translates
-    -1, -2, -3: RevComp, then removes 0, 1, or 2 nt, and translates
-    """
-    my_dna = Seq(sequence, generic_dna)
-    if frame < 0:
-        my_dna = my_dna.reverse_complement()
-    my_dna = Seq(str(my_dna)[abs(frame)-1:])
-    return str(my_dna.translate())
-
-
-def check_nt(sequence):
-    """
-    Returns True if the sequence can be considered as nucleotidic
-    """
-    alphabets = [ambiguous_dna, unambiguous_dna, extended_dna, ambiguous_rna, unambiguous_rna]
-    for alphabet in alphabets:
-        leftover = set(str(sequence).upper()) - set(alphabet.letters)
-        if not leftover:
-            return True
-    return False
-
-def check_aa(sequence):
-    """
-    Returns True if the sequence can be considered as proteic
-    """
-    alphabets = [extended_protein]
-    for alphabet in alphabets:
-        leftover = set(str(sequence).upper()) - set(alphabet.letters)
-        if not leftover:
-            return True
-    return False
-    

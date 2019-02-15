@@ -19,10 +19,7 @@ from .forms import ToolForm
 from .models import Tool, ToolFieldWhiteList, ToolFlag
 from workspace.tasks import initializeworkspacejob
 
-from Bio import SeqIO, Phylo
-from Bio.Alphabet import generic_dna
-from Bio.Alphabet.IUPAC import *
-
+from utils import biofile
 
 class ToolListView(ListView):
     """
@@ -102,15 +99,16 @@ def tool_exec_view(request, pk, store_output=None):
                     uploaded_file = ""
                     if request.FILES:
                         uploaded_file = request.FILES.get(inputfile, '')
+
+                    tmp_file = tempfile.NamedTemporaryFile()
                     if uploaded_file:
-                        tmp_file = tempfile.NamedTemporaryFile()
                         for chunk in uploaded_file.chunks():
                             tmp_file.write(chunk)
                         tmp_file.flush()
                         # send file to galaxy after verifying the
                         # allowed extensions
-                        type = detect_type(tmp_file.name)
-                        nseq, length, seqaa = nb_sequences(tmp_file.name, type)
+                        type = biofile.detect_type(tmp_file.name)
+                        nseq, length, seqaa = biofile.nb_sequences(tmp_file.name, type)
                         if type in ["fasta", "phylip"] and nseq <= 3:
                             msg='Input Sequence file should contain more than 3 sequences for field %s' % (
                                 fields.get(inputfile))
@@ -139,7 +137,14 @@ def tool_exec_view(request, pk, store_output=None):
                             # send file to galaxy after verifying the
                             # allowed extensions
                             input_fieldname = fields.get(inputfile)
-                            type = detect_type(tmp_file.name)
+                            type = biofile.detect_type(tmp_file.name)
+                            nseq, length, seqaa = biofile.nb_sequences(tmp_file.name, type)
+                            if type in ["fasta", "phylip"] and nseq <= 3:
+                                msg='Input Sequence file should contain more than 3 sequences for field %s' % (
+                                    fields.get(inputfile))
+                                raise ValueError(msg)
+                            if type in ["fasta", "phylip"] and not tool_obj.can_run_on_data(nseq, length, nboot, seqaa):
+                                raise ValueError('Given data is too large to run with this tool')
                             if type in exts.get(inputfile, ""):
                                 if wksph is None:
                                     wksph = create_history(request, name="Analyse with " + tool_obj.name)
@@ -159,7 +164,6 @@ def tool_exec_view(request, pk, store_output=None):
                                 # It should be the initial input file
                                 # and is required
                                 raise ValueError('No input file given')
-                                
                     if outputs:
                         file_id = outputs.get('outputs')[0].get('id')
                         hid[inputfile] = file_id
@@ -234,93 +238,3 @@ def get_tool_name(request):
 
     return HttpResponse(json.dumps(context), content_type='application/json')
 
-
-def detect_type(filename):
-    """
-    :param filename: File to read and detect the format
-    :return: detected type, in [fasta, phylip, phylip-relaxed, newick, N/A]
-
-    Tests formats using biopython SeqIO or Phylo
-    """
-    # Check Fasta Format
-    try:
-        nbseq = 0
-        for r in SeqIO.parse(filename, "fasta"):
-            nbseq += 1
-        if nbseq > 0:
-            return "fasta"
-    except Exception:
-        pass
-
-    # Check phylip strict
-    try:
-        nbseq = 0
-        for r in SeqIO.parse(filename, "phylip"):
-            nbseq += 1
-        if nbseq > 0:
-            return "phylip"
-    except Exception:
-        pass
-
-    # Check phylip relaxed
-    try:
-        nbseq = 0
-        for r in SeqIO.parse(filename, "phylip-relaxed"):
-            nbseq += 1
-        if nbseq > 0:
-            return "phylip"
-    except Exception:
-        pass
-
-    # Check Newick
-    try:
-        nbtrees = 0
-        trees = Phylo.parse(filename, 'newick')
-        for t in trees:
-            nbtrees += 1
-        if nbtrees > 0:
-            return "nhx"
-    except Exception as e:
-        pass
-
-    return "txt"
-
-
-def nb_sequences(filename, format):
-    nbseq = 0
-    length = 0
-    seqaa = False
-    if format == 'fasta':
-        try:
-            for r in SeqIO.parse(filename, "fasta"):
-                tlen = len(r.seq)
-                length = tlen if tlen > length else length
-                nbseq += 1
-                if check_aa(r.seq):
-                    seqaa = True
-        except Exception as e:
-            print e
-            pass
-    elif format == 'phylip':
-        try:
-            for r in SeqIO.parse(filename, "phylip"):
-                tlen = len(r.seq)
-                length = tlen if tlen > length else length
-                nbseq += 1
-                if check_aa(r.seq):
-                    seqaa = True
-        except Exception:
-            pass
-    return (nbseq, length, seqaa)
-
-
-def check_aa(sequence):
-    """
-    Returns True if the sequence can be considered as proteic
-    """
-    alphabets = [extended_protein]
-    for alphabet in alphabets:
-        leftover = set(str(sequence).upper()) - set(alphabet.letters)
-        if not leftover:
-            return True
-    return False

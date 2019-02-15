@@ -9,6 +9,7 @@ from Bio import SeqIO
 import StringIO
 
 from blast.models import BlastRun
+from utils import biofile
 
 class UploadForm(forms.Form):
     input_file = forms.FileField(widget=forms.FileInput(), required=False)
@@ -46,59 +47,6 @@ class UploadForm(forms.Form):
 
 
             
-    def validate_form_inputs(self):
-        valid = True
-        # Check uploaded file or pasted content
-        submitted_file = self.cleaned_data.get('input_file')
-        submitted_text = self.cleaned_data.get('pasted_text')
-        # Id of a blastrun : We will generate a fasta file from
-        # blast results
-        blast_run    = self.cleaned_data.get('blast_run')
-        if submitted_file:
-            nbseq = 0
-            #print submitted_file
-            for r in SeqIO.parse(submitted_file, "fasta"):
-                nbseq += 1
-            if nbseq == 0:
-                self.add_error(
-                    'input_file', "Input file format is not FASTA or file is empty")
-                valid = False
-            elif nbseq <= 3:
-                self.add_error(
-                    'input_file',"Input file should contain more than 3 sequences")
-                valid = False
-        elif submitted_text:
-            nbseq = 0
-            for r in SeqIO.parse(StringIO.StringIO(submitted_text), "fasta"):
-                nbseq += 1
-            if nbseq == 0:
-                self.add_error(
-                    'pasted_text', "Input data format is not FASTA or file is empty")
-                valid = False
-            elif nbseq <= 3:
-                self.add_error(
-                    'pasted_text',"Input data should contain more than 3 sequences")
-                valid = False
-        elif blast_run != '--':
-            nbseq = 0
-            blastrun = BlastRun.objects.get(pk=blast_run)
-            
-            for r in SeqIO.parse(StringIO.StringIO(blastrun.to_fasta()), "fasta"):
-                nbseq += 1
-            if nbseq == 0:
-                self.add_error(
-                    'pasted_text', "BlastRun data format is not FASTA or file is empty")
-                valid = False
-            elif nbseq <= 3:
-                self.add_error(
-                    'pasted_text',"BlastRun data should contain more than 3 sequences")
-                valid = False
-        else:
-            self.add_error(
-                None, "No input data has been provided")
-            valid = False
-        return valid
-
     class Media:
         js = ("js/jquery.filer.min.js",'js/form_examples.js',)
         css= {

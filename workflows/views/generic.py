@@ -12,13 +12,11 @@ from workspace.views import create_history
 from tools.models import Tool
 from blast.models import BlastRun
 from workspace.tasks import initializeworkspacejob
-from Bio import SeqIO
-from Bio.Alphabet import generic_dna
-from Bio.Alphabet.IUPAC import *
-
 
 import tempfile
 import StringIO
+
+from utils import biofile
 
 @method_decorator(connection_galaxy, name="dispatch")
 class WorkflowListView(ListView):
@@ -97,14 +95,23 @@ class WorkflowFormView(UploadView, DetailView):
         # run on this size of data
         if submitted_file:
             submitted_file.seek(0)
-            nseq, length, seqaa = valid_fasta(submitted_file)
+            nseq, length, seqaa = biofile.valid_fasta(submitted_file)
             submitted_file.seek(0)
         elif pasted_text:
-            nseq, length, seqaa = valid_fasta(StringIO.StringIO(pasted_text))
+            nseq, length, seqaa = biofile.valid_fasta(StringIO.StringIO(str(pasted_text)))
         elif blast_run != '--':
             b = BlastRun.objects.get(pk=blast_run)
-            nseq, length, seqaa = valid_fasta(StringIO.StringIO(b.to_fasta()))
+            nseq, length, seqaa = biofile.valid_fasta(StringIO.StringIO(str(b.to_fasta())))
 
+        if nseq == 0:
+            form.add_error(
+                'input_file', "Input file format is not FASTA or file is empty")
+            return self.form_invalid(form)
+        elif nseq <= 3:
+            form.add_error(
+                'input_file',"Input file should contain more than 3 sequences")
+            return self.form_invalid(form)
+            
         for k,v in workflow.json.get('steps',dict()).items():
              tid = v.get('tool_id',None)
              if tid :
@@ -152,29 +159,3 @@ class WorkflowFormView(UploadView, DetailView):
         initializeworkspacejob.delay(wksph.history)
         wksph.save()
         return HttpResponseRedirect(self.get_success_url())
-
-def valid_fasta(fasta_file):
-    # Check uploaded file or pasted content
-    nbseq = 0
-    length = 0
-    seqaa = False
-    for r in SeqIO.parse(fasta_file, "fasta"):
-        print r.seq
-        tlen = len(r.seq)
-        length = tlen if tlen > length else length
-        nbseq += 1
-        if check_aa(r.seq):
-            seqaa = True
-    return (nbseq, length, seqaa)
-
-def check_aa(sequence):
-    """
-    Returns True if the sequence can be considered as proteic
-    """
-    alphabets = [extended_protein]
-    for alphabet in alphabets:
-        leftover = set(str(sequence).upper()) - set(alphabet.letters)
-        if not leftover:
-            return True
-    return False
-    

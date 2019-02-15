@@ -23,9 +23,8 @@ from blast.models import BlastRun
 from workspace.tasks import initializeworkspacejob
 
 from bioblend.galaxy.tools.inputs import inputs
-from Bio import SeqIO
-from Bio.Alphabet import generic_dna
-from Bio.Alphabet.IUPAC import *
+
+from utils import biofile
 
 WORKFLOW_ADV_FLAG = "wadv"
 
@@ -135,7 +134,7 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
             tmp_file.flush()
 
         # Check that input file is Fasta and is not empty
-        nseq, length, seqaa = valid_fasta(tmp_file.name)
+        nseq, length, seqaa = biofile.valid_fasta(open(tmp_file.name))
         if nseq < 4 :
             raise WorkflowInputFileFormatError(
                 "Input data is malformed or contain less than 4 sequences"
@@ -339,27 +338,3 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
             # the workflow has been run
             workflow.delete(gi)
 
-
-def valid_fasta(fasta_file):
-    # Check uploaded file or pasted content
-    nbseq = 0
-    length = 0
-    seqaa=False
-    for r in SeqIO.parse(fasta_file, "fasta"):
-        tlen = len(r.seq)
-        length = tlen if tlen > length else length
-        nbseq += 1
-        if check_aa(r.seq):
-            seqaa = True
-    return (nbseq, length, seqaa)
-
-def check_aa(sequence):
-    """
-    Returns True if the sequence can be considered as proteic
-    """
-    alphabets = [extended_protein]
-    for alphabet in alphabets:
-        leftover = set(str(sequence).upper()) - set(alphabet.letters)
-        if not leftover:
-            return True
-    return False
