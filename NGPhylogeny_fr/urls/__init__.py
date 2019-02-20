@@ -33,6 +33,7 @@ urlpatterns = [
     url(r'^about/', include(surveys_urls)),
     url(r'^documentation$', TemplateView.as_view(template_name="documentation.html"), name="documentation"),
     url(r'^analysis$', TemplateView.as_view(template_name="phylogeny_analysis_choices.html"), name="analysis_list"),
+    url(r'^status$', TemplateView.as_view(template_name="status.json",content_type='application/json'), name="status"),
     url(r'^galaxy/', include(galaxy_urls)),
     url(r'^account/', include(account_urls)),
     url(r'^tools/', include(tool_urls)),
