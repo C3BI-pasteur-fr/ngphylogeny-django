@@ -77,15 +77,16 @@ def monitorworkspace():
             w.history_content_json = json.dumps(hc)
             w.history_info_json =  json.dumps(hi)
             w.save()
-            finished = True
-            for file in hc:
-                if ( 'running' in file.get('state','') or
-                     'queued' in file.get('state','') or
-                     'new' in file.get('state','')):
-                    finished = False
-                if 'error' in file.get('state',''):
-                    error = True
-                    finished = True
+            if length(hc) > 1:
+                finished = True
+                for file in hc:
+                    if ( 'running' in file.get('state','') or
+                         'queued' in file.get('state','') or
+                         'new' in file.get('state','')):
+                        finished = False
+                    if 'error' in file.get('state',''):
+                        error = True
+                        finished = True
         except:
             logging.warning('Problem with Galaxy server, waiting 1 minute')
             time.sleep(60)
