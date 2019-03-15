@@ -77,7 +77,7 @@ def monitorworkspace():
             w.history_content_json = json.dumps(hc)
             w.history_info_json =  json.dumps(hi)
             w.save()
-            if length(hc) > 1:
+            if len(hc) > 1:
                 finished = True
                 for file in hc:
                     if ( 'running' in file.get('state','') or
