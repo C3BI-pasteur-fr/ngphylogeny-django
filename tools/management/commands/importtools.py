@@ -85,14 +85,14 @@ class Command(BaseCommand):
             connection = requests.get(tools_url, params={'in_panel': "false"})
             if connection.status_code == 200:
                 tools_list = connection.json() or []
-            for tool in tools_list:
-                _m = [
-                    tool.get('id').lower(),
-                    tool.get('name').lower(),
-                    str(tool.get('panel_section_name')).lower()
-                ]
-                if query in _m:
-                    tools_found.append(tool.get('id'))
+                for tool in tools_list:
+                    _m = [
+                        tool.get('id').lower(),
+                        tool.get('name').lower(),
+                        str(tool.get('panel_section_name')).lower()
+                    ]
+                    if query in _m:
+                        tools_found.append(tool.get('id'))
 
         if tools_found:
             self.stdout.write("%s" % ('\n'.join(tools_found)))
