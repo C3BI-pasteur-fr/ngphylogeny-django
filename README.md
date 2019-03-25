@@ -19,7 +19,7 @@ source activate ngphylo
 * Install all NGPhylogeny.fr dependencies:
 
 ```
-pip install -r requirements.txt
+pip install -r requirement.txt
 apt-get install redis-server # Ubuntu / Debian
 ```
 
