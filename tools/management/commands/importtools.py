@@ -130,6 +130,8 @@ class Command(BaseCommand):
         for flaglink in self.flags:
             tool = Tool.objects.filter(
                 name=flaglink[0]).first()
+            if tool is None:
+                raise CommandError('Tool {} is not imported, and cannot be associated to {} flag(s)'.format(flaglink[0],flaglink[1]))
             for f in flaglink[1].split(","):
                 self.stdout.write(self.style.SUCCESS(
                     "%s : %s" % (flaglink[0], f)))
