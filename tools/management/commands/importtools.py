@@ -1,4 +1,5 @@
 import requests
+import sys
 
 from django.core.management.base import BaseCommand, CommandError
 
@@ -6,7 +7,6 @@ from galaxy.models import Server
 from tools.models import Tool
 from tools.models import ToolFlag
 from tools.models import ToolInputData
-
 
 class Command(BaseCommand):
     help = 'Import Galaxy tools to NGPhylogeny'
@@ -93,7 +93,8 @@ class Command(BaseCommand):
                     ]
                     if query in _m:
                         tools_found.append(tool.get('id'))
-
+            else:
+                sys.exit("Cannot connect to Galaxy server")
         if tools_found:
             self.stdout.write("%s" % ('\n'.join(tools_found)))
             response = 'y' if force else raw_input(
