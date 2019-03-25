@@ -8,5 +8,4 @@ class BlastConfig(AppConfig):
     name = 'blast'
     def ready(self):
         super(BlastConfig,self).ready()
-        print("Startup Code")
         pass
