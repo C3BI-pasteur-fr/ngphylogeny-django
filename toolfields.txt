@@ -1,6 +1,7 @@
 BMGE	input_align
 Gblocks	input_align
 Noisy	input_align
+trimAl	input_align
 Clustal Omega	input_seqs
 MAFFT	input_seqs
 MUSCLE	input_seqs
