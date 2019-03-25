@@ -94,7 +94,7 @@ class Command(BaseCommand):
                     if query in _m:
                         tools_found.append(tool.get('id'))
             else:
-                sys.exit("Cannot connect to Galaxy server")
+                raise CommandError('Cannot connect to Galaxy server {}'.format(galaxy_server.url))
         if tools_found:
             self.stdout.write("%s" % ('\n'.join(tools_found)))
             response = 'y' if force else raw_input(
