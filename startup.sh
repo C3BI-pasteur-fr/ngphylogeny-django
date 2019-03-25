@@ -17,7 +17,7 @@ echo "from django.contrib.auth.models import User; User.objects.filter(username=
 python manage.py loaddata tool_flags
 python manage.py creategalaxyserver --url=$GALAXYSERVER --activate
 # Adding shared galaxy api key
-echo "from django.contrib.auth.models import User; from galaxy.models import Server, GalaxyUser; u = User.objects.filter(username='admin'); g = Server.objects.filter(url='$GALAXYSERVER'); print(u);print(g);gu=GalaxyUser(user=u.first(),galaxy_server=g.first(),api_key='$GALAXYKEY',anonymous=True);gu.save()" | python manage.py shell
+python manage.py addgalaxykey --user admin --galaxyurl $GALAXYSERVER --galaxykey $GALAXYKEY
 python manage.py importtools --galaxyurl=$GALAXYSERVER --query="phylogeny" --flags=toolflags.txt --force --inputfields=toolfields.txt
 python manage.py import_links --linkfile=toollinks.txt
 python manage.py importworkflows --wfnamefile=wfnames.txt --galaxyurl=$GALAXYSERVER

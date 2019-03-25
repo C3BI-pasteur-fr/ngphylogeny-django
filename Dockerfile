@@ -28,7 +28,8 @@ WORKDIR /home/ngphylo/
 RUN pip install -r requirement.txt
 RUN python manage.py makemigrations \
     && python manage.py migrate --run-syncdb \
-    && python manage.py createcachetable
+    && python manage.py createcachetable \
+    && python manage.py collectstatic --noinput
 
 # Celeryd / Celerybeat init scripts
 COPY docker/celeryd /etc/init.d/celeryd
