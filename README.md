@@ -28,6 +28,7 @@ apt-get install redis-server # Ubuntu / Debian
 ```
 python manage.py makemigrations
 python manage.py migrate
+python manage.py createcachetable
 ```
 
 * Create admin user
@@ -46,6 +47,7 @@ python manage.py loaddata tool_flags
 
 ```
 python manage.py creategalaxyserver --url=http://url_galaxy:port --activate
+python manage.py addgalaxykey --user <superuser name> --galaxyurl http://url_galaxy:port --galaxykey <galaxy key>
 ```
 
 * Import existing tools from Galaxy to NGPhylogeny.fr
@@ -74,7 +76,7 @@ python manage.py importtools --galaxyurl=http://url_galaxy:port \
 
 It will import all workflows with name containing "oneclick" (case insensitive):
 ```
-python manage.py importworkflows --galaxyurl=http://url_galaxy:port
+python manage.py importworkflows --galaxyurl=http://url_galaxy:port --wfnamefile=wfnames.txt
 ```
 
 * Run Celery task queue
