@@ -1,24 +1,24 @@
 {% extends "base_site.html" %}
 {% load static %}
 {% block title %}History
-    <a onclick="refresh()" class="btn btn-primary">
-      <span class="glyphicon glyphicon-refresh"></span>Refresh
-    </a>
-    {% endblock %}
+<a onclick="refresh()" class="btn btn-primary">
+  <span class="glyphicon glyphicon-refresh"></span>Refresh
+</a>
+{% endblock %}
 {% block content %}
-    <div class="row">
-        <div class="col-md-12">
-          {% if object.history_content %}
-	    {% if object.history_content|dictsortreversed:"hid"|length > 1 %}
-              {% include "workspace/include/history_contents_provenance_ajax.html" %}
-	    {% else %}
-              {% include "workspace/include/history_wait.html" %}
-	    {% endif %}
-          {% else %}
-          <div class="jumbotron">
-                    This workspace has no equivalent on the galaxy server
-                </div>
-            {% endif %}
-        </div>
-    </div>
+<div class="row">
+  <div class="col-md-12">
+    {% if object.history_content %}
+      {% if object.history_content|dictsortreversed:"hid"|length > 1 %}
+        {% include "workspace/include/history_contents_provenance_ajax.html" %}
+      {% else %}
+        {% include "workspace/include/history_wait.html" %}
+      {% endif %}
+    {% else %}
+      <div class="jumbotron">
+        This workspace has no equivalent on the galaxy server
+      </div>
+    {% endif %}
+  </div>
+</div>
 {% endblock %}

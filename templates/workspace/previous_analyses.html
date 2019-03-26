@@ -2,36 +2,35 @@
 {% load static %}
 {% block title %}Previous analyses{% endblock %}
 {% block content %}
-        <div class="col-md-offset-1">
-            <ul class="nav histories-nav nav-pills">
-                {% for history in histories %}
-                    <li class="col-md-9" style="background-color:{% cycle '#f5f9fb' '#fcfcfc' %}">
-                        <a href="{% url 'history_detail' history.history %}">
-                            <div class="pull-left">
-                                <span class="badge">{{ forloop.counter }}</span>
-                            </div>
-                            {{ history.name }}
-                            <div class="pull-right">
-                                <span class="label label-info">{{ history.history|truncatechars:12 }}</span>
-                            </div>
-                            <div class="pull-right">
-                                <span class="text-muted">{{ history.created_date }}</span>
-                            </div>
-                        </a>
-                    </li>
-                <li style="background-color:{% cycle '#f5f9fb' '#fcfcfc' %}">
-                    <a href="{% url 'history_delete' history.history %}" class="text-center">
-                            <span class='glyphicon glyphicon-trash text-default'></span>
-                        </a>
-                    </li>
-                {% empty %}
-		<div class="panel panel-info">
-		  <div class="panel-heading">Analyses in Session</div>
-		  <div class="panel-body">You have no analyses in the session</div>
-		</div>
-                {% endfor %}
-            </ul>
-	    <a class="btn btn-danger" role="button" href="{% url 'history_delete_all' %}">Delete all histories</a>
-        </div>
-    </div>
+<div class="col-md-offset-1">
+  <ul class="nav histories-nav nav-pills">
+    {% for history in histories %}
+      <li class="col-md-9" style="background-color:{% cycle '#f5f9fb' '#fcfcfc' %}">
+        <a href="{% url 'history_detail' history.history %}">
+          <div class="pull-left">
+            <span class="badge">{{ forloop.counter }}</span>
+          </div>
+          {{ history.name }}
+          <div class="pull-right">
+            <span class="label label-info">{{ history.history|truncatechars:12 }}</span>
+          </div>
+          <div class="pull-right">
+            <span class="text-muted">{{ history.created_date }}</span>
+          </div>
+        </a>
+      </li>
+      <li style="background-color:{% cycle '#f5f9fb' '#fcfcfc' %}">
+        <a href="{% url 'history_delete' history.history %}" class="text-center">
+          <span class='glyphicon glyphicon-trash text-default'></span>
+        </a>
+      </li>
+    {% empty %}
+      <div class="panel panel-info">
+        <div class="panel-heading">Analyses in Session</div>
+        <div class="panel-body">You have no analyses in the session</div>
+      </div>
+    {% endfor %}
+  </ul>
+  <a class="btn btn-danger" role="button" href="{% url 'history_delete_all' %}">Delete all histories</a>
+</div>
 {% endblock %}
