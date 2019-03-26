@@ -117,7 +117,10 @@ def tool_exec_view(request, pk, store_output=None):
                             raise ValueError('Given data is too large to run with this tool')
                         if type in exts.get(inputfile, ""):
                             if wksph is None:
-                                wksph = create_history(request, name="Analyse with " + tool_obj.name)
+                                wksph = create_history(request,
+                                                       name="Analyse with " + tool_obj.name,
+                                                       wf_category="Tool",
+                                                       wf_steps=tool_obj.name)
                             outputs = gi.tools.upload_file(path=tmp_file.name,
                                                            file_name=uploaded_file.name,
                                                            history_id=wksph.history,
@@ -147,7 +150,10 @@ def tool_exec_view(request, pk, store_output=None):
                                 raise ValueError('Given data is too large to run with this tool')
                             if type in exts.get(inputfile, ""):
                                 if wksph is None:
-                                    wksph = create_history(request, name="Analyse with " + tool_obj.name)
+                                    wksph = create_history(request,
+                                                           name="Analyse with " + tool_obj.name,
+                                                           wf_category="Tool",
+                                                           wf_steps=tool_obj.name)
                                 outputs = gi.tools.upload_file(path=tmp_file.name,
                                                                file_name=input_fieldname + " pasted_sequence",
                                                                history_id=wksph.history,
@@ -172,7 +178,10 @@ def tool_exec_view(request, pk, store_output=None):
                     tool_inputs.set_dataset_param(fields.get(h), file_id)
 
                 if wksph is None:
-                    wksph = create_history(request, name="Analyse with " + tool_obj.name)
+                    wksph = create_history(request,
+                                           name="Analyse with " + tool_obj.name,
+                                           wf_category="Tool",
+                                           wf_steps=tool_obj.name)
                     
                 tool_outputs = gi.tools.run_tool(history_id=wksph.history,
                                                  tool_id=tool_obj.id_galaxy,

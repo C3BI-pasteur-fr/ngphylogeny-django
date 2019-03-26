@@ -125,6 +125,8 @@ class WorkflowFormView(UploadView, DetailView):
         wksph = create_history(
             self.request,
             name="NGPhylogeny Analyse - " + workflow.name,
+            wf_category="OneClick",
+            wf_steps=workflow.tooldesc,
         )
 
         if submitted_file:

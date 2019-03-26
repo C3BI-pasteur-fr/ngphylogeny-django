@@ -20,6 +20,11 @@ class WorkspaceHistory(models.Model):
     monitored = models.BooleanField(default=False)
     finished = models.BooleanField(default=False)
     source_ip=models.CharField(max_length=20, default="")
+    # Where the workflow comes from : Oneclick, Advanced or ALaCarte
+    # OneClick|ALaCarte|SingleTool
+    workflow_category = models.CharField(max_length=100, default="")
+    # Workflow Steps PhyML, etc.
+    workflow_steps = models.CharField(max_length=100, default="")
     # If the galaxy history has been deleted
     # We keep the workspace on the django side but
     # describe it as deleted (it won't appear anymore

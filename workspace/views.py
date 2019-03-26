@@ -19,7 +19,7 @@ from tools.models import Tool
 from utils import ip
 
 @connection_galaxy
-def create_history(request, name=''):
+def create_history(request, name='', wf_category='', wf_steps=''):
     """
     Create a new galaxy history
 
@@ -45,6 +45,8 @@ def create_history(request, name=''):
                             history_content_json = json.dumps(history),
                             history_info_json = json.dumps(history),
                             source_ip=ip.get_client_ip(request),
+                            workflow_category=wf_category,
+                            workflow_steps = wf_steps,
                             )
     wsph.save()
 
