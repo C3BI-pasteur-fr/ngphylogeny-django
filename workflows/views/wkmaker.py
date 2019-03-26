@@ -76,25 +76,25 @@ def workflows_alacarte_build(request):
             list_tool = [dict_tools.get(int(t)) for t in tools]
             if list_tool:
                 gi = request.galaxy
+                server = request.galaxy_server
                 # create temp history to build workflow
                 history_id = gi.histories.create_history(name="temp").get("id")
                 # build workflow object
-                wkg = WorkflowGalaxyFactory(list_tool, gi, history_id)
-                if wkg.valid:
-                    wkg.name = request.POST.get('wkname')
-                    if not wkg.name:
-                        wkg.name = "Workflow["+"".join(
-                            random.sample(
-                                string.ascii_letters + string.digits, 8
-                            ))+"]"
-                    # create the JSON of generated workflow
-                    # create new entry into Galaxy
-                    wkgi = gi.workflows.import_workflow_json(wkg.to_json())
-                    wk_id = wkgi.get('id')
-                    # remove temp history
-                    gi.histories.delete_history(history_id, purge=True)
-                    return redirect(reverse(
-                        "workflow_maker_form", args=[wk_id]))
+                description = request.POST.get('wkname')
+                name = "Workflow["+"".join(random.sample(string.ascii_letters + string.digits, 8))+"]"
+                if not description:
+                    description = name
+                category='automaker'
+                slug=name
+                wkg = WorkflowGalaxyFactory(category, name, description)
+                if wkg.build(gi, list_tool, history_id):
+                    if wkg.valid:
+                        wk = wkg.to_ngworkflow(server, gi)
+                        # remove temp history
+                        gi.histories.delete_history(history_id, purge=True)
+                        return redirect(reverse(
+                            "workflow_maker_form", args=[wk.id_galaxy]))
+                gi.histories.delete_history(history_id, purge=True)
     context = {"workflow": WORKFLOW_STATIC_STEPS}
     return render(request, 'workflows/workflows_alacarte.html', context)
 
@@ -125,16 +125,6 @@ class WorkflowMakerView(WorkflowAdvancedFormView):
 
         # create workflow
         wk_obj = Workflow.objects.filter(id_galaxy=self.kwargs['id'],category='automaker').first()
-        if not wk_obj:
-            wk_obj = Workflow(galaxy_server=self.request.galaxy_server,
-                              id_galaxy=self.kwargs['id'],
-                              name=wkname,
-                              category='automaker',
-                              description="Auto Generated Workflow",
-                              slug=wkname)
-            wk_obj.fetch_details(self.request.galaxy)
-            wk_obj.save()
-            
         # add galaxy json information
         wk_obj.json = wk_json
         wk_obj.save()

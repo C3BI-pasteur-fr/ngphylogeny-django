@@ -68,10 +68,10 @@ class Workflow(models.Model):
         # makes the copy
         workflow_copy = Workflow(galaxy_server=self.galaxy_server,
                                  id_galaxy=wf_import.get('id'),
-                                 name=self.name+"_copy",
+                                 name=self.name,
                                  category=self.category,
-                                 description=self.description+" (COPY)",
-                                 slug=self.name+"_copy")
+                                 description=self.description,
+                                 slug=self.id_galaxy+"_"+self.name+"_copy")
         return workflow_copy
 
     def delete(self, galaxyinstance):
@@ -161,18 +161,42 @@ class WorkflowGalaxyFactory(object):
     """
     CONVERSION_TOOL_FLAG = 'conve'
 
-    def __init__(self, list_tools, gi=None, history_id=""):
+    def __init__(self, category, name, description):
 
         self.a_galaxy_workflow = "true"
         self.annotation = ""
-        self.name = "Imported workflow"
+        self.name = name
         self.steps = dict()
+        self.valid = False
+        self.description = description
+        self.id_galaxy = ""
+        self.slug = self.name
+        self.category = category
+        
+    def build(self, galaxy_instance, list_tools, history_id):
+        self.set_steps(galaxy_instance, list_tools, history_id)
+        if self.valid:
+            print self.to_json()
+            wkgi = galaxy_instance.workflows.import_workflow_json(self.to_json())
+            wk_id = wkgi.get('id')
+            self.id_galaxy = wk_id
+        return self.valid
+
+    def to_ngworkflow(self, galaxy_server, galaxy_instance):
+        wk_obj = None
+        if self.valid:
+            wk_obj = Workflow(galaxy_server=galaxy_server,
+                              id_galaxy=self.id_galaxy,
+                              name=self.name,
+                              category=self.category,
+                              description=self.description,
+                              slug=self.slug)
+            wk_obj.fetch_details(galaxy_instance)
+            wk_obj.save()
+        return wk_obj
+    
+    def set_steps(self, galaxy_instance, list_tool, history_id):
         self.valid = True
-
-        if gi and history_id:
-            self.set_steps(list_tools, gi, history_id)
-
-    def set_steps(self, list_tool, gi, history_id):
         step = 0
         # Input data : First step
         wfi = WorkflowToolInformation()
@@ -183,7 +207,7 @@ class WorkflowGalaxyFactory(object):
         for tool in list_tool:
             step += 1
             previous_step = wfi
-            wfi = WorkflowToolInformation(tool, gi, history_id)
+            wfi = WorkflowToolInformation(tool, galaxy_instance, history_id)
             wfi.set_id(step)
             self.steps[str(step)] = wfi
             tmpvalid = False
@@ -230,6 +254,7 @@ class WorkflowGalaxyFactory(object):
 
     def to_json(self):
         import ast
+        print(str(self))
         return ast.literal_eval(str(self))
 
 

@@ -288,7 +288,7 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
 
         # We create an history (local and on galaxy)
         wksph = create_history(
-            self.request, name="NGPhylogeny Analyse - " + workflow.name)
+            self.request, name="NGPhylogeny Analyse - " + workflow.description)
         # we send the file to galaxy
         output = gi.tools.upload_file(path=tmp_file.name,
                                       file_name=uploadfile_name,
