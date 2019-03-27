@@ -95,6 +95,7 @@ def updateworkspacestatus(historyid):
                     if 'error' in file.get('state',''):
                         error = True
                         finished = True
+                        break
             if finished:
                 w.finished = finished
                 logging.warning("history %s finished? %r" % (historyid, w.finished))
