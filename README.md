@@ -93,7 +93,8 @@ python manage.py importworkflows --galaxyurl=http://url_galaxy:port --wfnamefile
 	2. Start celery
 	```
 	export PYTHONPATH=$PWD:$PYTHONPATH
-	celery --app=NGPhylogeny_fr.celery:app worker --loglevel=INFO &
+	celery multi start 2 -l INFO -c:2 1 -Q:1 default -Q:2 ncbi_blast --app=NGPhylogeny_fr.celery:app
+	celery beat --app=NGPhylogeny_fr.celery:app --loglevel=DEBUG --detach
 	```
 
 * Run the django server
