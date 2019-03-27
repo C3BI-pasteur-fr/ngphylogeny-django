@@ -102,6 +102,10 @@ class WorkflowFormView(UploadView, DetailView):
         elif blast_run != '--':
             b = BlastRun.objects.get(pk=blast_run)
             nseq, length, seqaa = biofile.valid_fasta(StringIO.StringIO(str(b.to_fasta())))
+        else:
+            form.add_error(
+                'input_file',"No input file given")
+            return self.form_invalid(form)
 
         if nseq == 0:
             form.add_error(
