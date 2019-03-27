@@ -15,6 +15,7 @@ from tasks import deletegalaxyhistory
 from galaxy.decorator import connection_galaxy
 from .models import WorkspaceHistory
 from tools.models import Tool
+from .tasks import updateworkspacestatus
 
 from utils import ip
 
@@ -108,6 +109,7 @@ class WorkspaceHistoryObjectMixin(SingleObjectMixin):
         hist_id = self.kwargs.get(self.pk_url_kwarg)
         if not hist_id:
             hist_id = self.request.session["last_history"]
+        updateworkspacestatus.delay(hist_id)
         w = queryset.get(history=hist_id,
                          galaxy_server=server)
 

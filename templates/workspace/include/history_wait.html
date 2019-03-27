@@ -7,44 +7,47 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
 
 {% endblock %}
+
 <script  type="text/javascript">
+    function renameHistory(el){
+	$.post("{% url 'history_rename' object.history_info.id %}",
+	       {
+		   name: el.value,
+		   csrfmiddlewaretoken: '{{ csrf_token }}'
+	       }
+	      );
+    }
+
+    function changeEmail(el){
+        $.post("{% url 'change_email' object.history_info.id %}",
+    	   {
+    	       email: el.value,
+    	       csrfmiddlewaretoken: '{{ csrf_token }}'
+    	   }
+    	  );
+    }
+    function refresh() {
+        location.reload();
+    }
+        
     $(document).ready(function(){
-	var interval = 10000;
-	var autorefresh = setInterval(refresh, interval);
+        var interval = 10000;
+        var autorefresh = setInterval(refresh, interval);
 	var elt = $('#countdown_span');
-	elt.html(interval / 1000);
-	function refresh() {
-	    location.reload();
-	}
-	function renameHistory(el){
-	    $.post("{% url 'history_rename' object.history_info.id %}",
-		   {
-		       name: el.value,
-		       csrfmiddlewaretoken: '{{ csrf_token }}'
-		   }
-		  );
-	}
-	function changeEmail(el){
-	    $.post("{% url 'change_email' object.history_info.id %}",
-		   {
-		       email: el.value,
-		       csrfmiddlewaretoken: '{{ csrf_token }}'
-		   }
-		  );
-	}
+
 	function countdown() {
-	    elt.html(elt.html() - 1);
-	    if (elt.html() < 0) {
-		elt.html(interval / 1000);
-	    }
+            elt.html(elt.html() - 1);
+            if (elt.html() < 0) {
+    		elt.html(interval / 1000);
+            }
 	}
-	setInterval(countdown, 1000);
+        setInterval(countdown, 1000);
     });
 </script>
 
 <div id="info-refresh" class="alert alert-info alert-dismissable fade in">
   <a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
-  <strong>Info !</strong> This page is will be refreshed in <span id="countdown_span">5</span> sec.
+  <strong>Info !</strong> This page is will be refreshed in <span id="countdown_span">10</span> sec.
 </div>
 <div id="success-copy" class="alert alert-success" style="display:none;">
   <a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
