@@ -93,7 +93,7 @@ python manage.py importworkflows --galaxyurl=http://url_galaxy:port --wfnamefile
 	2. Start celery
 	```
 	export PYTHONPATH=$PWD:$PYTHONPATH
-	celery multi start 2 -l INFO -c:2 1 -Q:1 default -Q:2 ncbi_blast --app=NGPhylogeny_fr.celery:app
+	celery multi start 3 -l INFO -c:2 1 -c:3 1 -Q:1 default -Q:2 ncbi_blast -Q:3 monitor --app=NGPhylogeny_fr.celery:app
 	celery beat --app=NGPhylogeny_fr.celery:app --loglevel=DEBUG --detach
 	```
 
