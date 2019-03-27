@@ -29,6 +29,7 @@ apt-get install redis-server # Ubuntu / Debian
 python manage.py makemigrations
 python manage.py migrate
 python manage.py createcachetable
+python manage.py collectstatic
 ```
 
 * Create admin user
