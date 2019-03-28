@@ -196,6 +196,7 @@ CELERY_ROUTES = {
     'workspace.tasks.deletegalaxyhistory': {'queue': 'default'},
     'workspace.tasks.deleteoldgalaxyhistory': {'queue': 'default'},
     'workflows.tasks.deleteoldgalaxyworkflows': {'queue': 'default'},
+    'workflows.tasks.deletegalaxyworkflow': {'queue': 'default'},
 }
 
 BLASTS = {

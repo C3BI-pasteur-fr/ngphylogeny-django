@@ -17,7 +17,7 @@ class Workflow(models.Model):
 
     galaxy_server = models.ForeignKey(Server, on_delete=models.CASCADE)
     id_galaxy = models.CharField(max_length=250, unique=True)
-    name = models.CharField(max_length=100, unique=True)
+    name = models.CharField(max_length=100)
     category = models.CharField(max_length=100, blank=True)
     version = models.CharField(max_length=10, blank=True)
     description = models.CharField(max_length=250)
@@ -28,7 +28,7 @@ class Workflow(models.Model):
     deleted = models.BooleanField(default=False)
     tooldesc = models.CharField(max_length=250,blank=True, default="")
     # Json representation of the workflow
-    json = None
+    json =  None
     # Details about Steps (WorkflowStepInformation.sorted_tool_list)
     detail = None
     
@@ -69,12 +69,12 @@ class Workflow(models.Model):
         workflow_copy = Workflow(galaxy_server=self.galaxy_server,
                                  id_galaxy=wf_import.get('id'),
                                  name=self.name,
-                                 category=self.category,
+                                 category='duplicated',
                                  description=self.description,
-                                 slug=self.id_galaxy+"_"+self.name+"_copy")
+                                 slug=wf_import.get('id')+"_"+self.name+"_copy")
         return workflow_copy
 
-    def delete(self, galaxyinstance):
+    def delete_from_galaxy(self, galaxyinstance):
         """
         Deletes the given workflow from galaxy server
         """

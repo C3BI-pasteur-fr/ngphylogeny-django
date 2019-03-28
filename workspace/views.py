@@ -11,6 +11,7 @@ from bioblend.galaxy.client import ConnectionError
 from django.shortcuts import render, redirect
 from django.http import HttpResponseRedirect
 from tasks import deletegalaxyhistory
+from workflows.tasks import deletegalaxyworkflow
 
 from galaxy.decorator import connection_galaxy
 from .models import WorkspaceHistory
@@ -297,6 +298,10 @@ class WorkspaceDeleteView(WorkspaceHistoryObjectMixin, DeleteView):
         self.object = self.get_object()
         self.object.deleted = True
         self.object.save()
+        if self.object.workflow is not None:
+            deletegalaxyworkflow.delay(self.object.workflow.id_galaxy)
+            self.object.workflow.deleted = True
+            self.object.workflow.save()
         deletegalaxyhistory.delay(self.object.history)
         return HttpResponseRedirect(self.get_success_url())
 
@@ -309,6 +314,10 @@ class DeleteAllHistories(View):
     def post(self,request):
         if "yes" in request.POST:
             for e in WorkspaceHistory.objects.filter(history__in=request.session.get('histories', [])).filter(deleted=False):
+                if e.workflow is not None:
+                    deletegalaxyworkflow.delay(e.workflow.id_galaxy)
+                    e.workflow.deleted = True
+                    e.workflow.save()
                 e.deleted = True
                 e.save()
                 deletegalaxyhistory.delay(e.history)

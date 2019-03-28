@@ -3,6 +3,8 @@ from django.http import HttpResponseRedirect
 from django.utils.decorators import method_decorator
 from django.utils.functional import cached_property
 from django.views.generic import ListView, DetailView
+from django.shortcuts import get_object_or_404
+from django.views.generic.base import RedirectView
 from django.db.models import Q
 
 from data.views import UploadView
@@ -31,15 +33,14 @@ class WorkflowListView(ListView):
     def workflow_list(self):
         gi = self.request.galaxy
         workflow_queryset = Workflow.objects.filter(
-            galaxy_server__current=True).filter(~Q(category='automaker')).select_related()
+            galaxy_server__current=True).filter(category='base').select_related()
 
         for workflow in workflow_queryset:
             workflow.fetch_details(gi, self.restricted_toolset)
         return workflow_queryset
 
     def get_queryset(self):
-        return self.workflow_list
-
+        return self.workflow_list    
 
 @method_decorator(connection_galaxy, name="dispatch")
 class WorkflowFormView(UploadView, DetailView):
@@ -84,6 +85,7 @@ class WorkflowFormView(UploadView, DetailView):
         wk = self.get_object()
         workflow = wk.duplicate(gi)
         workflow.fetch_details(gi, self.restricted_toolset)
+        workflow.save()
         # create new history
     
         # upload user file or pasted content
@@ -123,7 +125,7 @@ class WorkflowFormView(UploadView, DetailView):
                  if not t.can_run_on_data( nseq, length, -1, seqaa):
                      form.add_error(
                          'input_file',"Input data is too large for the workflow")
-                     workflow.delete(gi)
+                     workflow.delete_from_galaxy(gi)
                      return self.form_invalid(form)
 
         wksph = create_history(
@@ -155,13 +157,34 @@ class WorkflowFormView(UploadView, DetailView):
                 dataset_map=dataset_map,
             )
         except Exception as galaxy_exception:
+            workflow.delete_from_galaxy(gi)
             raise galaxy_exception
-        finally:
-            workflow.delete(gi)
+        #finally:
+        #    workflow.delete(gi)
         self.success_url = reverse_lazy("history_detail", kwargs={
                                         'history_id': wksph.history}, )
         # Start monitoring
         wksph.monitored = True
+        wksph.workflow = workflow
         initializeworkspacejob.delay(wksph.history)
         wksph.save()
         return HttpResponseRedirect(self.get_success_url())
+
+
+@method_decorator(connection_galaxy, name="dispatch")
+class RerunWorkflow(RedirectView):
+
+    permanent = False
+    query_string = True
+    pattern_name = 'workflow_maker_form'
+
+    # We duplicate the workflow and go to the workflow maker form
+    def get_redirect_url(self, *args, **kwargs):
+        # Duplicate workflow using ID and go to wmaker url...
+        gi = self.request.galaxy
+        wk = get_object_or_404(Workflow, id_galaxy=kwargs['id'])
+        workflow = wk.duplicate(gi)
+        #workflow.fetch_details(gi, self.restricted_toolset)
+        workflow.save()
+        kwargs['id'] = workflow.id_galaxy
+        return super(RerunWorkflow, self).get_redirect_url(*args, **kwargs)

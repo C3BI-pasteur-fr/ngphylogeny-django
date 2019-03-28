@@ -124,7 +124,7 @@ class WorkflowMakerView(WorkflowAdvancedFormView):
         wkname = wk_json.get('name')
 
         # create workflow
-        wk_obj = Workflow.objects.filter(id_galaxy=self.kwargs['id'],category='automaker').first()
+        wk_obj = Workflow.objects.filter(id_galaxy=self.kwargs['id']).exclude(category='base').first()
         # add galaxy json information
         wk_obj.json = wk_json
         wk_obj.save()

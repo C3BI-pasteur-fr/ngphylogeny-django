@@ -4,6 +4,7 @@ from django.contrib.auth.models import User
 from django.db import models
 
 from galaxy.models import Server, GalaxyUser
+from workflows.models import Workflow
 
 
 class WorkspaceHistory(models.Model):
@@ -13,6 +14,8 @@ class WorkspaceHistory(models.Model):
     # uuid = models.UUIDField(unique=True, default=uuid.uuid4, editable=False)
     history = models.CharField(max_length=20)
     galaxy_server = models.ForeignKey(Server, on_delete=models.CASCADE)
+    # The potential workflow that has been executed in the workspace
+    workflow = models.ForeignKey(Workflow, null=True)
     name = models.CharField(max_length=100)
     created_date = models.DateTimeField(auto_now=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True)

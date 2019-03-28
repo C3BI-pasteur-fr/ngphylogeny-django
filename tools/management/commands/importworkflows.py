@@ -74,6 +74,7 @@ class Command(BaseCommand):
                         galaxy_server=galaxy_server,
                         id_galaxy=wfid,
                         name=wfname,
+                        category='base',
                         description=wfname,
                         slug=slugify(wfname))
                     w.save()

@@ -4,6 +4,13 @@
 <a onclick="refresh()" class="btn btn-primary">
   <span class="glyphicon glyphicon-refresh"></span>Refresh
 </a>
+{% if object.workflow %}
+<a href="{% url 'workflow_rerun' object.workflow.id_galaxy %}" class="btn btn-warning" tooltip="Reuse workflow skeleton">
+  <span class="glyphicon glyphicon-repeat"></span>Rerun
+</a>
+
+{% endif %}
+
 {% endblock %}
 {% block content %}
 <div class="row">

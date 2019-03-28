@@ -231,13 +231,14 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
         # (ngphylogeny basic workflows) then we make a copy
         # otherwise we take the wf as is
         # (it will be deleted at the end)
-        if wf.category == 'automaker':
+        if wf.category == 'automaker' or wf.category == 'duplicated':
             workflow = wf
         else:
             workflow = wf.duplicate(gi)
 
         workflow.fetch_details(gi, self.restricted_toolset)
-
+        workflow.save()
+        
         context = self.get_context_data(object=self.object)
 
         # input file
@@ -259,7 +260,7 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
         elif not uploaded_file:
             context = self.get_context_data(object=self.object)
             context['fileerror'] = "No input file given"
-            workflow.delete(gi)
+            workflow.delete_from_galaxy(gi)
             return render(request, self.template_name, context)
         elif isinstance(uploaded_file, InMemoryUploadedFile) or isinstance(uploaded_file, TemporaryUploadedFile):
             upload_filename = str(uploaded_file.name)
@@ -278,12 +279,12 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
         except WorkflowInputFileFormatError as e:
             context = self.get_context_data(object=self.object)
             context['fileerror'] = str(e)
-            workflow.delete(gi)
+            workflow.delete_from_galaxy(gi)
             return render(request, self.template_name, context)
 
         # We check form validity
         if not self.check_form_validity(request, context):
-            workflow.delete(gi)
+            workflow.delete_from_galaxy(gi)
             return self.get(request, *args, **kwargs)
 
         # We create an history (local and on galaxy)
@@ -309,13 +310,13 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
             self.analyze_forms(request, context, workflow, params, gi, wksph, nseq, length, seqaa)
         except WorkflowInvalidFormError as e:
             # if one form is not valid
-            workflow.delete(gi)
+            workflow.delete_from_galaxy(gi)
             delete_history(wksph.history)
             return self.get(request, *args, **kwargs)
         except WorkflowInputFileFormatError as e:
             context = self.get_context_data(object=self.object)
             context['fileerror'] = str(e)
-            workflow.delete(gi)
+            workflow.delete_from_galaxy(gi)
             return render(request, self.template_name, context)
 
         # We run the galaxy workflow
@@ -333,6 +334,7 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
             # Start monitoring (for sending emails)
             initializeworkspacejob.delay(wksph.history)
             wksph.monitored = True
+            wksph.workflow = workflow
             wksph.save()
 
             return HttpResponseRedirect(self.succes_url)
@@ -340,8 +342,7 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
         except Exception:
             delete_history(wksph.history)
             raise
-        finally:
+        #finally:
             # delete the workflow copy of oneclick workflow when
             # the workflow has been run
-            workflow.delete(gi)
-
+            # workflow.delete(gi)

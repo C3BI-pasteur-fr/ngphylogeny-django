@@ -16,6 +16,7 @@ Including another URLconf
 
 from django.conf.urls import url
 
+from .views.generic import RerunWorkflow
 from .views.wkoneclick import WorkflowStartedView
 from .views.wkoneclick import WorkflowOneClickListView
 from .views.wkoneclick import WorkflowOneClickFormView
@@ -39,6 +40,8 @@ urlpatterns = [
         name="workflows_advanced_fullsteps"),
     url(r'^alacarte$', workflows_alacarte_build,
         name="workflows_alacarte"),
+    url(r'^rerun/(?P<id>[\w-]+)$', RerunWorkflow.as_view(),
+        name="workflow_rerun"),
     url(r'^wkmake/(?P<id>[\w-]+)$', WorkflowMakerView.as_view(),
         name="workflow_maker_form"),
 ]
