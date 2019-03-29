@@ -92,8 +92,11 @@ class WorkflowFormView(UploadView, DetailView):
         submitted_file = form.cleaned_data.get('input_file')
         pasted_text = form.cleaned_data.get('pasted_text')
         blast_run   = form.cleaned_data.get('blast_run')
-        galaxy_file = request.POST.get("galaxyfile")
-
+        galaxy_file = form.cleaned_data.get("galaxyfile")
+        nseq = 0
+        length=0
+        seqaa=False
+        
         file_id = ""
         # We check that all the tools of the workflow oneclick are allowed to
         # run on this size of data
@@ -107,20 +110,21 @@ class WorkflowFormView(UploadView, DetailView):
             b = BlastRun.objects.get(pk=blast_run)
             nseq, length, seqaa = biofile.valid_fasta(StringIO.StringIO(str(b.to_fasta())))
         elif galaxy_file != "--":
-            file_id = galaxyfile
+            file_id = galaxy_file
         else:
             form.add_error(
                 'input_file',"No input file given")
             return self.form_invalid(form)
 
-        if nseq == 0:
-            form.add_error(
-                'input_file', "Input file format is not FASTA or file is empty")
-            return self.form_invalid(form)
-        elif nseq <= 3:
-            form.add_error(
-                'input_file',"Input file should contain more than 3 sequences")
-            return self.form_invalid(form)
+        if submitted_file or pasted_text or blast_run != '--':
+            if nseq == 0 :
+                form.add_error(
+                    'input_file', "Input file format is not FASTA or file is empty")
+                return self.form_invalid(form)
+            elif nseq <= 3:
+                form.add_error(
+                    'input_file',"Input file should contain more than 3 sequences")
+                return self.form_invalid(form)
             
         for k,v in workflow.json.get('steps',dict()).items():
              tid = v.get('tool_id',None)

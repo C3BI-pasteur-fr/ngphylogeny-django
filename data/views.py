@@ -74,7 +74,16 @@ class UploadView(UploadMixin, FormView):
                 x = (b.id,b.query_id)
                 blastruns.append(x)
             kwargs['blastruns'] = blastruns
+
+        if self.request.session.get('files'):
+            compatibleinputs = []
+            for key, sf in self.request.session.get('files').iteritems():
+                if sf.get('ext') == 'fasta':
+                    compatibleinputs.append(sf)
+            kwargs['compatibleinputs'] = compatibleinputs
+
         return kwargs
+
     
     def form_valid(self, form):
         if form.cleaned_data.get('input_file') is not None:
