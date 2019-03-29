@@ -92,7 +92,9 @@ class WorkflowFormView(UploadView, DetailView):
         submitted_file = form.cleaned_data.get('input_file')
         pasted_text = form.cleaned_data.get('pasted_text')
         blast_run   = form.cleaned_data.get('blast_run')
+        galaxy_file = request.POST.get("galaxyfile")
 
+        file_id = ""
         # We check that all the tools of the workflow oneclick are allowed to
         # run on this size of data
         if submitted_file:
@@ -104,6 +106,8 @@ class WorkflowFormView(UploadView, DetailView):
         elif blast_run != '--':
             b = BlastRun.objects.get(pk=blast_run)
             nseq, length, seqaa = biofile.valid_fasta(StringIO.StringIO(str(b.to_fasta())))
+        elif galaxy_file != "--":
+            file_id = galaxyfile
         else:
             form.add_error(
                 'input_file',"No input file given")
@@ -137,13 +141,16 @@ class WorkflowFormView(UploadView, DetailView):
 
         if submitted_file:
             u_file = self.upload_file(submitted_file, wksph.history)
+            file_id = u_file.get('outputs')[0].get('id')
         # or upload user pasted content
         elif pasted_text:
             u_file = self.upload_content(pasted_text)
-        elif blast_run :
+            file_id = u_file.get('outputs')[0].get('id')
+        elif blast_run != '--':
             u_file = self.upload_content(b.to_fasta(),name="Blast_%s_%s" % (b.query_id,str(blast_run)))
-            
-        file_id = u_file.get('outputs')[0].get('id')
+            file_id = u_file.get('outputs')[0].get('id')
+        # else if galaxy: : file_id is already set
+        
         i_input = workflow.json['inputs'].keys()[0]
         
         # input file

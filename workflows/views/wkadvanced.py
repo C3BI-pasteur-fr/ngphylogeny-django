@@ -92,6 +92,19 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
         context = self.get_context_data(object=self.object)
         return render(request, self.template_name, context)
 
+
+    def compatible_inputs(self, extensions, files):
+        """
+        Returns a list of files [{ext:,history:,name:}] from self.session_files
+        that are compatible with the given list of extenstions
+        """
+        outlist = []
+        if files:
+            for key, sf in files.iteritems():
+                if sf.get('ext') in extensions:
+                    outlist.append(sf)
+        return outlist
+    
     def get_context_data(self, **kwargs):
         gi = self.request.galaxy
         if not self.object:
@@ -111,7 +124,19 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
                 x = (str(b.id),str(b.query_id))
                 blastruns.append(x)
             context['blastruns'] = blastruns
+
+        if self.request.session.get('files'):
+            # We get the first tool (after input_tool) of the workflow
+            first_tool_id = self.object.json['steps'].get('1').get('tool_id')
+            # Then we get the acceptable extentions of this tool
+            extensions = gi.tools.show_tool(first_tool_id,io_details=True).get('inputs')[0].get('extensions')
+            compatibleinputs = self.compatible_inputs(extensions,self.request.session.get('files'))
+            context['compatibleinputs'] = compatibleinputs
+            
+        #gi.attrfield.get('extensions')
+        #compatible_inputs = compatibleInputs()
         
+            
         for t in self.object.detail:
             tools.append(t[1])
             context['tool_list'].append(slugify(t[1].name))
@@ -252,36 +277,39 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
         # before creating the workspace etc.
         uploaded_file = request.FILES.get("file") or request.POST.get("file")
         blastrun = request.POST.get("blastrun")
-        # We check that a file has been given
-        if blastrun != "--":
-            b = BlastRun.objects.get(pk=blastrun)
-            uploaded_file = b.to_fasta()
-            upload_filename= "Blast_%s_%s" % (b.query_id,str(blastrun))
-        elif not uploaded_file:
-            context = self.get_context_data(object=self.object)
-            context['fileerror'] = "No input file given"
-            workflow.delete_from_galaxy(gi)
-            return render(request, self.template_name, context)
-        elif isinstance(uploaded_file, InMemoryUploadedFile) or isinstance(uploaded_file, TemporaryUploadedFile):
-            upload_filename = str(uploaded_file.name)
-        else:
-            upload_filename = "uploaded_content"
-            
+        galaxy_file = request.POST.get("galaxyfile")
         # Then we check input file format
         nseq=0
         length=0
         seqaa=False
-        try:
-            tmp_file, uploadfile_name, nseq, length, seqaa = self.process_file_to_upload(
-                uploaded_file,
-                upload_filename,
-            )
-        except WorkflowInputFileFormatError as e:
-            context = self.get_context_data(object=self.object)
-            context['fileerror'] = str(e)
-            workflow.delete_from_galaxy(gi)
-            return render(request, self.template_name, context)
+        if galaxy_file == "--":
+            # We check that a file has been given
+            if blastrun != "--":
+                b = BlastRun.objects.get(pk=blastrun)
+                uploaded_file = b.to_fasta()
+                upload_filename= "Blast_%s_%s" % (b.query_id,str(blastrun))
+            elif not uploaded_file:
+                context = self.get_context_data(object=self.object)
+                context['fileerror'] = "No input file given"
+                workflow.delete_from_galaxy(gi)
+                return render(request, self.template_name, context)
+            elif isinstance(uploaded_file, InMemoryUploadedFile) or isinstance(uploaded_file, TemporaryUploadedFile):
+                upload_filename = str(uploaded_file.name)
+            else:
+                upload_filename = "uploaded_content"
+                
+            try:
+                tmp_file, uploadfile_name, nseq, length, seqaa = self.process_file_to_upload(
+                    uploaded_file,
+                    upload_filename,
+                )
+            except WorkflowInputFileFormatError as e:
+                context = self.get_context_data(object=self.object)
+                context['fileerror'] = str(e)
+                workflow.delete_from_galaxy(gi)
+                return render(request, self.template_name, context)
 
+        print(galaxy_file)
         # We check form validity
         if not self.check_form_validity(request, context):
             workflow.delete_from_galaxy(gi)
@@ -297,11 +325,14 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
             wf_category=cat,
             wf_steps=workflow.tooldesc,
         )
-        # we send the file to galaxy
-        output = gi.tools.upload_file(path=tmp_file.name,
-                                      file_name=uploadfile_name,
-                                      history_id=wksph.history)
-        galaxy_file = output.get('outputs')[0].get('id')
+
+        if galaxy_file == "--":
+            # we send the file to galaxy
+            output = gi.tools.upload_file(path=tmp_file.name,
+                                          file_name=uploadfile_name,
+                                          history_id=wksph.history)
+            galaxy_file = output.get('outputs')[0].get('id')
+
         dataset_map[i_input] = {'id': galaxy_file, 'src': 'hda'}
 
         # We analyze submited forms and upload files to
@@ -346,3 +377,5 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
             # delete the workflow copy of oneclick workflow when
             # the workflow has been run
             # workflow.delete(gi)
+
+

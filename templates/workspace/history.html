@@ -6,7 +6,7 @@
 </a>
 {% if object.workflow %}
 <a href="{% url 'workflow_rerun' object.workflow.id_galaxy %}" class="btn btn-warning" tooltip="Reuse workflow skeleton">
-  <span class="glyphicon glyphicon-repeat"></span>Rerun
+  <span class="glyphicon glyphicon-repeat"></span>Reuse
 </a>
 
 {% endif %}
@@ -22,9 +22,7 @@
         {% include "workspace/include/history_wait.html" %}
       {% endif %}
     {% else %}
-      <div class="jumbotron">
-        This workspace has no equivalent on the galaxy server
-      </div>
+        {% include "workspace/include/history_wait.html" %}    
     {% endif %}
   </div>
 </div>
