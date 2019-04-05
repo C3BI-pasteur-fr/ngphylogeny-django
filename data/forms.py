@@ -16,25 +16,37 @@ class UploadForm(forms.Form):
     pasted_text = forms.CharField(widget=forms.Textarea, required=False)
     blast_run = forms.ChoiceField()
     
-    def __init__(self, blastruns=None, *args, **kwargs):
+    def __init__(self, blastruns=None, compatibleinputs=None, *args, **kwargs):
         super(UploadForm, self).__init__(*args, **kwargs)
 
         # We fill the select options with id of blast runs
-        choices= []
-        choices.append(
+        blastchoices= []
+        blastchoices.append(
             ('--','--'),
         )
         if blastruns is not None:
             for (bid, bname) in blastruns:
                 c = (bid,"%s (%s)" % (str(bname), str(bid)))
-                choices.append(c)
-        self.fields['blast_run'] = forms.ChoiceField(choices=choices)
+                blastchoices.append(c)
+        self.fields['blast_run'] = forms.ChoiceField(choices=blastchoices)
+
+        compatiblechoices = []
+        compatiblechoices.append(
+            ('--','--'),
+        )
+        
+        if compatibleinputs is not None:
+            for f in compatibleinputs:
+                c = (f.get('id'),"%s (%s)" % (str(f.get('name')), str(f.get('id'))))
+                compatiblechoices.append(c)
+        self.fields['galaxyfile'] = forms.ChoiceField(choices=compatiblechoices)
+
         
         textarea_id = "id_pasted_text"
 
         self.helper = FormHelper()
         self.helper.form_method = 'POST'
-        self.helper.layout = Layout('input_file','pasted_text','blast_run',
+        self.helper.layout = Layout('input_file','pasted_text','blast_run', 'galaxyfile',
                                     FormActions(
                                         Submit('submit', 'Submit'),
                                         StrictButton( "<span class='glyphicon glyphicon-question-sign'></span> Example",

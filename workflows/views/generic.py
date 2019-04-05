@@ -92,7 +92,12 @@ class WorkflowFormView(UploadView, DetailView):
         submitted_file = form.cleaned_data.get('input_file')
         pasted_text = form.cleaned_data.get('pasted_text')
         blast_run   = form.cleaned_data.get('blast_run')
-
+        galaxy_file = form.cleaned_data.get("galaxyfile")
+        nseq = 0
+        length=0
+        seqaa=False
+        
+        file_id = ""
         # We check that all the tools of the workflow oneclick are allowed to
         # run on this size of data
         if submitted_file:
@@ -104,19 +109,22 @@ class WorkflowFormView(UploadView, DetailView):
         elif blast_run != '--':
             b = BlastRun.objects.get(pk=blast_run)
             nseq, length, seqaa = biofile.valid_fasta(StringIO.StringIO(str(b.to_fasta())))
+        elif galaxy_file != "--":
+            file_id = galaxy_file
         else:
             form.add_error(
                 'input_file',"No input file given")
             return self.form_invalid(form)
 
-        if nseq == 0:
-            form.add_error(
-                'input_file', "Input file format is not FASTA or file is empty")
-            return self.form_invalid(form)
-        elif nseq <= 3:
-            form.add_error(
-                'input_file',"Input file should contain more than 3 sequences")
-            return self.form_invalid(form)
+        if submitted_file or pasted_text or blast_run != '--':
+            if nseq == 0 :
+                form.add_error(
+                    'input_file', "Input file format is not FASTA or file is empty")
+                return self.form_invalid(form)
+            elif nseq <= 3:
+                form.add_error(
+                    'input_file',"Input file should contain more than 3 sequences")
+                return self.form_invalid(form)
             
         for k,v in workflow.json.get('steps',dict()).items():
              tid = v.get('tool_id',None)
@@ -137,13 +145,16 @@ class WorkflowFormView(UploadView, DetailView):
 
         if submitted_file:
             u_file = self.upload_file(submitted_file, wksph.history)
+            file_id = u_file.get('outputs')[0].get('id')
         # or upload user pasted content
         elif pasted_text:
             u_file = self.upload_content(pasted_text)
-        elif blast_run :
+            file_id = u_file.get('outputs')[0].get('id')
+        elif blast_run != '--':
             u_file = self.upload_content(b.to_fasta(),name="Blast_%s_%s" % (b.query_id,str(blast_run)))
-            
-        file_id = u_file.get('outputs')[0].get('id')
+            file_id = u_file.get('outputs')[0].get('id')
+        # else if galaxy: : file_id is already set
+        
         i_input = workflow.json['inputs'].keys()[0]
         
         # input file

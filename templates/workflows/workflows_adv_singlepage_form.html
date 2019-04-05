@@ -44,11 +44,13 @@
             fileInput.change(function (evt) {
                 var fileDisplayArea = parentFileDiv.find('textarea');
                 parentFileDiv.find('textarea').val("");
-		$("#id_blast_run").val("--");
+	        $("#id_blast_run").val("--");
+	        $("#id_galaxyfile").val("--");
             });
             parentFileDiv.find('textarea').change(function () {
         	fileInput.val('');
 	        $("#id_blast_run").val("--");
+                $("#id_galaxyfile").val("--");
             });
 
 	    // If select changes, we fill the textarea with blast result
@@ -57,6 +59,16 @@
 	    	    var fileDisplayArea = parentFileDiv.find('textarea');
 	    	    fileDisplayArea.val("");
 	            fileInput.val('');
+	            $("#id_galaxyfile").val("--");
+	    });
+
+	    // If select changes, we fill the textarea with blast result
+	    // fasta file
+	    $("#id_galaxyfile").on('change', function (e) {
+	    	    var fileDisplayArea = parentFileDiv.find('textarea');
+	    	    fileDisplayArea.val("");
+	            fileInput.val('');
+	            $("#id_blast_run").val("--");
 	    });
 
             parentFileDiv.append("<button id='cleanTextarea" + fileInput.attr('name') + "' type='button' class='btn btn-default'><span class='glyphicon glyphicon-trash'></span></button>");
@@ -190,6 +202,13 @@
 				    <option value="--">--</option>
 				    {% for bid, bname in blastruns %}
 				    <option value="{{bid}}">{{bname}} ({{bid}})</option>
+				    {% endfor %}
+				  </select>
+				  Files in session
+                                  <select name="galaxyfile" class="select form-control" id="id_galaxyfile"> 
+				    <option value="--">--</option>
+				    {% for compfile in compatibleinputs %}
+				    <option value="{{ compfile.id }}">{{ compfile.name }} ({{ compfile.id }})</option>
 				    {% endfor %}
 				  </select>
                                 </div>

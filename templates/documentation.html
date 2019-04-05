@@ -329,6 +329,12 @@ It is possible to run NGPhylogeny.fr via two docker images:
 
 * Then open your browser at [http://127.0.0.1:8000](http://127.0.0.1:8000)
 
+## Dataset size limitation
+
+NGPhylogeny can handle large datasets. However, on the public server, we implemented limitations on the number and length of sequences that depend on the running tool. An error is displayed if the dataset is too large to be analyzed with the public instance of NGPhylogeny.fr.
+
+In contrast, these limitations are not activated if you run NGPhylogeny.fr locally using Docker.
+
 ## Example video
 <video width="800" controls="controls">
   <source src="https://ngphylogeny.fr/static/NGPhylo_doc.mp4" type="video/mp4" />
