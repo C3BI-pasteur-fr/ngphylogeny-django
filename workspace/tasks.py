@@ -104,6 +104,9 @@ def updateworkspacestatus(historyid):
                 if w and w.email and re.match(r"[^@]+@[^@]+\.[^@]+", w.email):
                     logging.warning("Sending EMail to %s",w.email)
                     try:
+                        citation = "Lemoine F, Correia D, Lefort V, Doppelt-Azeroual O, Mareuil F, Cohen-Boulakia S, Gascuel O\n" \
+                                   "NGPhylogeny.fr: new generation phylogenetic services for non-specialists.\n" \
+                                   "Nucleic Acids Research 2019 (https://doi.org/10.1093/nar/gkz303).\n"
                         message = "Dear NGPhylogeny user, \n\n"
                         if error:
                             message= message + "Your NGPhylogeny job finished with errors.\n\n"
@@ -112,7 +115,9 @@ def updateworkspacestatus(historyid):
                         please = 'Please visit http://%s%s to check results\n\n' % ("ngphylogeny.fr", reverse('history_detail', kwargs={'history_id':historyid}))
                         message = message + please
                         message = message + "Thank you for using ngphylogeny.fr\n\n"
-                        message = message + "NGPhylogeny.fr development team.\n"
+                        message = message + "NGPhylogeny.fr development team.\n\n"
+                        message = message + citation
+                        
                         send_mail(
                             'NGPhylogeny.fr results',
                             message,
