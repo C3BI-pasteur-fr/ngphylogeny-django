@@ -76,16 +76,16 @@ One click workflows are accessible via the "Phylogeny Analysis/One click workflo
 
 The 4 oneclick workflows implemented in NGPhylogeny.fr differ by the tree inference tool:
 
-1. PhyML-SMS: This workflow uses [PhyML-SMS](http://www.atgc-montpellier.fr/phyml-sms/) to select the best evolutionary model and to infer the trees. However, it may not handle very large datasets, as the tree inference may take a very long time;
-2. PhyML: This workflow uses [PhyML](http://www.atgc-montpellier.fr/phyml/) to infer trees. Default options depend on data type (dna, protein). Like PhyML-SMS, large datasets may not be analyzed with this workflow;
+1. PhyML+SMS: This workflow uses [PhyML+SMS](http://www.atgc-montpellier.fr/phyml-sms/) to select the best evolutionary model and to infer the trees. However, it may not handle very large datasets, as the tree inference may take a very long time;
+2. PhyML: This workflow uses [PhyML](http://www.atgc-montpellier.fr/phyml/) to infer trees. Default options depend on data type (dna, protein). Like PhyML+SMS, large datasets may not be analyzed with this workflow;
 3. FastME: This workflow infer trees using [FastME](http://www.atgc-montpellier.fr/fastme/). FastME provides distance algorithms to infer phylogenies and can work with large datasets;
 4. FastTree: This workflow runs [FastTree](http://www.microbesonline.org/fasttree/) to infer trees. "FastTree infers approximately-maximum-likelihood phylogenetic trees from alignments of nucleotide or protein sequences" and works very very large datasets.
 
 Sections below describe these oneclick workflows and all the steps.
 
-### PhyML-SMS
+### PhyML+SMS
 
-![PhyML-SMS workflow]({% static 'images/doc/menu_oc_phymlsms.png' %})
+![PhyML+SMS workflow]({% static 'images/doc/menu_oc_phymlsms.png' %})
 
 Workflow outputs:
 
@@ -98,7 +98,7 @@ Workflow outputs:
   - Cleaned sequences Nexus (NEXUS)
   - Cleaned sequences Fasta (FASTA)
   - Cleaned sequences Phylip (PHYLIP)
-* PhyML-SMS:
+* PhyML+SMS:
   - Output logs (TXT)
   - Output tree (NEWICK)
   - SMS model comparison (TXT)
@@ -194,7 +194,7 @@ Workflow outputs:
 - If sequence type is Protein or Codon:
   - Matrix: `BLOSUM62`
 
-#### PhyML-SMS
+#### PhyML+SMS
 
 - Statistical criterion to select the model : `AIC`
 - Tree topology search : `SPR`
@@ -262,7 +262,7 @@ In this mode, users can choose the tool they want to run at each step of the wor
 
 1. Multiple alignment: Clustal omega; MAFFT; MUSCLE;
 2. Alignment curation: BMGE; Gblocks; Noisy;
-3. Tree inference: FastME; FastTree; MrBayes; PhyML-SMS; PhyML; TNT;
+3. Tree inference: FastME; FastTree; MrBayes; PhyML+SMS; PhyML; TNT;
 4. Tree rendering: Newick Display.
 
 In addition, parameters of each step should be specified.
