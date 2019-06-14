@@ -213,7 +213,7 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
                     # send file to galaxy
                     outputs = gi.tools.upload_file(
                         path=tmp_file.name,
-                        file_name=uploaded_file.name,
+                        file_name=uploaded_file.name.encode('ascii','ignore'),
                         history_id=wksph.history)
                     file_id = outputs.get('outputs')[0].get('id')
                     tool_inputs.set_dataset_param(
@@ -294,7 +294,7 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
                 workflow.delete_from_galaxy(gi)
                 return render(request, self.template_name, context)
             elif isinstance(uploaded_file, InMemoryUploadedFile) or isinstance(uploaded_file, TemporaryUploadedFile):
-                upload_filename = str(uploaded_file.name)
+                upload_filename = uploaded_file.name.encode('ascii','ignore')
             else:
                 upload_filename = "uploaded_content"
                 
