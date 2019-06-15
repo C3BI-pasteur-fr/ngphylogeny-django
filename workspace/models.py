@@ -17,7 +17,7 @@ class WorkspaceHistory(models.Model):
     # The potential workflow that has been executed in the workspace
     workflow = models.ForeignKey(Workflow, null=True)
     name = models.CharField(max_length=100)
-    created_date = models.DateTimeField(auto_now=True)
+    created_date = models.DateTimeField(auto_now_add=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
     email = models.CharField(max_length=100)
     monitored = models.BooleanField(default=False)
