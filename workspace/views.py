@@ -253,7 +253,10 @@ class GalaxyErrorView(TemplateView):
         hid=''
         if ds is not None:
             state = ds.get('state')
-            errormessage = ds.get('misc_info')
+            #errormessage = ds.get('misc_info')
+            job = ds.get('creating_job')
+            jinfo = gi.jobs.show_job(job,full_details=True)
+            errormessage = jinfo.get('stderr')+jinfo.get('stdout')
             hid = ds.get('history_id')
             name = ds.get('name')
 	context['state'] = state
