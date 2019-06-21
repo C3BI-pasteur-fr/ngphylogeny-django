@@ -11,17 +11,6 @@
 {% block javascripts %}
     <script src="https://cdn.datatables.net/1.10.16/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/1.10.16/js/dataTables.bootstrap.min.js"></script>
-    <script>
-    $(document).ready(function(){
-	$('#view').html("");
-	$('#view').append("<h2>Error in job \"{{jobname}}\"</h2>");
-	$('#view').append("<table id=\"paramtable\" style=\"margin-left:auto;margin-right:auto;\"></table>");
-	$('#paramtable').append("<thead><tr><th>Key</th><th>Value</th></tr></thead><tbody>");
-        $('#paramtable').append("<tr><td>Status</td><td><pre>{{ state }}</pre></td></tr>");
-        $('#paramtable').append("<tr><td>Message</td><td><pre>{{ error|escape|linebreaks }}</pre></td></tr>");
-	$('#view').append("</tbody></table>");
-    });
-</script>
 {% endblock %}
 {% block goback %}
 <div class="row">
@@ -32,6 +21,15 @@
 {% endblock %}
 {% block content %}
 <div id="view" class="row">
-  <h4><span class="glyphicon glyphicon-refresh spin"></span> Loading...</h4>
+  <h2>Error in job {{jobname}}</h2>
+  <table id="paramtable" style="margin-left:auto;margin-right:auto;">
+    <thead>
+      <tr><th>Key</th><th>Value</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Status</td><td><pre>{{ state }}</pre></td></tr>
+      <tr><td>Message</td><td><pre>{{ error|escape|linebreaks }}</pre></td></tr>
+    </tbody>
+  </table>
 </div>
 {% endblock %}
