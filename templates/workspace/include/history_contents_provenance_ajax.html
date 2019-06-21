@@ -243,6 +243,10 @@
                data-toggle="tooltip" data-placement="right"
                href="{% url 'display_params' file.id %}">
               <span class="glyphicon glyphicon-cog text-primary"></span></a>
+	    <a class="btn btn-default btn-sm" title="shows stdout"
+	       href="{% url 'galaxy_error_url' file.id %}">
+	      <span class="glyphicon glyphicon-chevron-right text-primary"></span>
+	    </a>
             <a class="btn btn-default btn-sm" title="Dowload the file"
                data-toggle="tooltip" data-placement="right"
                href="{% url 'download_file' file.id %}">
