@@ -243,7 +243,9 @@
                data-toggle="tooltip" data-placement="right"
                href="{% url 'display_params' file.id %}">
               <span class="glyphicon glyphicon-cog text-primary"></span></a>
-	    <a class="btn btn-default btn-sm" title="shows stdout"
+	    <a class="btn btn-default btn-sm"
+	       data-toggle="tooltip" data-placement="right"
+	       title="Show stdout"
 	       href="{% url 'galaxy_error_url' file.id %}">
 	      <span class="glyphicon glyphicon-chevron-right text-primary"></span>
 	    </a>
@@ -288,8 +290,10 @@
 	    </a>
 	    {% endif %}
 	    {% elif 'error' in file.state %}
-	    <a class="btn btn-default btn-sm" title="shows error"
-	       href="{% url 'galaxy_error_url' file.id %}">
+	    <a class="btn btn-default btn-sm"
+	       href="{% url 'galaxy_error_url' file.id %}"
+	      data-toggle="tooltip" data-placement="right"
+	      title="Show messages">
 	      <span class="glyphicon glyphicon-exclamation-sign text-danger"></span>
 	    </a>
 	    {% endif %}
