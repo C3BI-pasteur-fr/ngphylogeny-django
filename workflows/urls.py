@@ -17,7 +17,6 @@ Including another URLconf
 from django.conf.urls import url
 
 from .views.generic import RerunWorkflow
-from .views.wkoneclick import WorkflowStartedView
 from .views.wkoneclick import WorkflowOneClickListView
 from .views.wkoneclick import WorkflowOneClickFormView
 from .views.wkadvanced import WorkflowAdvancedListView
@@ -26,9 +25,6 @@ from .views.wkmaker import WorkflowMakerView
 from .views.wkmaker import workflows_alacarte_build
 
 urlpatterns = [
-
-    url(r'^quickstart$', WorkflowStartedView.as_view(),
-        name="get_started_workflow"),
     url(r'^oneclick/$', WorkflowOneClickListView.as_view(),
         name="workflow_oneclick_list"),
     url(r'^oneclick/(?P<slug>[\w-]+)$', WorkflowOneClickFormView.as_view(),

@@ -38,14 +38,3 @@ class WorkflowOneClickFormView(WorkflowFormView):
         except Exception as galaxy_exception:
             raise galaxy_exception
         return render
-
-@method_decorator(connection_galaxy, name="dispatch")
-class WorkflowStartedView(WorkflowOneClickFormView):
-    """
-        Return form View to run the first One Click Workflow
-    """
-
-    def get_object(self, queryset=None, detail=None):
-        wk_obj = self.model.objects.order_by('rank').first()
-        wk_obj.json = self.request.galaxy.workflows.show_workflow(workflow_id=wk_obj.id_galaxy)
-        return wk_obj
