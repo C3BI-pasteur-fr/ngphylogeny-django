@@ -5,6 +5,17 @@ USEREMAIL=$2
 GALAXYSERVER=$3
 GALAXYKEY=$4
 
+# Wait for galaxycurl http://localhost:8080/api/version | jq -r .version_major
+
+echo ${GALAXYSERVER}
+echo $(curl -s ${GALAXYSERVER}/api/version)
+until [[ "$(curl -s ${GALAXYSERVER}/api/version | jq -r '.version_major')" == "18.09" ]] ; do
+    echo ${GALAXYSERVER}
+    echo $(curl -s ${GALAXYSERVER}/api/version)
+    sleep 2
+done
+
+
 # Start required services 
 service redis_6379 start
 

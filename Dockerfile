@@ -74,4 +74,7 @@ RUN wget http://nginx.org/download/nginx-1.15.0.tar.gz \
     && chmod +x /etc/init.d/nginx \
     && chmod 640  /etc/default/nginx
 
+RUN wget -O /usr/local/bin/jq https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64 \
+    && chmod +x /usr/local/bin/jq
+
 ENTRYPOINT ["/home/ngphylo/startup.sh"]
