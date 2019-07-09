@@ -10,3 +10,4 @@ celery[redis]
 uwsgi
 django-simple-captcha
 python_magic==0.4.15
+psycopg2
