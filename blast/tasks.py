@@ -125,6 +125,9 @@ def launch_ncbi_blast(blastrunid, sequence, prog, db, evalue, coverage, maxseqs)
 
         if b.email is not None and re.match(r"[^@]+@[^@]+\.[^@]+", b.email):
             try:
+                citation = "Lemoine F, Correia D, Lefort V, Doppelt-Azeroual O, Mareuil F, Cohen-Boulakia S, Gascuel O\n" \
+                           "NGPhylogeny.fr: new generation phylogenetic services for non-specialists.\n" \
+                           "Nucleic Acids Research 2019 (https://doi.org/10.1093/nar/gkz303).\n"
                 message = "Dear NGPhylogeny user, \n\n"
                 if b.status != b.FINISHED:
                     message = message + "Your NGPhylogeny BLAST job finished with errors.\n\n"
@@ -134,7 +137,9 @@ def launch_ncbi_blast(blastrunid, sequence, prog, db, evalue, coverage, maxseqs)
                     "ngphylogeny.fr", reverse('blast_view', kwargs={'pk': b.id}))
                 message = message + please
                 message = message + "Thank you for using ngphylogeny.fr\n\n"
-                message = message + "NGPhylogeny.fr development team.\n"
+                message = message + "NGPhylogeny.fr development team.\n\n"
+                message = message + citation
+                
                 send_mail(
                     'NGPhylogeny.fr BLAST results',
                     message,

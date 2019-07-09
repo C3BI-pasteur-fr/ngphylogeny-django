@@ -8,6 +8,10 @@ FROM python:2.7.14-jessie
 MAINTAINER Frederic Lemoine <frederic.lemoine@pasteur.fr>
 
 COPY . /home/ngphylo
+WORKDIR /home/ngphylo/
+
+RUN apt-get update --fix-missing \
+    && apt-get install -y libpq-dev postgresql-client
 
 # Install REDIS-SERVER
 RUN wget http://download.redis.io/redis-stable.tar.gz \
@@ -17,19 +21,12 @@ RUN wget http://download.redis.io/redis-stable.tar.gz \
     && cp src/redis-server /usr/local/bin/ \
     && cp src/redis-cli /usr/local/bin/ \
     && mkdir /etc/redis \
-    && mkdir /home/ngphylo/redis \
+    && mkdir -p /home/ngphylo/redis \
     && cp utils/redis_init_script /etc/init.d/redis_6379 \
     && mv /home/ngphylo/docker/redis.conf /etc/redis/6379.conf \
     && mkdir /home/ngphylo/redis/6379 \
     && cd .. && rm -rf redis-stable* \
     && touch /var/log/redis_6379.log
-
-WORKDIR /home/ngphylo/
-RUN pip install -r requirement.txt
-RUN python manage.py makemigrations \
-    && python manage.py migrate --run-syncdb \
-    && python manage.py createcachetable \
-    && python manage.py collectstatic --noinput
 
 # Celeryd / Celerybeat init scripts
 COPY docker/celeryd /etc/init.d/celeryd
@@ -73,5 +70,15 @@ RUN wget http://nginx.org/download/nginx-1.15.0.tar.gz \
     && cd .. && rm -rf nginx-1.15.0* \
     && chmod +x /etc/init.d/nginx \
     && chmod 640  /etc/default/nginx
+
+RUN wget -O /usr/local/bin/jq https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64 \
+    && chmod +x /usr/local/bin/jq
+
+RUN pip install -r requirement.txt
+RUN python manage.py makemigrations \
+    && python manage.py migrate --run-syncdb \
+    && python manage.py createcachetable \
+    && python manage.py collectstatic --noinput
+
 
 ENTRYPOINT ["/home/ngphylo/startup.sh"]

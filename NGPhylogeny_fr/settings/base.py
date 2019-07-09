@@ -27,7 +27,7 @@ SECRET_KEY = '_m(y$t1ukdw&!z-e_)ig5h!=*#y*3db3vh81il_i=n*y24ih9k'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-ALLOWED_HOSTS = ["127.0.0.1", ]
+ALLOWED_HOSTS = ["*", ]
 INTERNAL_IPS = ["127.0.0.1", ]
 
 CRISPY_TEMPLATE_PACK = "bootstrap3"
@@ -166,11 +166,14 @@ MARKDOWN_DEUX_STYLES = {'default': {
     "safe_mode": False,  # << here's the change
 }}
 
-# EMAIL_HOST = '<smtp>'
-# EMAIL_PORT = port
-# EMAIL_HOST_USER = '<user>'
-# EMAIL_HOST_PASSWORD = '<pass>'
-# EMAIL_USE_TLS=<True|False>
+EMAIL_HOST = os.environ.get('NGPHYLO_EMAIL_HOST')
+EMAIL_PORT = os.environ.get('NGPHYLO_EMAIL_PORT')
+EMAIL_HOST_USER = os.environ.get('NGPHYLO_EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = os.environ.get('NGPHYLO_EMAIL_HOST_PASSWORD')
+EMAIL_USE_TLS = (os.environ.get('NGPHYLO_EMAIL_USE_TLS')== 'True')
+
+if EMAIL_PORT is not None:
+    EMAIL_PORT = int(EMAIL_PORT)
 
 # CELERY SETTINGS
 BROKER_URL = 'redis://localhost:6379/0'

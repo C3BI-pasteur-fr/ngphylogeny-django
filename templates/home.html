@@ -13,9 +13,11 @@
         reconstructing and analysing phylogenetic relationships between
         molecular sequences.</p>
 	    <img id="genie" src="{% static 'images/genie.svg' %}"/>
-        <p class="text-center"><a href="{% url 'get_started_workflow' %}" class="btn playbtn">
-          <span class="glyphicon glyphicon-play"></span> <strong>Let's GO !</strong> with One Click Workflow
-        </a></p>
+        <p class="text-center">
+	  <a href="{% url 'workflow_oneclick_list' %}" class="btn playbtn">
+            <span class="glyphicon glyphicon-play"></span> <strong>Let's GO !</strong> with One Click Workflow
+          </a>
+	</p>
       </div>
 </div>
 {% endblock %}
