@@ -96,33 +96,29 @@ class Command(BaseCommand):
             else:
                 raise CommandError('Cannot connect to Galaxy server {}'.format(galaxy_server.url))
         if tools_found:
-            self.stdout.write("%s" % ('\n'.join(tools_found)))
-            response = 'y' if force else raw_input(
-                'Do you want (re)import this tool(s)? [y/N] from {}:'.format(galaxy_server))
-            if response.lower() == 'y':
-                import_tools_report = Tool.import_tools(
-                    galaxy_server, tools=tools_found,
-                    force=force)
-                if import_tools_report['new']:
+            import_tools_report = Tool.import_tools(
+                galaxy_server, tools=tools_found,
+                force=force)
+            if import_tools_report['new']:
+                self.stdout.write(
+                    self.style.SUCCESS(
+                        "%s successfully imported new tools." %
+                        (len(import_tools_report['new']))))
+                for ti in import_tools_report['new']:
                     self.stdout.write(
                         self.style.SUCCESS(
-                            "%s successfully imported new tools." %
-                            (len(import_tools_report['new']))))
-                    for ti in import_tools_report['new']:
-                        self.stdout.write(
-                            self.style.SUCCESS(
-                                "%s %s successfully imported" %
-                                (ti.name, ti.version))
-                        )
-                else:
-                    self.stdout.write(self.style.WARNING(
-                        "No new tool has been imported"))
-
-                for tool_id in import_tools_report['error']:
-                    self.stdout.write(
-                        self.style.ERROR(
-                            "import of %s has failed " % (tool_id))
+                            "%s %s successfully imported" %
+                            (ti.name, ti.version))
                     )
+            else:
+                self.stdout.write(self.style.WARNING(
+                    "No new tool has been imported"))
+
+            for tool_id in import_tools_report['error']:
+                self.stdout.write(
+                    self.style.ERROR(
+                        "import of %s has failed " % (tool_id))
+                )
         else:
             self.stdout.write("No result was found for query  %s" % (query))
 
