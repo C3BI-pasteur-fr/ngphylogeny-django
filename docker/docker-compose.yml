@@ -1,0 +1,49 @@
+version: "2.2"
+
+services:
+  galaxy:
+    image: evolbioinfo/ngphylogeny-galaxy
+    privileged: true
+    ports:
+      - "8080:80"
+      - "8121:21"
+      - "8122:22"
+    volumes:
+      - galaxy-data:/export/
+  web:
+    image: evolbioinfo/ngphylogeny
+    ports:
+      - "8000:8000"
+      - "8222:22"
+    environment:
+      - NGPHYLO_HOST=<host:port>
+      - NGPHYLO_EMAIL_HOST=<smtp host>
+      - NGPHYLO_EMAIL_PORT=<smtp port>
+      - NGPHYLO_EMAIL_HOST_USER=<smtp username>
+      - NGPHYLO_EMAIL_HOST_PASSWORD=<smtp password>
+      - NGPHYLO_EMAIL_USE_TLS=<True|False>
+      - NGPHYLO_DATABASE_ENGINE=django.db.backends.postgresql_psycopg2
+      - NGPHYLO_DATABASE_NAME=<psql database name>
+      - NGPHYLO_DATABASE_USER=<psql database user>
+      - NGPHYLO_DATABASE_PASSWORD=<psql database password>
+      - NGPHYLO_DATABASE_HOST=db
+      - NGPHYLO_DATABASE_PORT=5432
+    depends_on:
+      - galaxy
+      - db
+    entrypoint:
+      /home/ngphylo/startup.sh admin admin@admin http://galaxy:80 admin
+  db:
+    image: postgres
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    ports:
+      - 5432:5432
+    environment:
+      - POSTGRES_USER=<psql database user>
+      - POSTGRES_PASSWORD=<psql database password>
+volumes:
+  db-data:
+    driver: local
+  galaxy-data:
+    driver: local
