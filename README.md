@@ -129,3 +129,30 @@ docker run -p 8000:8000 evolbioinfo/ngphylogeny admin admin@admin http://host.do
 # Linux => Starting NGPhylogeny.fr
 docker run -p 8000:8000 --net=host evolbioinfo/ngphylogeny admin admin@admin http://localhost:8080 admin
 ```
+
+## Fully automatic with [docker-compose](https://docs.docker.com/compose/)
+The `docker-compose.yml` file in the `docker` folder is configured to set up a fully automatically running ngphylogeny instance, with 3 services:
+
+1. A Galaxy server
+1. A PostgreSQL database
+2. The NGPhylogeny.fr server
+
+First the file must be adapted to specific needs, by changing values between `<>` with real values, especially:
+
+- `NGPHYLO_HOST` : The hostname or ip address of the server on which NGPhylogeny.fr will be running (for urls purpose)
+- `NGPHYLO_EMAIL_HOST`: The smtp server for email notification
+- `NGPHYLO_EMAIL_PORT`: The smtp port
+- `NGPHYLO_EMAIL_HOST_USER`: The smtp user name
+- `NGPHYLO_EMAIL_HOST_PASSWORD`: The smtp password
+- `NGPHYLO_EMAIL_USE_TLS`: True or False, if smtp uses TLS
+- `NGPHYLO_DATABASE_NAME`: Name of the PostgreSQL database (see below)
+- `NGPHYLO_DATABASE_USER`: PostgreSQL user name (see below)
+- `NGPHYLO_DATABASE_PASSWORD`: PostgreSQL password (see below)
+- `POSTGRES_USER`: PostgreSQL user name (database name is the same)
+- `POSTGRES_PASSWORD`: PostgreSQL password
+
+Then to run the services:
+
+```
+> docker-compose up -d
+```
