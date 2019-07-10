@@ -75,10 +75,12 @@ RUN wget -O /usr/local/bin/jq https://github.com/stedolan/jq/releases/download/j
     && chmod +x /usr/local/bin/jq
 
 RUN pip install -r requirement.txt
-RUN python manage.py makemigrations \
-    && python manage.py migrate --run-syncdb \
-    && python manage.py createcachetable \
-    && python manage.py collectstatic --noinput
 
+#RUN python manage.py collectstatic --noinput \
+#    && python manage.py makemigrations \
+#    && python manage.py migrate --run-syncdb \
+#    && python manage.py createcachetable \
+#    && python manage.py 
+#
 
 ENTRYPOINT ["/home/ngphylo/startup.sh"]

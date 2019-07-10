@@ -256,16 +256,17 @@ class Tool(models.Model):
                 t, created = Tool.objects.get_or_create(
                     id_galaxy=id_tool, galaxy_server=galaxy_server)
                 t.save()
-                cite_url = '%s/%s/%s/%s/%s' % (galaxy_server.url, 'api', 'tools', id_tool, 'citations')
-                connection = requests.get(cite_url)
-                citations = connection.json()
-                for cite in citations:
-                    c = Citation(reference=cite.get('content','').encode('iso-8859-1').decode('utf8'), tool=t)
-                    c.save()
+
                 if force:
                     t.import_tool_io(t.tool_json)
                 if created or force:
                     tools_import_report['new'].append(t)
+                    cite_url = '%s/%s/%s/%s/%s' % (galaxy_server.url, 'api', 'tools', id_tool, 'citations')
+                    connection = requests.get(cite_url)
+                    citations = connection.json()
+                    for cite in citations:
+                        c = Citation(reference=cite.get('content','').encode('iso-8859-1').decode('utf8'), tool=t)
+                        c.save()
                 else:
                     tools_import_report['already_exist'].append(t)
             except (ValueError, ValidationError) as e:

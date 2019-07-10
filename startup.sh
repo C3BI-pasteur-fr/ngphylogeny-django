@@ -29,16 +29,17 @@ service redis_6379 start
 # Initialize databases
 python manage.py makemigrations
 python manage.py migrate
-python manage.py migrate --run-syncdb
+#python manage.py migrate --run-syncdb
 python manage.py createcachetable
+python manage.py collectstatic --noinput
 
 # Create admin user
-echo "from django.contrib.auth.models import User; User.objects.filter(username='admin').delete(); User.objects.create_superuser('admin', '$USEREMAIL', '$USERPASS');exit()" | python manage.py shell
+echo "from django.contrib.auth.models import User; User.objects.filter(username='admin').exists() or User.objects.create_superuser('admin', '$USEREMAIL', '$USERPASS');exit()" | python manage.py shell
 python manage.py loaddata tool_flags
 python manage.py creategalaxyserver --url=$GALAXYSERVER --activate
 # Adding shared galaxy api key
 python manage.py addgalaxykey --user admin --galaxyurl $GALAXYSERVER --galaxykey $GALAXYKEY
-python manage.py importtools --galaxyurl=$GALAXYSERVER --query="phylogeny" --flags=toolflags.txt --force --inputfields=toolfields.txt
+python manage.py importtools --galaxyurl=$GALAXYSERVER --query="phylogeny" --flags=toolflags.txt --inputfields=toolfields.txt
 python manage.py import_links --linkfile=toollinks.txt
 python manage.py importworkflows --wfnamefile=wfnames.txt --galaxyurl=$GALAXYSERVER
 

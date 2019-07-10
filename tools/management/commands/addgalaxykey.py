@@ -47,5 +47,14 @@ class Command(BaseCommand):
         g = Server.objects.filter(url=galaxy_url)
         if g.count() == 0:
             raise CommandError('Galaxy server {} does not exist, please use --galaxyurl'.format(galaxy_url))
-        gu=GalaxyUser(user=u.first(),galaxy_server=g.first(),api_key=galaxy_key,anonymous=True)
-        gu.save()
+
+        try:
+            gu=GalaxyUser.objects.get(user=u.first())
+            gu.galaxy_server=g.first()
+            gu.api_key=galaxy_key
+            gu.anonymous=True
+            gu.save()
+            self.stdout.write("User %s already present" % user)
+        except GalaxyUser.DoesNotExist:
+            gu=GalaxyUser(user=u.first(),galaxy_server=g.first(),api_key=galaxy_key,anonymous=True)
+            gu.save()
