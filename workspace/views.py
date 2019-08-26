@@ -184,7 +184,7 @@ def ngphylo_citation():
     <div class="pub-content clear">
     <span class="pub-author-list">Lemoine, F. and Correia, D. and Lefort, V. and Doppelt-Azeroual, O. and Mareuil, F. and Cohen-Boulakia, S. and Gascuel, O.</span>
     <span class="pub-title">NGPhylogeny.fr: new generation phylogenetic services for non-specialists.</span>
-    <span class="pub-journal-name">Nucleic acids research, 47:W260–W265</span>
+    <span class="pub-journal-name">Nucleic acids research, 47:W260-W265</span>
     </div>
     </a>
     """
