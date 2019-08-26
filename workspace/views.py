@@ -153,7 +153,7 @@ def get_dataset_citations(request, history_id):
     Ajax: return citations of all tools used in the dataset
     """
     context = dict()
-    refs = []
+    refs = [ngphylo_citation()]
     tools = []
     gi = request.galaxy
     try:
@@ -176,6 +176,19 @@ def get_dataset_citations(request, history_id):
         pass
     context.update({'citations': refs})
     return HttpResponse(json.dumps(context), content_type='application/json')
+
+def ngphylo_citation():
+    ref="""
+    <a target="_blank" href="https://doi.org/10.1093/nar/gkz303">
+    <div class="pub-date">2019</div>
+    <div class="pub-content clear">
+    <span class="pub-author-list">Lemoine, F. and Correia, D. and Lefort, V. and Doppelt-Azeroual, O. and Mareuil, F. and Cohen-Boulakia, S. and Gascuel, O.</span>
+    <span class="pub-title">NGPhylogeny.fr: new generation phylogenetic services for non-specialists.</span>
+    <span class="pub-journal-name">Nucleic acids research, 47:W260–W265</span>
+    </div>
+    </a>
+    """
+    return ref
 
 @connection_galaxy
 def get_dataset_citations_bibtex(request, history_id):
