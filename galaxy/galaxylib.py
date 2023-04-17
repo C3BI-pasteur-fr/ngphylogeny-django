@@ -34,10 +34,35 @@ class GalaxyInstance(BioblendGalaxyInstance):
     """
     Override GalaxyInstance make_get_request method to use django cache
     """
-
+    def __init__(self, url, galaxysession):
+        super(BioblendGalaxyInstance, self).__init__(url, key=None, email=None, password=None)
+        self.json_header['x-api-key'] = self.key
+        
+    
     @get_request_cache
     def make_get_request(self, url, **kwargs):
-        return super(GalaxyInstance, self).make_get_request(url, **kwargs)
+        """
+        Make a GET request using the provided ``url``.
+        Keyword arguments are the same as in requests.request.
+        If ``verify`` is not provided, ``self.verify`` will be used.
+        If the ``params`` are not provided, use ``default_params`` class field.
+        If params are provided and the provided dict does not have ``key`` key,
+        the default ``self.key`` value will be included in what's passed to
+        the server via the request.
+        :rtype: requests.Response
+        :return: the response object.
+        """
+        params = kwargs.get('params')
+        if params is not None and params.get('key', False) is False:
+            params['key'] = self.key
+        else:
+            params = self.default_params
+        headers=self.json_headers
+        kwargs['params'] = params
+        kwargs.setdefault('verify', self.verify)
+        kwargs.setdefault('timeout', self.timeout)
+        r = requests.get(url, headers=headers, **kwargs)
+        return r
 
 
 class GalaxyInstanceAnonymous(GalaxyInstance):
@@ -83,9 +108,10 @@ class GalaxyInstanceAnonymous(GalaxyInstance):
             params['key'] = self.key
         else:
             params = self.default_params
-
+        
+        headers=self.json_headers
         kwargs['cookies'] = dict(galaxysession=self.galaxysession)
         kwargs['params'] = params
         kwargs.setdefault('verify', self.verify)
-        r = requests.get(url, **kwargs)
+        r = requests.get(url, headers=headers, **kwargs)
         return r
