@@ -73,14 +73,15 @@ def updateworkspacestatus(historyid):
         pass
     else:
         return
-    
-    galaxycon = galaxy_connection()
-    galaxycon.nocache = True
-    #print "Monitoring workspace " + historyid
-    finished = False
-    error = False
-    email = None
-    try:
+
+    try:    
+        galaxycon = galaxy_connection()
+        galaxycon.nocache = True
+        #print "Monitoring workspace " + historyid
+        finished = False
+        error = False
+        email = None
+
         hc = galaxycon.histories.show_history(historyid, contents=True)
         hi = galaxycon.histories.show_history(historyid)
         w = WorkspaceHistory.objects.get(history=historyid)

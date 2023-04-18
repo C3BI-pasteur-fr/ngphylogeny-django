@@ -76,10 +76,10 @@ One click workflows are accessible via the "Phylogeny Analysis/One click workflo
 
 The 4 oneclick workflows implemented in NGPhylogeny.fr differ by the tree inference tool:
 
-1. PhyML+SMS: This workflow uses [PhyML+SMS](http://www.atgc-montpellier.fr/phyml-sms/) to select the best evolutionary model and to infer the trees. However, it may not handle very large datasets, as the tree inference may take a very long time;
+1. PhyML+SMS: This workflow uses [PhyML+SMS](http://www.atgc-montpellier.fr/phyml-sms/) to select the best evolutionary model and to infer the trees. However, it may not handle very large datasets, as the tree inference may take a very long time. SH-like aLRT branch supports are computed by default;
 2. PhyML: This workflow uses [PhyML](http://www.atgc-montpellier.fr/phyml/) to infer trees. Default options depend on data type (dna, protein). Like PhyML+SMS, large datasets may not be analyzed with this workflow;
 3. FastME: This workflow infer trees using [FastME](http://www.atgc-montpellier.fr/fastme/). FastME provides distance algorithms to infer phylogenies and can work with large datasets;
-4. FastTree: This workflow runs [FastTree](http://www.microbesonline.org/fasttree/) to infer trees. "FastTree infers approximately-maximum-likelihood phylogenetic trees from alignments of nucleotide or protein sequences" and works very very large datasets.
+4. FastTree: This workflow runs [FastTree](http://www.microbesonline.org/fasttree/) to infer trees. "FastTree infers approximately-maximum-likelihood phylogenetic trees from alignments of nucleotide or protein sequences" and works for very large datasets. Local branch supports (SH) are computed by default by FastTree.
 
 Sections below describe these oneclick workflows and all the steps.
 

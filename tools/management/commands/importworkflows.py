@@ -68,7 +68,7 @@ class Command(BaseCommand):
                         "importing workflow %s" % (wfname)
                     )
                 )
-                if(re.search('oneclick', wfname, re.IGNORECASE) or
+                if(re.search('/oneclick', wfname, re.IGNORECASE) or
                    wfname in self.wfnames):
                     try:
                         w = Workflow.objects.get(id_galaxy=wfid)
