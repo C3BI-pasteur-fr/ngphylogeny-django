@@ -19,12 +19,11 @@ def get_request_cache(func):
         params = dict(kwargs.get('params') or {})
         params['key'] = self.key
         pre_req = Request('GET', url, params=params).prepare()
-
         c = cache.get(pre_req.url)
         if c:
             return c
         else:
-            r = func(self, url, **kwargs)
+            r = func(self, url, headers={'x-api-key':self.key},**kwargs)
             cache.set(r.url, r)
         return r
     return wrapper
@@ -47,6 +46,7 @@ class GalaxyInstanceAnonymous(GalaxyInstance):
 
     def __init__(self, url, galaxysession):
         super(GalaxyInstanceAnonymous, self).__init__(url, key=None, email=None, password=None)
+        self.json_header['x-api-key'] = self.key
         self.galaxysession = galaxysession
 
     def make_post_request(self, url, payload, params=None, files_attached=False, ):
@@ -79,13 +79,14 @@ class GalaxyInstanceAnonymous(GalaxyInstance):
 
     def make_get_request(self, url, **kwargs):
         params = kwargs.get('params')
+        headers=self.json_headers
         if params is not None and params.get('key', False) is False:
             params['key'] = self.key
+            headers['x-api-key']=self.key
         else:
             params = self.default_params
-
         kwargs['cookies'] = dict(galaxysession=self.galaxysession)
         kwargs['params'] = params
         kwargs.setdefault('verify', self.verify)
-        r = requests.get(url, **kwargs)
+        r = requests.get(url, headers=headers, **kwargs)
         return r

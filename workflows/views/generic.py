@@ -162,10 +162,10 @@ class WorkflowFormView(UploadView, DetailView):
         dataset_map[i_input] = {'id': file_id, 'src': 'hda'}
         try:
             # run workflow
-            self.outputs = gi.workflows.run_workflow(
+            self.outputs = gi.workflows.invoke_workflow(
                 workflow_id=workflow.id_galaxy,
                 history_id=wksph.history,
-                dataset_map=dataset_map,
+                inputs=dataset_map,
             )
         except Exception as galaxy_exception:
             workflow.delete_from_galaxy(gi)

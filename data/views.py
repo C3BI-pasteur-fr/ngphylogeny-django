@@ -1,5 +1,6 @@
 import urllib
 import json
+from urllib2 import Request, urlopen
 
 try:
     # Python 3:
@@ -118,7 +119,9 @@ def download_file(request, file_id):
             name = "download"
         if dlurl:
             url = urlparse.urljoin(gi.base_url, dlurl)
-            response = urllib.urlopen(url)
+            req = Request(url)
+            req.add_header('x-api-key', gi.key)
+            response = urlopen(req)
             stream_response = StreamingHttpResponse(response.read())
             stream_response['Content-Disposition'] = 'attachment; filename=' + name
         else:
@@ -190,7 +193,9 @@ def tree_visualization(request, file_id):
         historyid = data.get('history_id')
         if dlurl and historyid:
             url = urlparse.urljoin(gi.base_url, dlurl)
-            response = urllib.urlopen(url)
+            req = Request(url)
+            req.add_header('x-api-key', gi.key)
+            response = urlopen(req)
             return render(request,
                           template_name='treeviz/tree.html',
                           context={'newick_tree': response.read(),
@@ -208,7 +213,9 @@ def export_to_itol(request, file_id):
         dlurl = data.get('download_url')
         if dlurl:
             url = urlparse.urljoin(gi.base_url, dlurl)
-            response = urllib.urlopen(url)
+            req = Request(url)
+            req.add_header('x-api-key', gi.key)
+            response = urlopen(req)
             tmpfile = tempfile.NamedTemporaryFile()
             tmpfile.write(response.read())
             tmpfile.flush()
