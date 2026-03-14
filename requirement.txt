@@ -4,8 +4,8 @@ django-crispy-forms==1.6
 bioblend==0.10
 django-markdown-deux==1.0.5
 biopython==1.70
-python-slugify
-bibtexparser
+python-slugify==1.2.6
+bibtexparser==0.6.2
 celery[redis]
 uwsgi
 django-simple-captcha
