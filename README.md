@@ -5,14 +5,14 @@ A Django web application to make Phylogeny analysis.
 
 # Installation
 
-NGPhylogeny.fr requires python 3.7 (see the Dockerfile).
+NGPhylogeny.fr requires python 3.8 (see the Dockerfile).
 
 To install it:
 
 * You may first install and activate a new conda environment:
 
 ```
-conda create --name ngphylo python=3.7
+conda create --name ngphylo python=3.8
 source activate ngphylo
 ```
 

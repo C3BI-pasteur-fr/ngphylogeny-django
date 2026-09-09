@@ -32,6 +32,9 @@ INTERNAL_IPS = ["127.0.0.1", ]
 
 CRISPY_TEMPLATE_PACK = "bootstrap3"
 TESTDATA_DIR = os.path.join(BASE_DIR, 'testdata')
+# Preserves pre-3.2 behavior (AutoField) instead of opting into the new
+# Django 3.2 default (BigAutoField), which would alter existing PK columns.
+DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
 # Application definition
 
 INSTALLED_APPS = [

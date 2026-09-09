@@ -1,14 +1,14 @@
 # GitLab CI/CD for NGPhylogeny_fr_django.
 #
-# Current scope: lint + test only, targeting Python 3.7 / Django 2.2.
-# Further Django hops (3.2, 4.2) are tracked as separate follow-up
-# phases. No Docker build/push/deploy stage yet.
+# Current scope: lint + test only, targeting Python 3.8 / Django 3.2.
+# The Django 4.2 hop is tracked as a separate follow-up phase. No Docker
+# build/push/deploy stage yet.
 #
 # NOTE: if your GitLab runners are tag-scoped, add a `tags:` list to each
 # job below matching your runner setup - this file intentionally leaves
 # that unset since it can't be discovered from the repo.
 
-image: python:3.7-buster
+image: python:3.8-buster
 
 workflow:
   rules:
