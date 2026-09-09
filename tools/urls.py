@@ -1,11 +1,11 @@
-from django.conf.urls import url
+from django.urls import re_path
 
 from .views import ToolListView, tool_exec_view, ToolDetailView, get_tool_name
 
 urlpatterns = [
-    url(r'^$', ToolListView.as_view(), name='tools'),
-    url(r'^tool/(?P<pk>[\w-]+)/form$', tool_exec_view, name="tool_form"),
-    url(r'^tool/(?P<pk>[\w-]+)$',
+    re_path(r'^$', ToolListView.as_view(), name='tools'),
+    re_path(r'^tool/(?P<pk>[\w-]+)/form$', tool_exec_view, name="tool_form"),
+    re_path(r'^tool/(?P<pk>[\w-]+)$',
         ToolDetailView.as_view(), name="tool_detail"),
-    url(r'^tool/galaxy_id/$', get_tool_name, name="get_tool_name")
+    re_path(r'^tool/galaxy_id/$', get_tool_name, name="get_tool_name")
 ]

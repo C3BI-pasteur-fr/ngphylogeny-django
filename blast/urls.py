@@ -14,7 +14,7 @@ Including another URLconf
     2. Add a URL to urlpatterns:  url(r'^blog/', include('blog.urls'))
 """
 
-from django.conf.urls import url
+from django.urls import re_path
 from .views import BlastView, BlastRunView, DeleteBlastRunView
 from .views import DeleteBlastSubjectView, BlastRunFasta
 from .views import DeleteBlastSequences
@@ -23,24 +23,24 @@ from .views import available_blasts_servers, blast_example
 
 
 urlpatterns = [
-    url(r'^dbs/(?P<server>\w+)/(?P<prog>[\w/\.]+)$',
+    re_path(r'^dbs/(?P<server>\w+)/(?P<prog>[\w/\.]+)$',
         available_blasts_dbs, name="available_blasts_dbs"),
-    url(r'^progs/(?P<server>\w+)$',
+    re_path(r'^progs/(?P<server>\w+)$',
         available_blasts_progs, name="available_blasts_progs"),
-    url(r'^servers$',
+    re_path(r'^servers$',
         available_blasts_servers, name="available_blasts_servers"),
-    url(r'^example/(?P<server>\w+)/(?P<prog>[\w/\.]+)$',
+    re_path(r'^example/(?P<server>\w+)/(?P<prog>[\w/\.]+)$',
         blast_example, name="blast_example"),
-    url(r'^$', BlastView.as_view(),
+    re_path(r'^$', BlastView.as_view(),
         name="blast_form"),
-    url(r'^(?P<pk>[\w-]+)$', BlastRunView.as_view(),
+    re_path(r'^(?P<pk>[\w-]+)$', BlastRunView.as_view(),
         name="blast_view"),
-    url(r'^(?P<pk>[\w-]+)/deletemulti$', DeleteBlastSequences.as_view(),
+    re_path(r'^(?P<pk>[\w-]+)/deletemulti$', DeleteBlastSequences.as_view(),
         name="blast_delete_seqs"),
-    url(r'^subject/(?P<pk>[\w-]+)/delete$', DeleteBlastSubjectView.as_view(),
+    re_path(r'^subject/(?P<pk>[\w-]+)/delete$', DeleteBlastSubjectView.as_view(),
         name="blast_subject_delete"),
-    url(r'^(?P<pk>[\w-]+)/fasta$', BlastRunFasta.as_view(),
+    re_path(r'^(?P<pk>[\w-]+)/fasta$', BlastRunFasta.as_view(),
         name="blast_fasta"),
-    url(r'^(?P<pk>[\w-]+)/delete$', DeleteBlastRunView.as_view(),
+    re_path(r'^(?P<pk>[\w-]+)/delete$', DeleteBlastRunView.as_view(),
         name="blast_delete"),
 ]

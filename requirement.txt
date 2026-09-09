@@ -1,8 +1,13 @@
-Django==3.2.25
-django-formtools==2.0
+Django==4.2.15
+django-formtools==2.6.1
 django-crispy-forms==1.9.2
 bioblend==0.10
-django-markdown-deux==1.0.5
+# django-markdown-deux is unmaintained (last release ~2013) and crashes
+# on import under Django 4.0+ (force_text/force_unicode removed). Its
+# one template usage (templates/documentation.html) was replaced with
+# a small local template tag (data/templatetags/markdown_extras.py)
+# built directly on markdown2, which markdown_deux itself just wrapped.
+markdown2
 # Build-time dependency of biopython==1.70 (not declared by biopython itself)
 numpy
 biopython==1.70
@@ -15,6 +20,6 @@ bibtexparser
 # a separate future upgrade phase).
 celery[redis]==4.4.7
 uwsgi
-django-simple-captcha
+django-simple-captcha==0.7.0
 python_magic==0.4.15
 psycopg2
