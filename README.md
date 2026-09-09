@@ -1,7 +1,10 @@
 # NGPhylogeny.fr
 
-
-A Django web application to make Phylogeny analysis.
+A Django web application for phylogenetic analysis. NGPhylogeny.fr itself
+does no bioinformatics computation — it's an orchestration/UI layer that
+drives a separate [Galaxy](https://galaxyproject.org/) server (via the
+`bioblend` API client) to run the actual tools (alignment, tree building,
+bootstrapping, BLAST, etc.) and tracks job status/results locally.
 
 # Installation
 
@@ -102,6 +105,19 @@ python manage.py importworkflows --galaxyurl=http://url_galaxy:port --wfnamefile
 
 ```
 python manage.py runserver
+```
+
+# Tests and linting
+
+GitLab CI (`.gitlab-ci.yml`) runs both of these on every push/merge request:
+
+```
+python manage.py makemigrations
+python manage.py migrate
+python manage.py check
+python manage.py test
+
+flake8 --select=E9,F63,F7,F82 --exclude=migrations .
 ```
 
 # Docker
