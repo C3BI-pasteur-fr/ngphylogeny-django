@@ -108,7 +108,10 @@ class WorkflowStepInformation(object):
         _tools = self.get_tools()
 
         # remove unknown tools
-        for nbstep, step in self.steps_tooldict.items():
+        # list(...items()) is required here: items() is a live view in
+        # Python 3 (unlike Python 2's list snapshot), and the loop body
+        # deletes from self.steps_tooldict while iterating it.
+        for nbstep, step in list(self.steps_tooldict.items()):
             for tool in _tools:
                 if tool.id_galaxy in step.get('tool_idgalaxy'):
                     step['tool'] = tool
