@@ -36,7 +36,7 @@ class Server(models.Model):
 
         super(Server, self).save(*args, **kwargs)
 
-    def __unicode__(self):
+    def __str__(self):
         return "%s %s" % (self.name, self.url)
 
 
@@ -69,7 +69,7 @@ class GalaxyUser(models.Model):
         else:
             raise ValueError("API key must be set")
 
-    def __unicode__(self):
+    def __str__(self):
         return "%s %s" % (self.user.username, self.api_key)
 
     class Meta:

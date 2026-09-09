@@ -6,7 +6,6 @@ from crispy_forms.layout import Submit, Layout
 from django import forms
 
 from Bio import SeqIO
-import StringIO
 
 from blast.models import BlastRun
 from utils import biofile

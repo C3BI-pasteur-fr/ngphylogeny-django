@@ -76,7 +76,7 @@ def nb_sequences(filename, format):
                 if check_aa(r.seq):
                     seqaa = True
         except Exception as e:
-            print e
+            print(e)
             pass
     elif format == 'phylip':
         try:
@@ -129,7 +129,7 @@ def valid_fasta(fasta_file):
 
     mimetype=magic.from_buffer(fasta_file.read(1024),mime=True)
 
-    print mimetype
+    print(mimetype)
     if mimetype != "text/plain" :
         return (0,0,False)
 

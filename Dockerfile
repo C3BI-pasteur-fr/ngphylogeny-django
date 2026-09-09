@@ -1,8 +1,11 @@
 # NGPhylogeny.fr
 # https://ngphylogeny.fr
 
-# base image: python 2.7.14-jessie
-FROM python:2.7.14-jessie
+# base image: python 3.7.17-buster
+# (jessie's Python 3.7 images don't exist upstream - jessie only ever
+# shipped Python 2.7/3.4/3.5 official tags - so this hop to Python 3.7
+# also moves the base Debian release from jessie to buster)
+FROM python:3.7.17-buster
 
 # File Author / Maintainer
 MAINTAINER Frederic Lemoine <frederic.lemoine@pasteur.fr>
@@ -11,7 +14,7 @@ COPY . /home/ngphylo
 WORKDIR /home/ngphylo/
 
 RUN apt-get update --fix-missing \
-    && apt-get install -y libpq-dev postgresql-client
+    && apt-get install -y libpq-dev postgresql-client libmagic1
 
 # Install REDIS-SERVER
 RUN wget http://download.redis.io/redis-stable.tar.gz \
@@ -74,6 +77,9 @@ RUN wget http://nginx.org/download/nginx-1.15.0.tar.gz \
 RUN wget -O /usr/local/bin/jq https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64 \
     && chmod +x /usr/local/bin/jq
 
+# celery==4.4.7 (pinned in requirement.txt - see the comment there) ships
+# a non-PEP440 dependency specifier that pip >=24.1 refuses outright.
+RUN pip install "pip<24.1"
 RUN pip install -r requirement.txt
 RUN python manage.py makemigrations \
     && python manage.py migrate --run-syncdb \

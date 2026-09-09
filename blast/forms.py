@@ -9,9 +9,9 @@ from .models import BlastRun
 class BlastForm(forms.Form):
     sequence = forms.CharField(label='Sequence', widget=forms.Textarea)
 
-    init_servers = BlastRun.blast_servers().items()
-    init_progs =  BlastRun.blast_progs(init_servers[0][0]).items()
-    init_dbs = BlastRun.blast_dbs(init_servers[0][0],init_progs[0][0]).items()
+    init_servers = list(BlastRun.blast_servers().items())
+    init_progs =  list(BlastRun.blast_progs(init_servers[0][0]).items())
+    init_dbs = list(BlastRun.blast_dbs(init_servers[0][0],init_progs[0][0]).items())
 
     server = forms.CharField(
         label='Server',

@@ -8,7 +8,6 @@ from django.core.urlresolvers import reverse_lazy
 from django.http import HttpResponseRedirect
 
 import tempfile
-import StringIO
 
 from galaxy.decorator import connection_galaxy
 from tools.models import Tool
@@ -100,7 +99,7 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
         """
         outlist = []
         if files:
-            for key, sf in files.iteritems():
+            for key, sf in files.items():
                 if sf.get('ext') in extensions:
                     outlist.append(sf)
         return outlist
@@ -213,7 +212,7 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
                     # send file to galaxy
                     outputs = gi.tools.upload_file(
                         path=tmp_file.name,
-                        file_name=uploaded_file.name.encode('ascii','ignore'),
+                        file_name=uploaded_file.name.encode('ascii','ignore').decode('ascii'),
                         history_id=wksph.history)
                     file_id = outputs.get('outputs')[0].get('id')
                     tool_inputs.set_dataset_param(
@@ -271,7 +270,7 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
         # tool params
         params = {}
         # Workflow inputs
-        i_input = workflow.json['inputs'].keys()[0]
+        i_input = list(workflow.json['inputs'].keys())[0]
 
         # Handle workflow main input file
         # before creating the workspace etc.
@@ -294,7 +293,7 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
                 workflow.delete_from_galaxy(gi)
                 return render(request, self.template_name, context)
             elif isinstance(uploaded_file, InMemoryUploadedFile) or isinstance(uploaded_file, TemporaryUploadedFile):
-                upload_filename = uploaded_file.name.encode('ascii','ignore')
+                upload_filename = uploaded_file.name.encode('ascii','ignore').decode('ascii')
             else:
                 upload_filename = "uploaded_content"
                 

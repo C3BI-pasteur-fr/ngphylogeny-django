@@ -10,7 +10,7 @@ from django.views.generic.edit import SingleObjectMixin
 from bioblend.galaxy.client import ConnectionError
 from django.shortcuts import render, redirect
 from django.http import HttpResponseRedirect
-from tasks import deletegalaxyhistory
+from .tasks import deletegalaxyhistory
 from workflows.tasks import deletegalaxyworkflow
 
 from galaxy.decorator import connection_galaxy
@@ -199,7 +199,7 @@ def get_dataset_citations_bibtex(request, history_id):
             try:
                 t = Tool.objects.get(id_galaxy=tid)
                 for b in t.citation_set.all():
-                    refs=refs+unicode(b.reference)+unicode("\n")
+                    refs=refs+b.reference+"\n"
             except Tool.DoesNotExist:
                 pass
     except WorkspaceHistory.DoesNotExist:
@@ -228,7 +228,7 @@ def get_dataset_citations_txt(request, history_id):
             try:
                 t = Tool.objects.get(id_galaxy=tid)
                 for b in t.citation_set.all():
-                    refs=refs+unicode(b.txt())+unicode("\n")
+                    refs=refs+b.txt()+"\n"
             except Tool.DoesNotExist:
                 pass
     except WorkspaceHistory.DoesNotExist:
@@ -244,7 +244,7 @@ class GalaxyErrorView(TemplateView):
     template_name='display_galaxyerror.html'
     def get_context_data(self, *args, **kwargs):
         gi = self.request.galaxy
-	context = super(GalaxyErrorView, self).get_context_data(*args, **kwargs)
+        context = super(GalaxyErrorView, self).get_context_data(*args, **kwargs)
         dsid = kwargs.get('id')
         ds = gi.datasets.show_dataset(dsid)
         state = ''
@@ -259,11 +259,11 @@ class GalaxyErrorView(TemplateView):
             errormessage = jinfo.get('stderr')+jinfo.get('stdout')
             hid = ds.get('history_id')
             name = ds.get('name')
-	context['state'] = state
+        context['state'] = state
         context['error'] = errormessage
         context['history_id'] = hid
         context['jobname'] = name
-	return context
+        return context
 
 @method_decorator(connection_galaxy, name="dispatch")
 class PreviousHistoryListView(ListView):

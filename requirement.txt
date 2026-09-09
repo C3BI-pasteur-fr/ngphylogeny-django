@@ -3,10 +3,17 @@ django-formtools==2.0
 django-crispy-forms==1.6
 bioblend==0.10
 django-markdown-deux==1.0.5
+# Build-time dependency of biopython==1.70 (not declared by biopython itself)
+numpy
 biopython==1.70
 python-slugify
 bibtexparser
-celery[redis]
+# Pinned to the last Celery 4.x release: it still supports the
+# celery.decorators.periodic_task API and the unprefixed CELERY_*
+# settings used in NGPhylogeny_fr/settings/base.py. Celery 5 drops both
+# (settings renaming + periodic-task decorator migration is tracked as
+# a separate future upgrade phase).
+celery[redis]==4.4.7
 uwsgi
 django-simple-captcha
 python_magic==0.4.15
