@@ -1,9 +1,8 @@
 # GitLab CI/CD for NGPhylogeny_fr_django.
 #
-# Current scope: lint + test only, targeting Python 3.7 / Django 1.11 (the
-# highest Python version Django 1.11 officially supports - the Django
-# upgrade itself is tracked as separate follow-up phases). No Docker
-# build/push/deploy stage yet.
+# Current scope: lint + test only, targeting Python 3.7 / Django 2.2.
+# Further Django hops (3.2, 4.2) are tracked as separate follow-up
+# phases. No Docker build/push/deploy stage yet.
 #
 # NOTE: if your GitLab runners are tag-scoped, add a `tags:` list to each
 # job below matching your runner setup - this file intentionally leaves

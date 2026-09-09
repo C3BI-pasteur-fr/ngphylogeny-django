@@ -4,7 +4,7 @@ from django.shortcuts import render
 from django.views.generic import View
 from django.views.generic.detail import SingleObjectMixin
 from django.core.files.uploadedfile import InMemoryUploadedFile, TemporaryUploadedFile
-from django.core.urlresolvers import reverse_lazy
+from django.urls import reverse_lazy
 from django.http import HttpResponseRedirect
 
 import tempfile

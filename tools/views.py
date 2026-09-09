@@ -5,7 +5,7 @@ import json
 import tempfile
 
 from bioblend.galaxy.tools.inputs import inputs
-from django.core.urlresolvers import reverse_lazy
+from django.urls import reverse_lazy
 from django.forms import ValidationError
 from django.http import HttpResponse
 from django.shortcuts import render, get_object_or_404, redirect

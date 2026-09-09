@@ -2,7 +2,7 @@ from __future__ import absolute_import
 
 from django.db.models import Q
 from django.core.mail import send_mail
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.core.cache import cache
 
 from smtplib import SMTPException
