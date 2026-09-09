@@ -15,6 +15,9 @@ class StaticPagesSmokeTest(TestCase):
             '/documentation',
             '/analysis',
             '/status',
+            # Exercises real crispy_forms + django-simple-captcha
+            # rendering (not just app loading), unlike the other pages.
+            '/about/feedback',
         ]
         for path in paths:
             response = self.client.get(path)

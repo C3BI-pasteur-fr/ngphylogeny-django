@@ -55,7 +55,6 @@ INSTALLED_APPS = [
     'surveys.apps.SurveysConfig',
     'workflows',
     # 'workspace.apps.WorkspaceConfig',
-    'markdown_deux',
     'blast.apps.BlastConfig',
 ]
 
@@ -160,7 +159,7 @@ CACHES = {
     }
 }
 
-MARKDOWN_DEUX_STYLES = {'default': {
+MARKDOWN_STYLES = {'default': {
     "extras": {
         "code-friendly": None,
         "tables": None,
