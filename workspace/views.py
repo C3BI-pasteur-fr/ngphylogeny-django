@@ -35,7 +35,7 @@ def create_history(request, name='', wf_category='', wf_steps=''):
         name = 'NGPhylogeny analyse'
     history = gi.histories.create_history(name=name)
 
-    if request.user.is_authenticated():
+    if request.user.is_authenticated:
         current_user = request.user
     else:
         current_user = server.galaxyuser_set.get(anonymous=True).user

@@ -5,8 +5,7 @@ A Django web application to make Phylogeny analysis.
 
 # Installation
 
-NGPhylogeny.fr requires python 3.7 (pinned to Django 1.11's highest
-officially-supported Python version - see the Dockerfile).
+NGPhylogeny.fr requires python 3.7 (see the Dockerfile).
 
 To install it:
 

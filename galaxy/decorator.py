@@ -44,7 +44,7 @@ def connection_galaxy(view_function):
         request.galaxy_server = galaxy_server
         request.session['galaxy_server'] = galaxy_server.id
 
-        if request.user.is_authenticated():
+        if request.user.is_authenticated:
             """Try to use related Galaxy user information"""
 
             try:
@@ -68,7 +68,7 @@ def connection_galaxy(view_function):
                 logger.exception("Galaxy account Error")
                 return HttpResponseGone()
 
-        elif request.user.is_anonymous():
+        elif request.user.is_anonymous:
             """If user is not an authenticated, use the anonymous Galaxy user set"""
             try:
                 gu = GalaxyUser.objects.get(anonymous=True, galaxy_server=galaxy_server)
