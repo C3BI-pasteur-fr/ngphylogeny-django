@@ -120,14 +120,30 @@ removed in Celery 5; the task functions are plain `@shared_task`). All
 
 ### Settings split
 
-`NGPhylogeny_fr/settings/{base,local,prod}.py`. `local.py` (the default —
-see `manage.py`) sets `DEBUG=True` and falls back to sqlite unless
-`NGPHYLO_DATABASE_HOST` is set. **`prod.py` (used by `wsgi.py`) is a single
-line, `DEBUG = False` — it does not import from `base.py`.** Whether that's
-intentional or a latent bug, be aware neither Django module resolution will
-pull in `base.py`'s settings automatically for `prod.py`; check which
-settings module is actually in effect before assuming `INSTALLED_APPS`,
-`DATABASES`, etc. are what you'd expect in a "production" context.
+`NGPhylogeny_fr/settings/{base,local,prod}.py`. `DATABASES` lives in
+`base.py` (env-var-based: `NGPHYLO_DATABASE_*` if `NGPHYLO_DATABASE_HOST` is
+set, sqlite fallback otherwise) so both `local.py` and `prod.py` inherit the
+same logic via `from .base import *`. `local.py` (the default — see
+`manage.py`) additionally sets `DEBUG=True`; `prod.py` (used by `wsgi.py`)
+sets `DEBUG=False`. Custom error templates (`templates/500.html` etc.) only
+ever render when `DEBUG=False` — Django always shows the interactive
+traceback otherwise, regardless of what templates exist, so reproducing a
+production-looking error page locally means running with
+`DJANGO_SETTINGS_MODULE=NGPhylogeny_fr.settings.prod`, not `.local`.
+
+### `dictsort` doesn't call methods
+
+Django 3.1 hardened `dictsort`/`dictsortreversed` to stop auto-calling
+methods in a lookup chain (`"foo.bar.baz"` where an intermediate step is a
+method, e.g. a related-manager's `.first()`) — unlike normal template
+variable resolution, which still auto-calls. A filter argument like
+`dictsort:"toolflag_set.first.verbose_name"` will now silently resolve to
+`""` instead of raising, so a `{% regroup %}`/`{% for %}` over it just
+renders as empty — no error, no page-load failure, easy to miss entirely
+unless the list actually has data (`tools/views.py`'s `ToolListView` hit
+this rendering as a permanently-empty tools page; see git history for the
+fix — precompute the value as a plain attribute in the view instead of
+relying on dictsort to call anything).
 
 ### Known dependency ceilings (don't casually bump these)
 
@@ -139,10 +155,11 @@ settings module is actually in effect before assuming `INSTALLED_APPS`,
   is why the project is pinned to Python 3.8 rather than something newer.
 - **`celery[redis]==5.4.0`**, **`bioblend==1.4.0`** were bumped from very old
   pins (4.4.7, 0.10) as part of this project's Python 2→3 / Django
-  1.11→4.2 migration; `bioblend`'s actual runtime behavior against a live
-  Galaxy server hasn't been exercised yet (only import/signature-level
-  compatibility has been verified) — treat Galaxy-integration code changes
-  with extra caution until that's been done.
+  1.11→4.2 migration. `bioblend`'s actual runtime behavior has since been
+  verified live against the real production Galaxy server (`galaxy.pasteur.fr`)
+  — auth (moved from `?key=` query params to an `x-api-key` header),
+  `get_tools`/`get_histories`, `Workflow.fetch_details()`/`show_workflow()`,
+  and `Workflow.duplicate()` (`import_workflow_dict`) all confirmed working.
 
 ### Docker
 
