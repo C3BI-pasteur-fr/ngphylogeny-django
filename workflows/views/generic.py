@@ -162,10 +162,16 @@ class WorkflowFormView(UploadView, DetailView):
         dataset_map[i_input] = {'id': file_id, 'src': 'hda'}
         try:
             # run workflow
-            self.outputs = gi.workflows.run_workflow(
+            # run_workflow() (dataset_map=...) was removed from
+            # bioblend; invoke_workflow() (inputs=...) is the direct
+            # replacement - same role, new name - matching the
+            # invoke_workflow() call already used for the advanced/a
+            # la carte flow in workflows/views/wkadvanced.py.
+            self.outputs = gi.workflows.invoke_workflow(
                 workflow_id=workflow.id_galaxy,
                 history_id=wksph.history,
-                dataset_map=dataset_map,
+                inputs=dataset_map,
+                allow_tool_state_corrections=True,
             )
         except Exception as galaxy_exception:
             workflow.delete_from_galaxy(gi)

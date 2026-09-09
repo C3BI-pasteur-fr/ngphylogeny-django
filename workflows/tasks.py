@@ -3,8 +3,6 @@ from __future__ import absolute_import
 import logging
 
 from celery import shared_task
-from celery.schedules import crontab
-from celery.decorators import periodic_task
 from datetime import date, timedelta, datetime
 
 from celery.utils.log import get_task_logger
@@ -31,7 +29,7 @@ def deletegalaxyworkflow(workflow_galaxyid):
 
 # Every day at 2am, remove workflows older than 1 day from galaxy and that are not
 # associated to a workspace (i.e. have not been executed)
-@periodic_task(run_every=(crontab(hour="02", minute="00", day_of_week="*")))
+@shared_task
 def deleteoldgalaxyworkflows():
     logger.info("Start old workflow deletion task")
     datecutoff = datetime.now() - timedelta(days=1)

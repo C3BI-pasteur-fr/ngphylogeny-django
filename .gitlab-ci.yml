@@ -31,9 +31,6 @@ cache:
 
 before_script:
   - apt-get update -qq && apt-get install -y -qq libpq-dev libmagic1
-  # celery==4.4.7 (pinned in requirement.txt - see the comment there) ships
-  # a non-PEP440 dependency specifier that pip >=24.1 refuses outright.
-  - pip install "pip<24.1"
   - pip install -r requirement.txt
 
 lint:

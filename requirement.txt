@@ -1,25 +1,31 @@
 Django==4.2.15
 django-formtools==2.6.1
 django-crispy-forms==1.9.2
-bioblend==0.10
+# Bumped from 0.10 (2017); bioblend's Client classes dropped the
+# per-client .url attribute and GalaxyClient.default_params along the
+# way (auth moved from ?key= query params to an x-api-key header) -
+# both fixed up in galaxy/galaxylib.py and workflows/models.py.
+# Import-level/unit-level verified only; NOT yet exercised against a
+# real Galaxy server - that's the next step.
+bioblend==1.4.0
 # django-markdown-deux is unmaintained (last release ~2013) and crashes
 # on import under Django 4.0+ (force_text/force_unicode removed). Its
 # one template usage (templates/documentation.html) was replaced with
 # a small local template tag (data/templatetags/markdown_extras.py)
 # built directly on markdown2, which markdown_deux itself just wrapped.
-markdown2
+markdown2==2.5.1
 # Build-time dependency of biopython==1.70 (not declared by biopython itself)
-numpy
+numpy==1.24.4
 biopython==1.70
-python-slugify
-bibtexparser
-# Pinned to the last Celery 4.x release: it still supports the
-# celery.decorators.periodic_task API and the unprefixed CELERY_*
-# settings used in NGPhylogeny_fr/settings/base.py. Celery 5 drops both
-# (settings renaming + periodic-task decorator migration is tracked as
-# a separate future upgrade phase).
-celery[redis]==4.4.7
-uwsgi
+python-slugify==8.0.4
+bibtexparser==1.4.4
+celery[redis]==5.4.0
+uwsgi==2.0.31
 django-simple-captcha==0.7.0
 python_magic==0.4.15
-psycopg2
+# Used directly by galaxy/galaxylib.py (multipart uploads); previously
+# only ever installed transitively via bioblend.
+requests-toolbelt==1.0.0
+# Not verified locally (needs libpq, which this dev machine lacks) -
+# the Dockerfile installs libpq-dev/postgresql-client before this.
+psycopg2==2.9.9

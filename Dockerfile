@@ -74,9 +74,6 @@ RUN wget http://nginx.org/download/nginx-1.15.0.tar.gz \
 RUN wget -O /usr/local/bin/jq https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64 \
     && chmod +x /usr/local/bin/jq
 
-# celery==4.4.7 (pinned in requirement.txt - see the comment there) ships
-# a non-PEP440 dependency specifier that pip >=24.1 refuses outright.
-RUN pip install "pip<24.1"
 RUN pip install -r requirement.txt
 RUN python manage.py makemigrations \
     && python manage.py migrate --run-syncdb \

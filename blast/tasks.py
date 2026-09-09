@@ -19,9 +19,7 @@ import time
 import tempfile
 
 from celery import shared_task
-from celery.decorators import periodic_task
 from celery.utils.log import get_task_logger
-from celery.schedules import crontab
 
 from datetime import timedelta, datetime
 
@@ -247,7 +245,7 @@ def build_tree(blastrunid):
         b.message = str(e)
         b.save()
 
-@periodic_task(run_every=(crontab(hour="02", minute="00", day_of_week="*")))
+@shared_task
 def deleteoldblastruns():
     """
     Every day at 2am, clears analyses older than 14 days
@@ -262,7 +260,7 @@ def deleteoldblastruns():
     logger.info("Old blast deletion task finished")
 
 
-@periodic_task(run_every=(crontab(hour="*", minute="*", day_of_week="*")))
+@shared_task
 def checkblastruns():
     """
     Every minutes, check running pasteur blast runs

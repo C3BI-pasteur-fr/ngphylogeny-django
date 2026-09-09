@@ -7,8 +7,6 @@ import logging
 import os
 
 from celery import shared_task
-from celery.schedules import crontab
-from celery.decorators import periodic_task
 from datetime import date, timedelta, datetime
 
 from celery.utils.log import get_task_logger
@@ -44,7 +42,7 @@ def initializeworkspacejob(historyid):
     w.save()
 
 
-@periodic_task(run_every=(crontab(hour="*", minute="*", day_of_week="*")))
+@shared_task
 def launchmonitorworkspaces():
     """
     Celery periodic task that will monitor galaxy workspaces
@@ -155,7 +153,7 @@ def deletegalaxyhistory(historyid):
 
         
 # Every day at 2am, clears analyses older than 14 days
-@periodic_task(run_every=(crontab(hour="02", minute="00", day_of_week="*")))
+@shared_task
 def deleteoldgalaxyhistory():
     logger.info("Start old workspace deletion task")
     galaxycon = galaxy_connection()
