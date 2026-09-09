@@ -1,11 +1,8 @@
 # NGPhylogeny.fr
 # https://ngphylogeny.fr
 
-# base image: python 3.7.17-buster
-# (jessie's Python 3.7 images don't exist upstream - jessie only ever
-# shipped Python 2.7/3.4/3.5 official tags - so this hop to Python 3.7
-# also moves the base Debian release from jessie to buster)
-FROM python:3.7.17-buster
+# base image: python 3.8.18-buster
+FROM python:3.8.18-buster
 
 # File Author / Maintainer
 MAINTAINER Frederic Lemoine <frederic.lemoine@pasteur.fr>

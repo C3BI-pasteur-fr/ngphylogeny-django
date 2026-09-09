@@ -5,7 +5,7 @@ import bibtexparser
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.functional import cached_property
-from django.utils.translation import ugettext as _
+from django.utils.translation import gettext as _
 
 from data.models import ExampleFile
 from galaxy.models import Server
