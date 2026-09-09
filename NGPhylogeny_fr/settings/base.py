@@ -177,7 +177,17 @@ if EMAIL_PORT is not None:
     EMAIL_PORT = int(EMAIL_PORT)
 
 # CELERY SETTINGS
-BROKER_URL = 'redis://localhost:6379/0'
+#
+# Celery >=4.0 also accepts the unprefixed names below (BROKER_URL,
+# CELERY_DEFAULT_QUEUE, CELERY_ROUTES) via a deprecated compat shim,
+# but that shim - along with celery.decorators.periodic_task, used to
+# be used here - was removed in Celery 5. These are the current
+# CELERY_-prefixed names, read via
+# app.config_from_object('django.conf:settings', namespace='CELERY')
+# in NGPhylogeny_fr/celery.py.
+from celery.schedules import crontab
+
+CELERY_BROKER_URL = 'redis://localhost:6379/0'
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
@@ -186,8 +196,8 @@ CELERY_TIMEZONE = 'Europe/Madrid'
 CELERY_ENABLE_UTC = True
 
 # celery queues setup
-CELERY_DEFAULT_QUEUE = 'default'
-CELERY_ROUTES = {
+CELERY_TASK_DEFAULT_QUEUE = 'default'
+CELERY_TASK_ROUTES = {
     'blast.tasks.launch_ncbi_blast': {'queue': 'ncbi_blast'},
     'blast.tasks.launch_pasteur_blast': {'queue': 'default'},
     'blast.tasks.build_tree': {'queue': 'default'},
@@ -201,6 +211,33 @@ CELERY_ROUTES = {
     'workspace.tasks.deleteoldgalaxyhistory': {'queue': 'default'},
     'workflows.tasks.deleteoldgalaxyworkflows': {'queue': 'default'},
     'workflows.tasks.deletegalaxyworkflow': {'queue': 'default'},
+}
+
+# celery beat schedule: replaces the celery.decorators.periodic_task
+# decorator (removed in Celery 5) previously used directly on these
+# task functions in blast/tasks.py, workflows/tasks.py and
+# workspace/tasks.py. Schedules are unchanged from before.
+CELERY_BEAT_SCHEDULE = {
+    'blast-delete-old-runs': {
+        'task': 'blast.tasks.deleteoldblastruns',
+        'schedule': crontab(hour=2, minute=0),
+    },
+    'blast-check-runs': {
+        'task': 'blast.tasks.checkblastruns',
+        'schedule': crontab(),
+    },
+    'workflows-delete-old-galaxy-workflows': {
+        'task': 'workflows.tasks.deleteoldgalaxyworkflows',
+        'schedule': crontab(hour=2, minute=0),
+    },
+    'workspace-launch-monitor-workspaces': {
+        'task': 'workspace.tasks.launchmonitorworkspaces',
+        'schedule': crontab(),
+    },
+    'workspace-delete-old-galaxy-history': {
+        'task': 'workspace.tasks.deleteoldgalaxyhistory',
+        'schedule': crontab(hour=2, minute=0),
+    },
 }
 
 BLASTS = {

@@ -48,6 +48,12 @@ class GalaxyInstanceAnonymous(GalaxyInstance):
     def __init__(self, url, galaxysession):
         super(GalaxyInstanceAnonymous, self).__init__(url, key=None, email=None, password=None)
         self.galaxysession = galaxysession
+        # bioblend >=1.0 dropped GalaxyClient.default_params along with
+        # query-string ?key= auth (replaced by the x-api-key header).
+        # This class never had an API key to begin with - it
+        # authenticates via the galaxysession cookie instead - so this
+        # preserves the previous (effectively no-op) fallback exactly.
+        self.default_params = {'key': self.key}
 
     def make_post_request(self, url, payload, params=None, files_attached=False, ):
         if params is not None and params.get('key', False) is False:

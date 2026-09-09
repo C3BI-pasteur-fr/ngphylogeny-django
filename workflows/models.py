@@ -177,7 +177,11 @@ class WorkflowGalaxyFactory(object):
         self.set_steps(galaxy_instance, list_tools, history_id)
         if self.valid:
             print(self.to_json())
-            wkgi = galaxy_instance.workflows.import_workflow_json(self.to_json())
+            # import_workflow_json (which took a JSON string) was
+            # removed from bioblend; to_json() already returns a dict
+            # (via ast.literal_eval), so import_workflow_dict is the
+            # direct replacement, not a behavior change.
+            wkgi = galaxy_instance.workflows.import_workflow_dict(self.to_json())
             wk_id = wkgi.get('id')
             self.id_galaxy = wk_id
         return self.valid
@@ -341,8 +345,12 @@ class WorkflowToolInformation(object):
 
     def set_tool_state(self, tool, gi, history_id):
 
+        # Client instances no longer expose a precomputed .url attribute
+        # (bioblend >=1.0) - compose it the same way Client._make_url()
+        # does internally: <galaxy_instance_url>/<module>/<id>/...
+        tools_url = '/'.join((gi.url, gi.tools.module))
         tool_build = gi.make_get_request(
-            url=gi.tools.url + '/' + tool.id_galaxy + '/build',
+            url=tools_url + '/' + tool.id_galaxy + '/build',
             params=dict(history_id=history_id))
 
         tool_state = tool_build.json()['state_inputs']
