@@ -159,6 +159,29 @@ CACHES = {
     }
 }
 
+# Shared by local.py and prod.py so both actually get a working
+# DATABASES setting - it used to live only in local.py, which meant
+# prod.py (missing `from .base import *` entirely, fixed alongside
+# this) had none at all.
+if os.environ.get('NGPHYLO_DATABASE_HOST') is not None:
+    DATABASES = {
+        'default': {
+            'ENGINE': os.environ.get('NGPHYLO_DATABASE_ENGINE'),
+            'NAME': os.environ.get('NGPHYLO_DATABASE_NAME'),
+            'USER': os.environ.get('NGPHYLO_DATABASE_USER'),
+            'PASSWORD': os.environ.get('NGPHYLO_DATABASE_PASSWORD'),
+            'HOST': os.environ.get('NGPHYLO_DATABASE_HOST'),
+            'PORT': os.environ.get('NGPHYLO_DATABASE_PORT'),
+        }
+    }
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+        }
+    }
+
 MARKDOWN_STYLES = {'default': {
     "extras": {
         "code-friendly": None,
