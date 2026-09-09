@@ -13,7 +13,7 @@ from datetime import datetime
 import uuid
 import textwrap
 import logging
-import StringIO
+from io import StringIO
 
 import re
 
@@ -105,7 +105,7 @@ class BlastRun(models.Model):
         dm = self.distance_matrix()
         constructor = DistanceTreeConstructor()
         tree = constructor.nj(dm)
-        treeio = StringIO.StringIO()
+        treeio = StringIO()
         Phylo.write(tree, treeio, 'newick')
         treestr = treeio.getvalue()
         treeio.close()

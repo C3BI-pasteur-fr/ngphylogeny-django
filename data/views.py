@@ -1,13 +1,6 @@
-import urllib
+from urllib.parse import urljoin
+from urllib.request import urlopen
 import json
-
-try:
-    # Python 3:
-    from urllib.parse import urlparse
-
-except ImportError:
-    # Python 2:
-    import urlparse
 
 import tempfile
 import requests
@@ -77,7 +70,7 @@ class UploadView(UploadMixin, FormView):
 
         if self.request.session.get('files'):
             compatibleinputs = []
-            for key, sf in self.request.session.get('files').iteritems():
+            for key, sf in self.request.session.get('files').items():
                 if sf.get('ext') == 'fasta':
                     compatibleinputs.append(sf)
             kwargs['compatibleinputs'] = compatibleinputs
@@ -117,8 +110,8 @@ def download_file(request, file_id):
         if not name:
             name = "download"
         if dlurl:
-            url = urlparse.urljoin(gi.base_url, dlurl)
-            response = urllib.urlopen(url)
+            url = urljoin(gi.base_url, dlurl)
+            response = urlopen(url)
             stream_response = StreamingHttpResponse(response.read())
             stream_response['Content-Disposition'] = 'attachment; filename=' + name
         else:
@@ -189,8 +182,8 @@ def tree_visualization(request, file_id):
         dlurl = data.get('download_url')
         historyid = data.get('history_id')
         if dlurl and historyid:
-            url = urlparse.urljoin(gi.base_url, dlurl)
-            response = urllib.urlopen(url)
+            url = urljoin(gi.base_url, dlurl)
+            response = urlopen(url)
             return render(request,
                           template_name='treeviz/tree.html',
                           context={'newick_tree': response.read(),
@@ -207,8 +200,8 @@ def export_to_itol(request, file_id):
     if isinstance(data, dict):
         dlurl = data.get('download_url')
         if dlurl:
-            url = urlparse.urljoin(gi.base_url, dlurl)
-            response = urllib.urlopen(url)
+            url = urljoin(gi.base_url, dlurl)
+            response = urlopen(url)
             tmpfile = tempfile.NamedTemporaryFile()
             tmpfile.write(response.read())
             tmpfile.flush()
@@ -254,8 +247,8 @@ def add_file_to_session(request, file_id):
             request.session['files']={}
         fdict = request.session['files']
         if file_id not in fdict:
-            print "data:"
-            print json.dumps(data)
+            print("data:")
+            print(json.dumps(data))
             fdict[file_id]={'id': file_id, 'ext' : data.get('file_ext'), 'history' : data.get('history_id'), 'name': data.get('name')}
         return redirect('history_detail', history_id=data.get('history_id'))
     return render(request, 'error.html', {'errortitle': 'Error while adding file to session', 'errormessage': 'File id does not exist'})

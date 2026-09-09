@@ -66,19 +66,19 @@ class Tool(models.Model):
         """
         if (self.max_nbseq > 0 and
             ((nseq > self.max_nbseq) or
-             (seqaa and nseq > self.max_nbseq/self.aa_scale_factor))):
+             (seqaa and nseq > self.max_nbseq//self.aa_scale_factor))):
             return False
         if self.max_boot > 0 and nboot > self.max_boot :
             return False
         if (self.max_lengthxnbseqsquared > 0 and
             ((length*nseq > self.max_lengthxnbseqsquared) or
-             (seqaa and length*nseq > self.max_lengthxnbseqsquared/self.aa_scale_factor))):
+             (seqaa and length*nseq > self.max_lengthxnbseqsquared//self.aa_scale_factor))):
             return False
         if self.max_nbseqsquaredxboot > 0 and nseq*nboot > self.max_nbseqsquaredxboot:
             return False
         if (self.max_lengthxnbseqsquaredxboot > 0 and
             ((length*nseq*nboot > self.max_lengthxnbseqsquaredxboot) or
-             (seqaa and length*nseq*nboot > self.max_lengthxnbseqsquaredxboot/self.aa_scale_factor))):
+             (seqaa and length*nseq*nboot > self.max_lengthxnbseqsquaredxboot//self.aa_scale_factor))):
             return False
         return True
 
@@ -269,7 +269,7 @@ class Tool(models.Model):
                 else:
                     tools_import_report['already_exist'].append(t)
             except (ValueError, ValidationError) as e:
-                print e
+                print(e)
                 tools_import_report['error'].append(id_tool)
         return tools_import_report
 
@@ -297,7 +297,7 @@ class Tool(models.Model):
 
         return Tool.objects.filter(pk__in=tools_compatible)
 
-    def __unicode__(self):
+    def __str__(self):
         return "{} - {}".format(self.name, self.version)
 
 
@@ -341,12 +341,12 @@ class ToolInputData(ToolData):
 
         l_ext = self.get_extensions()
         l_ext_filtered = [ext for ext in l_ext if ext not in ignore]
-        print l_ext_filtered
+        print(l_ext_filtered)
         galaxy_server = self.tool.galaxy_server
         return ToolOutputData.objects.filter(extension__in=l_ext_filtered,
                                              tool__galaxy_server=galaxy_server)
 
-    def __unicode__(self):
+    def __str__(self):
         return "%s | %s: %s" % (self.tool, self.name, self.extensions)
 
     class Meta:
@@ -366,7 +366,7 @@ class ToolOutputData(ToolData):
     def search_compatible_inputs(self):
         return ToolInputData.objects.filter(extensions__contains=self.extension)
 
-    def __unicode__(self):
+    def __str__(self):
         return "%s | %s: %s" % (self.tool, self.name, self.extension)
 
     class Meta:
@@ -382,7 +382,7 @@ class Citation(models.Model):
     def format(self):
         bib_database = bibtexparser.loads(self.reference)
         f = []
-        for k, v in bib_database.entries_dict.iteritems():
+        for k, v in bib_database.entries_dict.items():
             journal = v.get('journal','')
             title = v.get('title','')
             year = v.get('year','')
@@ -406,7 +406,7 @@ class Citation(models.Model):
     def txt(self):
         bib_database = bibtexparser.loads(self.reference)
         f = ""
-        for k, v in bib_database.entries_dict.iteritems():
+        for k, v in bib_database.entries_dict.items():
             journal = v.get('journal','')
             title = v.get('title','')
             year = v.get('year','')
@@ -429,7 +429,7 @@ class ToolFlag(models.Model):
     tool = models.ManyToManyField(Tool)
     rank = models.IntegerField(default=999, help_text="flags order")
 
-    def __unicode__(self):
+    def __str__(self):
         return self.verbose_name
 
     class Meta:
@@ -475,7 +475,7 @@ class ToolFieldWhiteList(models.Model):
     def get_json_params(self):
         return self.tool.get_params_detail
 
-    def __unicode__(self):
+    def __str__(self):
         return "%s ,%s" % (self.tool.name, self.DICT_CONTEXT_CHOICES.get(self.context))
 
     class Meta:

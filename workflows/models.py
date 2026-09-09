@@ -150,7 +150,7 @@ class WorkflowStepInformation(object):
 
         self.steps_tooldict = ord_step
         self.sorted_tool_list = list(
-            (k, v.get('tool')) for k, v in ord_step.iteritems() if v and 'tool' in v)
+            (k, v.get('tool')) for k, v in ord_step.items() if v and 'tool' in v)
 
 
 class WorkflowGalaxyFactory(object):
@@ -176,7 +176,7 @@ class WorkflowGalaxyFactory(object):
     def build(self, galaxy_instance, list_tools, history_id):
         self.set_steps(galaxy_instance, list_tools, history_id)
         if self.valid:
-            print self.to_json()
+            print(self.to_json())
             wkgi = galaxy_instance.workflows.import_workflow_json(self.to_json())
             wk_id = wkgi.get('id')
             self.id_galaxy = wk_id

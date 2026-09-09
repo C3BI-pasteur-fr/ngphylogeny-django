@@ -1,13 +1,15 @@
 # GitLab CI/CD for NGPhylogeny_fr_django.
 #
-# Current scope: lint + test only, targeting the stack the project runs
-# today (Python 2.7 / Django 1.11). No Docker build/push/deploy stage yet.
+# Current scope: lint + test only, targeting Python 3.7 / Django 1.11 (the
+# highest Python version Django 1.11 officially supports - the Django
+# upgrade itself is tracked as separate follow-up phases). No Docker
+# build/push/deploy stage yet.
 #
 # NOTE: if your GitLab runners are tag-scoped, add a `tags:` list to each
 # job below matching your runner setup - this file intentionally leaves
 # that unset since it can't be discovered from the repo.
 
-image: python:2.7-jessie
+image: python:3.7-buster
 
 workflow:
   rules:
@@ -30,7 +32,10 @@ cache:
     - .cache/pip
 
 before_script:
-  - apt-get update -qq && apt-get install -y -qq libpq-dev
+  - apt-get update -qq && apt-get install -y -qq libpq-dev libmagic1
+  # celery==4.4.7 (pinned in requirement.txt - see the comment there) ships
+  # a non-PEP440 dependency specifier that pip >=24.1 refuses outright.
+  - pip install "pip<24.1"
   - pip install -r requirement.txt
 
 lint:

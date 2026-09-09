@@ -32,6 +32,6 @@ class ToolCanRunOnDataTest(TestCase):
         self.assertTrue(tool.can_run_on_data(nseq=1, length=1, nboot=100, seqaa=False))
         self.assertFalse(tool.can_run_on_data(nseq=1, length=1, nboot=101, seqaa=False))
 
-    def test_unicode_representation(self):
+    def test_string_representation(self):
         tool = self.make_tool(name="PhyML", version="3.1")
-        self.assertEqual(unicode(tool), u"PhyML - 3.1")
+        self.assertEqual(str(tool), "PhyML - 3.1")

@@ -44,10 +44,3 @@ urlpatterns = [
     url(r'^(?P<pk>[\w-]+)/delete$', DeleteBlastRunView.as_view(),
         name="blast_delete"),
 ]
-
-def available_blasts_progs(request, server):
-    """
-    Ajax: return possible blasts progs : {id:name}
-    """
-    context = BlastRun.blast_progs(server)
-    return HttpResponse(json.dumps(context), content_type='application/json')

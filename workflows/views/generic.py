@@ -16,7 +16,7 @@ from blast.models import BlastRun
 from workspace.tasks import initializeworkspacejob
 
 import tempfile
-import StringIO
+from io import StringIO
 
 from utils import biofile
 
@@ -62,7 +62,7 @@ class WorkflowFormView(UploadView, DetailView):
             context['form'] = UploadView.form()
         if hasattr(wk, 'json'):
             # parse galaxy workflow json information
-            context["inputs"] = wk.json['inputs'].keys()
+            context["inputs"] = list(wk.json['inputs'].keys())
             # add workfow galaxy information
             context["steps"] = WorkflowStepInformation(
                 wk.json, tools=self.restricted_toolset,
@@ -105,10 +105,10 @@ class WorkflowFormView(UploadView, DetailView):
             nseq, length, seqaa = biofile.valid_fasta(submitted_file)
             submitted_file.seek(0)
         elif pasted_text:
-            nseq, length, seqaa = biofile.valid_fasta(StringIO.StringIO(str(pasted_text)))
+            nseq, length, seqaa = biofile.valid_fasta(StringIO(str(pasted_text)))
         elif blast_run != '--':
             b = BlastRun.objects.get(pk=blast_run)
-            nseq, length, seqaa = biofile.valid_fasta(StringIO.StringIO(str(b.to_fasta())))
+            nseq, length, seqaa = biofile.valid_fasta(StringIO(str(b.to_fasta())))
         elif galaxy_file != "--":
             file_id = galaxy_file
         else:
@@ -155,7 +155,7 @@ class WorkflowFormView(UploadView, DetailView):
             file_id = u_file.get('outputs')[0].get('id')
         # else if galaxy: : file_id is already set
         
-        i_input = workflow.json['inputs'].keys()[0]
+        i_input = list(workflow.json['inputs'].keys())[0]
         
         # input file
         dataset_map = dict()

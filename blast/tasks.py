@@ -200,17 +200,17 @@ def launch_pasteur_blast(blastrunid, sequence, prog, db, evalue, coverage, maxse
                 tmp_file.flush()
                 if biofile.is_fasta_one_seq(tmp_file.name):
                     ## Upload input query file to galaxy
-	            outputs = galaxycon.tools.upload_file(path=tmp_file.name,file_name="blastinput.fasta",history_id=history.get("id"),file_type="fasta")
-	            file_id = outputs.get('outputs')[0].get('id')
+                    outputs = galaxycon.tools.upload_file(path=tmp_file.name,file_name="blastinput.fasta",history_id=history.get("id"),file_type="fasta")
+                    file_id = outputs.get('outputs')[0].get('id')
                     ## Configuring job
-	            tool_inputs=inputs()
-	            tool_inputs.set_dataset_param("query",file_id)
-	            tool_inputs.set_param("db_opts|database", db)
-	            tool_inputs.set_param("blast_type", blast_type)
-	            tool_inputs.set_param("evalue_cutoff", evalue)
-	            tool_inputs.set_param("output|out_format", "5")
+                    tool_inputs=inputs()
+                    tool_inputs.set_dataset_param("query",file_id)
+                    tool_inputs.set_param("db_opts|database", db)
+                    tool_inputs.set_param("blast_type", blast_type)
+                    tool_inputs.set_param("evalue_cutoff", evalue)
+                    tool_inputs.set_param("output|out_format", "5")
                     ## Running blast job
-	            outputs=galaxycon.tools.run_tool(history_id=history.get("id"),tool_id=prog,tool_inputs=tool_inputs)
+                    outputs=galaxycon.tools.run_tool(history_id=history.get("id"),tool_id=prog,tool_inputs=tool_inputs)
                     b.history_fileid = outputs.get("outputs")[0].get("id")
                 else:
                     b.status=BlastRun.ERROR

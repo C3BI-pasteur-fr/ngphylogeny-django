@@ -23,7 +23,7 @@ class Command(BaseCommand):
         interactive = bool(options.get('interactive'))
 
         if interactive:
-            new_url = raw_input('Enter the URL of the Galaxy server you want to add: ')
+            new_url = input('Enter the URL of the Galaxy server you want to add: ')
             galaxy_url = requests.get(new_url).url
 
         if galaxy_url:
