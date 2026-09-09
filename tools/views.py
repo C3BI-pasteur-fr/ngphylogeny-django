@@ -37,6 +37,15 @@ class ToolListView(ListView):
         tool_list = Tool.objects.filter(galaxy_server__current=True,
                                         visible=True,
                                         toolflag__name__in=CATEGORY).prefetch_related('toolflag_set')
+        # Precompute a plain attribute here rather than having the
+        # template call toolflag_set.first() via {% regroup %}/dictsort:
+        # dictsort's variable resolver stopped auto-calling methods
+        # starting Django 3.1 (a security hardening against triggering
+        # side-effecting methods via sort keys), so
+        # dictsort:"toolflag_set.first.verbose_name" silently resolved
+        # to "" and the whole list appeared empty.
+        for tool in tool_list:
+            tool.first_flag = tool.toolflag_set.first()
         return tool_list
 
 

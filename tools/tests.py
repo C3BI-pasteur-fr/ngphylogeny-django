@@ -1,6 +1,8 @@
 from django.test import TestCase
+from django.urls import reverse
 
-from tools.models import Tool
+from galaxy.models import Server
+from tools.models import Tool, ToolFlag
 
 
 class ToolCanRunOnDataTest(TestCase):
@@ -35,3 +37,42 @@ class ToolCanRunOnDataTest(TestCase):
     def test_string_representation(self):
         tool = self.make_tool(name="PhyML", version="3.1")
         self.assertEqual(str(tool), "PhyML - 3.1")
+
+
+class ToolListViewGroupingTest(TestCase):
+    """
+    Regression test for templates/tools/tool_list.html's
+    {% regroup tool_list|dictsort:"first_flag.verbose_name" by
+    first_flag %}: it used to read toolflag_set.first.verbose_name
+    directly, relying on dictsort auto-calling .first(). Django 3.1
+    hardened dictsort's variable resolver to never call methods (to
+    stop sort keys from triggering side-effecting methods), so that
+    stopped working - dictsort silently returned "" and the tools
+    page rendered as if there were zero tools, for any tool that
+    actually has a flag (i.e. always, in real data). Only caught by
+    testing against real (restored production) data; Tool.save() and
+    Server.save() both make live Galaxy HTTP calls, which is why this
+    uses bulk_create() to build fixtures without touching either.
+    """
+
+    def setUp(self):
+        server = Server(name="Test Galaxy", url="http://example.invalid",
+                        current=True)
+        Server.objects.bulk_create([server])
+        self.server = Server.objects.get(url="http://example.invalid")
+
+        tool = Tool(galaxy_server=self.server, id_galaxy="test_tool",
+                    name="PhyML", version="3.1", description="")
+        Tool.objects.bulk_create([tool])
+        self.tool = Tool.objects.get(id_galaxy="test_tool")
+
+        flag = ToolFlag(name="tree", verbose_name="Tree Inference", rank=0)
+        ToolFlag.objects.bulk_create([flag])
+        self.flag = ToolFlag.objects.get(name="tree")
+        self.tool.toolflag_set.add(self.flag)
+
+    def test_tool_and_its_group_appear_on_the_page(self):
+        response = self.client.get(reverse('tools'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.tool.name)
+        self.assertContains(response, self.flag.verbose_name)
