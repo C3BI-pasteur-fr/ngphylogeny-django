@@ -320,7 +320,7 @@ class ToolInputData(ToolData):
     """
     edam_formats = models.CharField(max_length=250, null=True, blank=True)
     extensions = models.CharField(max_length=100)
-    examplefile = models.ForeignKey(ExampleFile, null=True, blank=True)
+    examplefile = models.ForeignKey(ExampleFile, null=True, blank=True, on_delete=models.SET_NULL)
     # Wether this field may be linked to the first input data step
     # in the workflow maker.
     # Avoids to link input data to all input file fields in PhyML for example

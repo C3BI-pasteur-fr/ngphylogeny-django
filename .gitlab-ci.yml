@@ -1,0 +1,52 @@
+# GitLab CI/CD for NGPhylogeny_fr_django.
+#
+# Current scope: lint + test only, targeting the stack the project runs
+# today (Python 2.7 / Django 1.11). No Docker build/push/deploy stage yet.
+#
+# NOTE: if your GitLab runners are tag-scoped, add a `tags:` list to each
+# job below matching your runner setup - this file intentionally leaves
+# that unset since it can't be discovered from the repo.
+
+image: python:2.7-jessie
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+
+stages:
+  - lint
+  - test
+
+variables:
+  DJANGO_SETTINGS_MODULE: "NGPhylogeny_fr.settings.local"
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+cache:
+  key:
+    files:
+      - requirement.txt
+  paths:
+    - .cache/pip
+
+before_script:
+  - apt-get update -qq && apt-get install -y -qq libpq-dev
+  - pip install -r requirement.txt
+
+lint:
+  stage: lint
+  script:
+    - pip install flake8
+    # Start narrow: fail only on syntax errors / undefined names, not on
+    # pre-existing style debt in this legacy codebase. Tighten over time.
+    - flake8 --select=E9,F63,F7,F82 --exclude=migrations .
+
+test:
+  stage: test
+  script:
+    # Migrations aren't committed to this repo (see .gitignore), so they
+    # need to be (re)generated before every run, same as Dockerfile/startup.sh.
+    - python manage.py makemigrations
+    - python manage.py migrate
+    - python manage.py check
+    - python manage.py test

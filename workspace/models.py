@@ -15,7 +15,7 @@ class WorkspaceHistory(models.Model):
     history = models.CharField(max_length=20)
     galaxy_server = models.ForeignKey(Server, on_delete=models.CASCADE)
     # The potential workflow that has been executed in the workspace
-    workflow = models.ForeignKey(Workflow, null=True)
+    workflow = models.ForeignKey(Workflow, null=True, on_delete=models.SET_NULL)
     name = models.CharField(max_length=100)
     created_date = models.DateTimeField(auto_now_add=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
