@@ -2,3 +2,5 @@
 */migrations/0*.py
 db.sqlite3
 *~
+# collectstatic output (STATIC_ROOT) - generated, not source
+/static/

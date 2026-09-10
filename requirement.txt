@@ -29,3 +29,7 @@ requests-toolbelt==1.0.0
 # Not verified locally (needs libpq, which this dev machine lacks) -
 # the Dockerfile installs libpq-dev/postgresql-client before this.
 psycopg2==2.9.9
+# Needed by Django's loaddata for tools/fixtures/tool_flags.yaml - never
+# declared even though it's required; only ever worked before if something
+# else pulled it in transitively.
+PyYAML==6.0.1

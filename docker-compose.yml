@@ -1,0 +1,77 @@
+x-django-env: &django-env
+  DJANGO_SETTINGS_MODULE: "${NGPHYLO_SETTINGS_MODULE:-NGPhylogeny_fr.settings.local}"
+  NGPHYLO_DATABASE_ENGINE: django.db.backends.postgresql
+  NGPHYLO_DATABASE_NAME: ngphylo
+  NGPHYLO_DATABASE_USER: ngphylo
+  NGPHYLO_DATABASE_PASSWORD: ngphylo_local_dev
+  NGPHYLO_DATABASE_HOST: db
+  NGPHYLO_DATABASE_PORT: "5432"
+  NGPHYLO_REDIS_URL: redis://redis:6379/0
+  # Point these at a running Galaxy server (e.g. the docker-compose in the
+  # sibling NGPhylogeny_fr_galaxytools repo) to link it up automatically -
+  # see README.md. Left unset, the app still starts, it just has no Galaxy
+  # server to submit workflows to yet.
+  NGPHYLO_GALAXY_URL: "${NGPHYLO_GALAXY_URL:-}"
+  NGPHYLO_GALAXY_KEY: "${NGPHYLO_GALAXY_KEY:-}"
+  NGPHYLO_ADMIN_USER: "${NGPHYLO_ADMIN_USER:-admin}"
+  NGPHYLO_ADMIN_EMAIL: "${NGPHYLO_ADMIN_EMAIL:-admin@example.org}"
+  NGPHYLO_ADMIN_PASSWORD: "${NGPHYLO_ADMIN_PASSWORD:-password}"
+
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: ngphylo
+      POSTGRES_PASSWORD: ngphylo_local_dev
+      POSTGRES_DB: ngphylo
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ngphylo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - ngphylo-db:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+
+  # One-shot: migrations, admin user, and (if NGPHYLO_GALAXY_URL/KEY are set)
+  # Galaxy server linking + tool/workflow import. web/celery-* wait for this
+  # to finish before starting.
+  init:
+    build: .
+    command: ["docker/init.sh"]
+    environment: *django-env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    environment: *django-env
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
+  celery-worker:
+    build: .
+    command: ["celery", "-A", "NGPhylogeny_fr.celery:app", "worker", "-l", "INFO", "-Q", "default,monitor,ncbi_blast"]
+    environment: *django-env
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
+  celery-beat:
+    build: .
+    command: ["celery", "-A", "NGPhylogeny_fr.celery:app", "beat", "-l", "INFO"]
+    environment: *django-env
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
+volumes:
+  ngphylo-db:
