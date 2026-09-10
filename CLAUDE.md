@@ -145,6 +145,41 @@ this rendering as a permanently-empty tools page; see git history for the
 fix — precompute the value as a plain attribute in the view instead of
 relying on dictsort to call anything).
 
+### Code paths only a real Galaxy run exercises
+
+A full local Galaxy setup (any current version — verified against Galaxy
+25.1, tools/workflows from `NGPhylogeny_fr_galaxytools` installed via its
+`tool_conf.xml` + conda auto-install) surfaced three more Python 2→3 bugs
+that `manage.py check`/`test` and synthetic bioblend calls never touch,
+because they only trigger when a real workflow actually runs end to end:
+- `requires_system_checks = True` (a bare bool) in `creategalaxyserver`,
+  `addgalaxykey`, `importtools`, `importworkflows` — Django 4.x requires a
+  list/tuple or the `'__all__'` sentinel here, not a bool. These commands
+  are how a Galaxy server gets linked to the app at all (see the commands
+  above), so this broke silently through every earlier phase.
+- `Tool.import_tools()`'s citation text used to round-trip through
+  `.encode('iso-8859-1').decode('utf8')` — a Python 2-era fix for a
+  `requests`/`json` mojibake quirk that doesn't exist under Python 3
+  (`requests.json()` already returns correctly-decoded text). Re-applying
+  it crashed on any citation with a character outside Latin-1 (en dashes,
+  curly quotes — both common in real citations), blocking most tool
+  imports.
+- `utils/biofile.py`'s `valid_fasta()` passed an uploaded file's binary
+  handle straight to `Bio.SeqIO.parse()`. Biopython's `SimpleFastaParser`
+  detects EOF by comparing a line to `""` (str), which never matches
+  `b""` (bytes) under Python 3 — so parsing any real uploaded fasta file
+  crashed with `IndexError` at the true end of the file, every time. Only
+  worked in Python 2, where `bytes == str`. Fixed by reading the upload
+  fully upfront and parsing through a text `io.StringIO` regardless of
+  whether the source yields bytes or str.
+
+With all three fixed, a real "PhyML" oneclick workflow submitted through
+the actual UI ran for real against the local Galaxy: upload succeeds,
+MAFFT/seqtype-detection/BMGE/PhyML execute as real (conda-installed)
+Galaxy jobs. If you're touching upload/import/tool-linking code, don't
+trust `manage.py test` alone — these paths need an actual Galaxy to run
+against.
+
 ### Known dependency ceilings (don't casually bump these)
 
 - **`biopython==1.70`** is pinned and can't be bumped past Python 3.9: its
@@ -155,11 +190,13 @@ relying on dictsort to call anything).
   is why the project is pinned to Python 3.8 rather than something newer.
 - **`celery[redis]==5.4.0`**, **`bioblend==1.4.0`** were bumped from very old
   pins (4.4.7, 0.10) as part of this project's Python 2→3 / Django
-  1.11→4.2 migration. `bioblend`'s actual runtime behavior has since been
-  verified live against the real production Galaxy server (`galaxy.pasteur.fr`)
-  — auth (moved from `?key=` query params to an `x-api-key` header),
+  1.11→4.2 migration. `bioblend`'s runtime behavior has since been verified
+  live both against the real production Galaxy server (`galaxy.pasteur.fr`
+  — auth moved from `?key=` query params to an `x-api-key` header,
   `get_tools`/`get_histories`, `Workflow.fetch_details()`/`show_workflow()`,
-  and `Workflow.duplicate()` (`import_workflow_dict`) all confirmed working.
+  `Workflow.duplicate()`/`import_workflow_dict`) and end to end against a
+  local Galaxy 25.1 running a real oneclick workflow (see "Code paths only
+  a real Galaxy run exercises" above) — both confirmed working.
 
 ### Docker
 
