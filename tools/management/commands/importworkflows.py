@@ -70,14 +70,22 @@ class Command(BaseCommand):
                 )
                 if(re.search('oneclick', wfname, re.IGNORECASE) or
                    wfname in self.wfnames):
-                    w = Workflow(
+                    # update_or_create, not a plain insert: Galaxy re-imports
+                    # its bundled workflows (fresh id_galaxy each time) on
+                    # every restart, so re-running this against the same
+                    # server used to hit the unique constraint on slug with
+                    # "duplicate key value violates unique constraint
+                    # workflows_workflow_slug_key" instead of just
+                    # refreshing the existing row's id_galaxy.
+                    w, created = Workflow.objects.update_or_create(
                         galaxy_server=galaxy_server,
-                        id_galaxy=wfid,
-                        name=wfname,
-                        category='base',
-                        description=wfname,
-                        slug=slugify(wfname))
-                    w.save()
+                        slug=slugify(wfname),
+                        defaults={
+                            'id_galaxy': wfid,
+                            'name': wfname,
+                            'category': 'base',
+                            'description': wfname,
+                        })
         else:
             self.stdout.write("Problem while querying galaxy server")
 
