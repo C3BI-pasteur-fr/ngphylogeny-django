@@ -6,7 +6,7 @@ from galaxy.models import Server
 
 class Command(BaseCommand):
     help = 'Create or activate Galaxy Server to NGPhylogeny'
-    requires_system_checks = True
+    requires_system_checks = '__all__'
 
     def add_arguments(self, parser):
         # Named (optional) arguments

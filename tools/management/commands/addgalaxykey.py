@@ -13,7 +13,7 @@ from tools.models import ToolFlag
 
 class Command(BaseCommand):
     help = 'Adds Galaxy Key to given user and given galaxy server'
-    requires_system_checks = True
+    requires_system_checks = '__all__'
 
     def add_arguments(self, parser):
         parser.add_argument('--galaxyurl')
