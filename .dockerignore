@@ -1,10 +1,16 @@
 db.sqlite3
-*/migrations
-*~
+# Keep migrations/__init__.py (needed for Django to recognize these as
+# migrations-tracked apps) - only the generated 0*.py files are excluded,
+# matching .gitignore. makemigrations creates them fresh on every build.
+*/migrations/0*.py
+# Unlike .gitignore, a bare pattern here only matches at the build context
+# root - it needs the **/ prefix to actually match at any depth.
+**/*~
 .git
 Dockerfile
-*.pyc
-*.pyo
-*.pyd
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/__pycache__
 .Python
 env

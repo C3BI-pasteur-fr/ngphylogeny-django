@@ -210,7 +210,7 @@ if EMAIL_PORT is not None:
 # in NGPhylogeny_fr/celery.py.
 from celery.schedules import crontab
 
-CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_BROKER_URL = os.environ.get('NGPHYLO_REDIS_URL', 'redis://localhost:6379/0')
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'

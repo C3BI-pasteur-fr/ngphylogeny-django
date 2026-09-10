@@ -122,26 +122,37 @@ flake8 --select=E9,F63,F7,F82 --exclude=migrations .
 
 # Docker
 
-You can run NGPhylogeny.fr via its [docker image](https://hub.docker.com/r/evolbioinfo/ngphylogeny/):
-
-## Using a remote galaxy instance:
-
-Note: The remote galaxy instance must contain all necessary tools (listed [here](toolflags.txt)).
-
 ```
-docker run -p 8080:8000 evolbioinfo/ngphylogeny django_admin_username django_admin_password django_admin_email galaxy_url galaxy_api_key
+docker compose up -d
 ```
 
-## Using a custom local docker galaxy instance
-We provide a [galaxy docker image](https://hub.docker.com/r/evolbioinfo/ngphylogeny-galaxy/) with all tools and workflows already installed (see this [github repo](https://github.com/C3BI-pasteur-fr/ngphylogeny-galaxy)):
+This runs five services (see `docker-compose.yml`): Postgres, Redis, the
+Django app (`web`, on http://localhost:8000), and a Celery worker + beat.
+A one-shot `init` service runs migrations, loads the tool-flag fixtures, and
+creates an admin user (`admin` / `password` by default - override via the
+`NGPHYLO_ADMIN_USER`/`NGPHYLO_ADMIN_EMAIL`/`NGPHYLO_ADMIN_PASSWORD` env vars)
+before the other services start.
+
+The app works without one, but to actually run analyses it needs a Galaxy
+server linked (with NGPhylogeny's tools/workflows installed - see the
+[NGPhylogeny_fr_galaxytools](https://github.com/C3BI-pasteur-fr/ngphylogeny-galaxy)
+repo, which has its own `docker compose up` deployment). Point this stack at
+one by setting `NGPHYLO_GALAXY_URL` and `NGPHYLO_GALAXY_KEY` (a Galaxy admin
+API key) before starting it:
 
 ```
-# Starting Docker image of Galaxy
-docker run --privileged=true  \
-           -p 8080:80 -p 8121:21 -p 8122:22 \
-           evolbioinfo/ngphylogeny-galaxy
-# MacOS => Starting NGPhylogeny.fr 
-docker run -p 8000:8000 evolbioinfo/ngphylogeny admin admin@admin http://host.docker.internal:8080 admin
-# Linux => Starting NGPhylogeny.fr
-docker run -p 8000:8000 --net=host evolbioinfo/ngphylogeny admin admin@admin http://localhost:8080 admin
+NGPHYLO_GALAXY_URL=http://host.docker.internal:8080 \
+NGPHYLO_GALAXY_KEY=<galaxy admin api key> \
+docker compose up -d
 ```
+
+`init` only links Galaxy and imports its tools/workflows on that first run;
+to do it later against an already-running stack, `docker compose run init`
+(or the underlying `manage.py creategalaxyserver`/`addgalaxykey`/`importtools`/
+`importworkflows` commands - see CLAUDE.md) works too.
+
+By default the app runs with `DEBUG=True` (`NGPhylogeny_fr.settings.local`)
+so Django's dev server serves static files itself with no extra setup;
+override `NGPHYLO_SETTINGS_MODULE=NGPhylogeny_fr.settings.prod` for
+production-like behavior, but then something needs to serve `STATIC_ROOT`
+(`/static/`) separately - this compose file doesn't set that up.

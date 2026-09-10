@@ -200,8 +200,22 @@ against.
 
 ### Docker
 
-Single container running nginx + uwsgi + redis + celeryd + celerybeat
-together (via init.d scripts under `docker/`), bootstrapped by
-`startup.sh`, which also seeds the DB, creates a superuser, and imports
-tools/workflows from a Galaxy server on every container start — see that
-script for the exact sequence if you need to reproduce it outside Docker.
+`docker compose up -d` runs five services from one lean `Dockerfile` (`db`
+postgres, `redis`, `web`, `celery-worker`, `celery-beat` — no
+nginx/uwsgi/compiled-redis bundled into the image, unlike the pre-2026
+deployment). A one-shot `init` service (`docker/init.sh`) runs migrations,
+seeds the admin user, and — only if `NGPHYLO_GALAXY_URL`/`NGPHYLO_GALAXY_KEY`
+are set — links a Galaxy server and imports its tools/workflows, before
+`web`/`celery-*` start (`depends_on: init: condition:
+service_completed_successfully`); see that script for the exact command
+sequence if reproducing it outside Docker. Verified end to end against a
+from-scratch `docker compose up` — see README.md for deploy steps and the
+Galaxy-linking env vars.
+
+Two dockerignore gotchas worth knowing if this ever breaks again: unlike
+`.gitignore`, a bare pattern in `.dockerignore` (`*.pyc`) only matches at the
+build context *root*, not at any depth — nested files need the `**/` prefix
+(`**/*.pyc`). And migrations/__init__.py must stay in the build context (only
+the generated `0*.py` files are excluded, matching `.gitignore`) — excluding
+the whole `*/migrations` directory silently breaks `makemigrations`'
+auto-detection for every app that hasn't got a migration yet.
