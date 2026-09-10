@@ -12,7 +12,7 @@ from tools.models import ToolFlag
 
 class Command(BaseCommand):
     help = 'Import Galaxy workflows into NGPhylogeny'
-    requires_system_checks = True
+    requires_system_checks = '__all__'
     flags = []
     wfnames = []
 

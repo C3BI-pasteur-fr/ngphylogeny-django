@@ -10,7 +10,7 @@ from tools.models import ToolInputData
 
 class Command(BaseCommand):
     help = 'Import Galaxy tools to NGPhylogeny'
-    requires_system_checks = True
+    requires_system_checks = '__all__'
     input_fields = []
     flags = []
 

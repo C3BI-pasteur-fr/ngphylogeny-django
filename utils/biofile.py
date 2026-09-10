@@ -4,6 +4,7 @@ from Bio.Seq import Seq
 from Bio.Alphabet import generic_dna
 from Bio.Alphabet.IUPAC import *
 
+import io
 import re
 import magic
 
@@ -126,19 +127,30 @@ def check_nt(sequence):
 
 def valid_fasta(fasta_file):
     # Check uploaded file or pasted content
+    # Read the whole thing upfront and normalize to text: uploaded file
+    # objects (Django's InMemoryUploadedFile/TemporaryUploadedFile) yield
+    # bytes, while pasted content already comes in as a text StringIO.
+    # SeqIO.parse() needs the former case wrapped as text - byte lines
+    # break SimpleFastaParser's EOF check (it compares readline() to ""
+    # to detect the end of the file, which never matches b"").
+    raw = fasta_file.read()
+    if isinstance(raw, bytes):
+        content = raw.decode('utf-8', errors='replace')
+        mime_sample = raw[:1024]
+    else:
+        content = raw
+        mime_sample = raw[:1024].encode('utf-8', errors='ignore')
 
-    mimetype=magic.from_buffer(fasta_file.read(1024),mime=True)
+    mimetype = magic.from_buffer(mime_sample, mime=True)
 
     print(mimetype)
     if mimetype != "text/plain" :
         return (0,0,False)
 
-    fasta_file.seek(0)
-    
     nbseq = 0
     length = 0
     seqaa=False
-    for r in SeqIO.parse(fasta_file, "fasta"):
+    for r in SeqIO.parse(io.StringIO(content), "fasta"):
         tlen = len(r.seq)
         length = tlen if tlen > length else length
         nbseq += 1

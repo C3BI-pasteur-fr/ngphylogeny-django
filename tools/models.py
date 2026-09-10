@@ -260,7 +260,15 @@ class Tool(models.Model):
                 connection = requests.get(cite_url)
                 citations = connection.json()
                 for cite in citations:
-                    c = Citation(reference=cite.get('content','').encode('iso-8859-1').decode('utf8'), tool=t)
+                    # No encode/decode roundtrip needed: unlike Python 2's
+                    # requests/json stack (which this iso-8859-1->utf8
+                    # roundtrip used to correct for), Python 3's
+                    # requests.json() already returns correctly-decoded
+                    # text - re-encoding it as iso-8859-1 just raises
+                    # UnicodeEncodeError on any citation containing a
+                    # character outside Latin-1 (en dashes, curly quotes,
+                    # ...), which is common in real citation text.
+                    c = Citation(reference=cite.get('content',''), tool=t)
                     c.save()
                 if force:
                     t.import_tool_io(t.tool_json)
