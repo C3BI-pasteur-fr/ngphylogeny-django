@@ -47,5 +47,13 @@ class Command(BaseCommand):
         g = Server.objects.filter(url=galaxy_url)
         if g.count() == 0:
             raise CommandError('Galaxy server {} does not exist, please use --galaxyurl'.format(galaxy_url))
-        gu=GalaxyUser(user=u.first(),galaxy_server=g.first(),api_key=galaxy_key,anonymous=True)
-        gu.save()
+        # update_or_create, not a plain insert: this command is meant to be
+        # re-runnable (e.g. every time the docker-compose init step runs),
+        # but a blind GalaxyUser(...).save() crashed with "duplicate key
+        # value violates unique constraint
+        # galaxy_galaxyuser_user_id_galaxy_server_id_53f2ea9d_uniq" on any
+        # second run for the same user/server instead of just refreshing
+        # the key.
+        GalaxyUser.objects.update_or_create(
+            user=u.first(), galaxy_server=g.first(),
+            defaults={'api_key': galaxy_key, 'anonymous': True})
