@@ -33,6 +33,15 @@ x-django-env: &django-env
   NGPHYLO_ADMIN_USER: "${NGPHYLO_ADMIN_USER:-admin}"
   NGPHYLO_ADMIN_EMAIL: "${NGPHYLO_ADMIN_EMAIL:-admin@example.org}"
   NGPHYLO_ADMIN_PASSWORD: "${NGPHYLO_ADMIN_PASSWORD:-password}"
+  # See docker-compose.yml for what these do - same SMTP/report config,
+  # same optional-by-default behavior.
+  NGPHYLO_EMAIL_HOST: "${NGPHYLO_EMAIL_HOST:-}"
+  NGPHYLO_EMAIL_PORT: "${NGPHYLO_EMAIL_PORT:-}"
+  NGPHYLO_EMAIL_HOST_USER: "${NGPHYLO_EMAIL_HOST_USER:-}"
+  NGPHYLO_EMAIL_HOST_PASSWORD: "${NGPHYLO_EMAIL_HOST_PASSWORD:-}"
+  NGPHYLO_EMAIL_USE_TLS: "${NGPHYLO_EMAIL_USE_TLS:-False}"
+  NGPHYLO_REPORT_RECIPIENTS: "${NGPHYLO_REPORT_RECIPIENTS:-}"
+  NGPHYLO_REPORT_FROM_EMAIL: "${NGPHYLO_REPORT_FROM_EMAIL:-ngphylogeny@pasteur.fr}"
 
 services:
   db:

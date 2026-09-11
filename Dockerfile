@@ -32,6 +32,29 @@ COPY requirement.txt .
 RUN pip install numpy==1.24.4 \
     && pip install -r requirement.txt
 
+# Debian Buster's ca-certificates package (20200601~deb10u2, frozen since
+# Buster went EOL - see the apt sources fix above) predates newer root CAs
+# such as HARICA TLS RSA Root CA 2021, which e.g. smtp.pasteur.fr's
+# certificate chains through - TLS connections to servers using such a CA
+# fail with CERTIFICATE_VERIFY_FAILED. certifi ships Mozilla's current CA
+# bundle and gets regular updates on PyPI independent of Buster's own
+# frozen apt archive; use it as the system bundle.
+#
+# Just overwriting /etc/ssl/certs/ca-certificates.crt isn't enough on its
+# own: this image's Python was built with no working default `cafile`
+# (`ssl.get_default_verify_paths()` reports one that doesn't exist on
+# disk), so verification falls back to `capath` - a *directory* of
+# individual certs plus OpenSSL hash-named symlinks maintained by
+# `update-ca-certificates`, not a single concatenated file - and dropping
+# one file there doesn't regenerate those symlinks. SSL_CERT_FILE is the
+# one override `ssl.get_default_verify_paths()` explicitly documents
+# (`openssl_cafile_env`): set it to force every TLS connection in this
+# container to use the up-to-date single-file bundle as `cafile` directly,
+# sidestepping the capath/hash-symlink path entirely.
+RUN CERTIFI_PATH=$(python -c "import certifi; print(certifi.where())") \
+    && cp "$CERTIFI_PATH" /etc/ssl/certs/ca-certificates.crt
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+
 COPY . .
 
 RUN chmod +x docker/init.sh
