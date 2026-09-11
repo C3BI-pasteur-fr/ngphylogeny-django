@@ -7,6 +7,7 @@ from django.test import TestCase
 from galaxy.models import GalaxyUser, Server
 from tools.models import Tool
 from workflows.models import Workflow, WorkflowStepInformation
+from workflows.views.wkadvanced import WorkflowAdvancedFormView
 
 
 class WorkflowStepInformationTest(TestCase):
@@ -91,3 +92,23 @@ class ImportWorkflowsCommandTest(TestCase):
 
         self.assertEqual(Workflow.objects.count(), 1)
         self.assertEqual(Workflow.objects.get().id_galaxy, 'galaxyid2')
+
+
+class ProcessFileToUploadTest(TestCase):
+    """
+    Regression test: process_file_to_upload()'s non-uploaded-file branch
+    (request.POST.get("file") for pasted text, or a BlastRun.to_fasta()
+    result) used to crash with "TypeError: a bytes-like object is required,
+    not 'str'" - it wrote a plain str straight into a NamedTemporaryFile(),
+    which defaults to binary mode. Only caught by actually pasting text
+    through the live A La Carte/advanced form (POST /workflows/wkmake/<id>),
+    not by any existing test.
+    """
+
+    def test_pasted_text_str_input_does_not_crash(self):
+        view = WorkflowAdvancedFormView()
+        fasta = ">s1\nACGT\n>s2\nACGT\n>s3\nACGT\n>s4\nACGT\n"
+        tmp_file, name, nseq, length, seqaa = view.process_file_to_upload(
+            fasta, "pasted.fasta")
+        self.assertEqual(nseq, 4)
+        self.assertEqual(length, 4)
