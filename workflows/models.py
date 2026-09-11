@@ -4,10 +4,10 @@ import collections
 import json
 
 from django.db import models
+from django.utils import timezone
 
 from galaxy.models import Server
 from tools.models import Tool, ToolOutputData
-from datetime import datetime
 
 
 class Workflow(models.Model):
@@ -24,7 +24,7 @@ class Workflow(models.Model):
     slug = models.SlugField(max_length=100, unique=True)
     rank = models.IntegerField(default=999, help_text="Workflows order")
     # Date added
-    date = models.DateTimeField(default=datetime.now, blank=True)
+    date = models.DateTimeField(default=timezone.now, blank=True)
     deleted = models.BooleanField(default=False)
     tooldesc = models.CharField(max_length=250,blank=True, default="")
     # Json representation of the workflow
