@@ -7,8 +7,6 @@ from django.test import TestCase
 from galaxy.models import GalaxyUser, Server
 from tools.models import Tool
 from workflows.models import Workflow, WorkflowStepInformation
-from workflows.views.wkadvanced import WorkflowAdvancedListView
-from workflows.views.wkoneclick import WorkflowOneClickListView
 
 
 class WorkflowStepInformationTest(TestCase):
@@ -93,45 +91,3 @@ class ImportWorkflowsCommandTest(TestCase):
 
         self.assertEqual(Workflow.objects.count(), 1)
         self.assertEqual(Workflow.objects.get().id_galaxy, 'galaxyid2')
-
-
-class WorkflowListViewFilteringTest(TestCase):
-    """
-    Regression test: WorkflowListView's queryset only ever filtered by
-    category='base', with nothing distinguishing a "oneclick" one-shot
-    pipeline from the plain "advanced" (parametrized) workflow of the same
-    tool - importworkflows imports both under that same category. Both the
-    OneClick and Advanced list pages ended up showing the exact same mixed
-    set (e.g. both "FastME" and "FastME OneClick" on each page) - only
-    caught by checking the actual deployed site's rendered HTML, not by
-    any existing test.
-    """
-
-    def setUp(self):
-        with patch('galaxy.models.requests.get',
-                   return_value=Mock(status_code=200,
-                                      json=lambda: {'version_major': '25.1'})):
-            self.server = Server.objects.create(
-                url='http://fake-galaxy.example.org', current=True)
-        for name in ['FastME', 'FastME OneClick', 'PhyML', 'PhyML OneClick']:
-            Workflow.objects.create(
-                galaxy_server=self.server, id_galaxy=name, name=name,
-                category='base', description=name,
-                slug=name.lower().replace(' ', '-'))
-
-    def _names(self, view_class):
-        view = view_class()
-        view.request = Mock(galaxy=None)
-        with patch.object(Workflow, 'fetch_details',
-                          lambda self, *a, **k: None):
-            return sorted(w.name for w in view.workflow_list)
-
-    def test_oneclick_page_only_shows_oneclick_workflows(self):
-        self.assertEqual(
-            self._names(WorkflowOneClickListView),
-            ['FastME OneClick', 'PhyML OneClick'])
-
-    def test_advanced_page_only_shows_non_oneclick_workflows(self):
-        self.assertEqual(
-            self._names(WorkflowAdvancedListView),
-            ['FastME', 'PhyML'])

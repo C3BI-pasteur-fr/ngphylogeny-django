@@ -28,28 +28,12 @@ class WorkflowListView(ListView):
     model = Workflow
     context_object_name = "workflow_list"
     template_name = 'workflows/workflows_list.html'
-    # `importworkflows` imports both the "oneclick" one-shot pipelines and
-    # the plain "advanced" (parametrized) workflows under the same
-    # category='base', distinguishing them only by "oneclick" in the name -
-    # the same substring it itself matches on. Without picking a side here,
-    # both the OneClick and Advanced list pages showed the full mixed set
-    # (e.g. both "FastME" and "FastME OneClick" on each page). Subclasses
-    # set this to True/False to pick their half; leave None to keep the
-    # unfiltered (both leaves 'base') behavior.
-    name_contains_oneclick = None
 
     @cached_property
     def workflow_list(self):
         gi = self.request.galaxy
         workflow_queryset = Workflow.objects.filter(
-            galaxy_server__current=True).filter(category='base')
-        if self.name_contains_oneclick is True:
-            workflow_queryset = workflow_queryset.filter(
-                name__icontains='oneclick')
-        elif self.name_contains_oneclick is False:
-            workflow_queryset = workflow_queryset.exclude(
-                name__icontains='oneclick')
-        workflow_queryset = workflow_queryset.select_related()
+            galaxy_server__current=True).filter(category='base').select_related()
 
         for workflow in workflow_queryset:
             workflow.fetch_details(gi, self.restricted_toolset)
