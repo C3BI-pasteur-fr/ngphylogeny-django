@@ -156,3 +156,42 @@ so Django's dev server serves static files itself with no extra setup;
 override `NGPHYLO_SETTINGS_MODULE=NGPhylogeny_fr.settings.prod` for
 production-like behavior, but then something needs to serve `STATIC_ROOT`
 (`/static/`) separately - this compose file doesn't set that up.
+
+## Standalone (Django + Galaxy, all in one)
+
+`docker-compose.yml` above needs a Galaxy server to already be running
+somewhere. To test NGPhylogeny.fr completely from scratch - Django, Postgres,
+Redis, *and* a Galaxy server with NGPhylogeny's own tools/workflows, all
+brought up and wired together by one command - use
+`docker-compose.standalone.yml` instead. This is a separate, self-contained
+stack, not an overlay for the file above: run one or the other, don't combine
+them with `-f`.
+
+It needs the [NGPhylogeny_fr_galaxytools](https://github.com/C3BI-pasteur-fr/ngphylogeny-galaxy)
+repo cloned as a sibling directory (`../NGPhylogeny_fr_galaxytools` by
+default - override with `GALAXYTOOLS_DIR` if you keep it elsewhere), since
+that's where the tool wrappers, the PhyML-SMS/Noisy combined-image
+Dockerfiles, and the base workflow `.ga` files it needs actually live:
+
+```
+git clone https://github.com/C3BI-pasteur-fr/ngphylogeny-galaxy.git ../NGPhylogeny_fr_galaxytools
+docker compose -f docker-compose.standalone.yml up -d
+```
+
+That one command chains everything through `depends_on` conditions: Postgres
+and Galaxy come up, two one-shot services then build the PhyML-SMS/Noisy
+combined images inside Galaxy's own internal Docker daemon and import the 4
+base "\<Tool\> OneClick" workflows, and only then does NGPhylogeny's own
+`init` (migrations, Galaxy linking, tool/workflow import) run - `web`/
+`celery-*` wait for that. First boot takes a few minutes (pulling the Galaxy
+image, conda/container tool dependency resolution on first use, etc.).
+NGPhylogeny comes up on http://localhost:8000, Galaxy itself on
+http://localhost:8080 (not needed for normal use, but there if you want to
+poke at it directly - `admin` / `password` by default, same as NGPhylogeny's
+own admin login, overridable via the same `NGPHYLO_ADMIN_*`/`GALAXY_ADMIN_*`
+env vars documented at the top of the file).
+
+Re-running `docker compose -f docker-compose.standalone.yml up -d` (without
+`down -v` first) is safe: the workflow import step skips workflows that
+already exist by name, and NGPhylogeny's own `init` is idempotent for the
+same reasons the regular `docker-compose.yml` deployment is (see CLAUDE.md).

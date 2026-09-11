@@ -220,6 +220,20 @@ the generated `0*.py` files are excluded, matching `.gitignore`) — excluding
 the whole `*/migrations` directory silently breaks `makemigrations`'
 auto-detection for every app that hasn't got a migration yet.
 
+`docker-compose.standalone.yml` is a separate, self-contained alternative
+(not an overlay — don't combine the two with `-f`) that also brings up a
+Galaxy server itself, for testing entirely from scratch with no pre-existing
+Galaxy needed. It requires `NGPhylogeny_fr_galaxytools` cloned as a sibling
+directory (`../NGPhylogeny_fr_galaxytools`, override via `GALAXYTOOLS_DIR`)
+and chains, via `depends_on` conditions, straight through: Postgres/Galaxy
+come up → `galaxy-build-images` (a `docker:27-cli` sidecar with the host
+Docker socket mounted, reaching into Galaxy's own container to build the
+PhyML-SMS/Noisy combined images by reusing that repo's own
+`docker/build-combined-images.sh`) and `galaxy-import-workflows`
+(`docker/import_base_workflows.py` in this repo, using bioblend — already a
+dependency here — to import the 4 base `.ga` workflows) → this repo's own
+`init`. See README.md's "Standalone" section for usage.
+
 ### `upgrade` vs the old `master` branch
 
 `upgrade` (this branch) is a from-scratch Python 2→3 / Django 1.11→4.2 /
