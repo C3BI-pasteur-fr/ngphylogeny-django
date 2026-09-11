@@ -48,8 +48,8 @@ no Docker build/push/deploy stage yet.
 ### One-time / operational management commands
 
 These aren't used in normal dev loops but are how the app gets linked to a
-Galaxy server and populated with tools/workflows (see `startup.sh` for the
-full bootstrap sequence used in Docker):
+Galaxy server and populated with tools/workflows (see `docker/init.sh` for
+the full bootstrap sequence used in Docker):
 
 ```bash
 python manage.py creategalaxyserver --url=http://url_galaxy:port --activate
@@ -64,8 +64,8 @@ python manage.py importworkflows --galaxyurl=<url> --wfnamefile=wfnames.txt
 ### Migrations are not committed
 
 `.gitignore` excludes `*/migrations/0*.py` (only `migrations/__init__.py` is
-tracked). Both the `Dockerfile` and `startup.sh` run `makemigrations` fresh
-on every build/container start. Don't expect `git log` on a migrations
+tracked). `docker/init.sh` runs `makemigrations` fresh on every container
+start (see "Docker" below). Don't expect `git log` on a migrations
 directory to tell you anything, and always run `makemigrations` before
 `migrate` in a fresh checkout.
 
@@ -219,3 +219,53 @@ build context *root*, not at any depth — nested files need the `**/` prefix
 the generated `0*.py` files are excluded, matching `.gitignore`) — excluding
 the whole `*/migrations` directory silently breaks `makemigrations`'
 auto-detection for every app that hasn't got a migration yet.
+
+### `upgrade` vs the old `master` branch
+
+`upgrade` (this branch) is a from-scratch Python 2→3 / Django 1.11→4.2 /
+Docker-Compose rewrite done independently of `master`, which stalled on the
+old Python 2 stack. They share history up to a merge-base years back, so
+`master` isn't something to merge in wholesale — but it still holds a
+handful of genuine bugfixes made against the real production instance that
+predate the rewrite and were worth cross-checking for. That comparison
+turned up:
+
+- **Raw (non-bioblend) Galaxy HTTP calls need the `x-api-key` header added
+  by hand.** `bioblend>=1.4.0` moved auth from `?key=` query params to an
+  `x-api-key` header automatically for anything routed through it — but
+  `data/views.py`'s `download_file`/`tree_visualization`/`export_to_itol`
+  build and fetch URLs directly via `urllib.request.urlopen()`, bypassing
+  bioblend entirely, so they never picked that up. Whether this is a hard
+  requirement depends on the target Galaxy's `require_login`/dataset
+  permission settings: tested against the local dev Galaxy image
+  (`require_login` unset → permissive), these endpoints return `200` even
+  fully anonymous, so the header isn't *load-bearing* there — but sending
+  an invalid key does get a hard `401` (Galaxy checks it if present, it
+  just doesn't require one), and `gi.key` here is always a real stored key
+  (never `None`/garbage — `GalaxyUser.get_galaxy_instance()` raises rather
+  than hand back an instance with no key), so there's no regression risk in
+  adding it. Fixed to keep this consistent with every other Galaxy call in
+  the app and to not depend on the target Galaxy being configured
+  permissively.
+- **`Tool.import_tools()` re-fetched and re-saved every `Citation` row on
+  every `importtools` run**, even for tools that already existed — no dedup
+  on that table, so re-running the command (which happens on every
+  container restart via `docker/init.sh`) duplicated citations
+  indefinitely. Fixed by only fetching/saving citations when a tool is
+  newly created or force-reimported — same idempotency class as the
+  `importworkflows`/`addgalaxykey` fixes below.
+- **Deliberately NOT ported: `master`'s `importworkflows` matching regex
+  change** (`'oneclick'` → `'/oneclick'`, slash-prefixed) and its plain
+  get-or-create dedup. `upgrade`'s own `importworkflows`/`addgalaxykey`
+  already use `update_or_create` (galaxy re-imports its bundled workflows
+  with a fresh `id_galaxy` on every restart — `master`'s `id_galaxy`-keyed
+  existence check doesn't actually solve that duplication, `upgrade`'s
+  `galaxy_server`+`slug`-keyed one does). Adopting the slash-prefixed regex
+  would also be a breaking change against any already-deployed instance
+  whose imported workflows are named `"<Tool> OneClick"` (space) rather
+  than `"<Tool>/OneClick"` (slash) — check the actual imported workflow
+  names on the target Galaxy before ever changing this regex.
+- Everything else `master`-only (`startup.sh`/old `Dockerfile`/old
+  `.dockerignore` changes, the `addgalaxykey.py` get-or-create dedup, a
+  couple of dependabot bumps) was superseded by this branch's own
+  independent fixes, or made moot by the docker-compose rewrite.
