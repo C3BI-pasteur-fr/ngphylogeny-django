@@ -33,3 +33,5 @@ psycopg2==2.9.9
 # declared even though it's required; only ever worked before if something
 # else pulled it in transitively.
 PyYAML==6.0.1
+# Static file serving under DEBUG=False - see MIDDLEWARE in settings/base.py.
+whitenoise==6.7.0

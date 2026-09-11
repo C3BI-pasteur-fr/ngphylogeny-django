@@ -22,7 +22,11 @@ LOGIN_REDIRECT_URL = '/'
 # See https://docs.djangoproject.com/en/1.11/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = '_m(y$t1ukdw&!z-e_)ig5h!=*#y*3db3vh81il_i=n*y24ih9k'
+# The fallback is only for local dev/CI - it's public (this file is on
+# GitHub), so any real deployment must set NGPHYLO_SECRET_KEY instead.
+SECRET_KEY = os.environ.get(
+    'NGPHYLO_SECRET_KEY',
+    '_m(y$t1ukdw&!z-e_)ig5h!=*#y*3db3vh81il_i=n*y24ih9k')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
@@ -60,6 +64,11 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # Serves STATIC_ROOT directly from the app process - needed because
+    # runserver only auto-serves static files when DEBUG=True, and this
+    # deployment has no separate nginx/CDN in front of it under prod
+    # settings (DEBUG=False).
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -129,6 +138,13 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/1.11/howto/static-files/
 STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 STATIC_URL = '/static/'
+# Not CompressedManifestStaticFilesStorage: collectstatic fails hard on it
+# because css/bootstrap.css references fonts/glyphicons-halflings-regular.eot,
+# which was never actually included in this repo's assets - a pre-existing
+# gap, not something introduced here. CompressedStaticFilesStorage still
+# gzips and whitenoise-serves everything, it just doesn't hash-bust or
+# validate CSS asset references.
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 STATICFILES_DIRS = (
     # Put strings here, like "/home/html/static" or "C:/www/django/static".
     # Always use forward slashes, even on Windows.
