@@ -94,6 +94,13 @@
                 </a>
             </li>
             {% endif %}
+            {% if request.user.is_staff %}
+            <li class="user navbar-right">
+                <a href="{% url 'daily_report' %}" title="Daily workflow report">
+                    <span class="glyphicon glyphicon-stats"></span>
+                </a>
+            </li>
+            {% endif %}
             <li class="user navbar-right">
                 <a href="{% url 'account' %}">
                     <span class="glyphicon glyphicon-user"></span> {{user}}

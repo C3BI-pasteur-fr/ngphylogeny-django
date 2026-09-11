@@ -16,6 +16,7 @@ them, simply don't render data: URI images in HTML email at all, leaving
 blank space where a chart should be. Content-ID inline attachments are
 the long-standing, universally-supported way to put an image in an email.
 """
+import base64
 import io
 from collections import defaultdict, OrderedDict
 from datetime import timedelta
@@ -24,6 +25,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
+from django.core.cache import cache
 from django.db.models import Count
 from django.db.models.functions import TruncWeek
 from django.template.loader import render_to_string
@@ -337,6 +339,12 @@ def build_report_context():
     return context, images
 
 
+CHART_CONTEXT_KEYS = [
+    'daily_category_chart', 'daily_oneclick_chart', 'weekly_chart',
+    'alltime_category_chart', 'alltime_workflow_chart',
+]
+
+
 def render_report_html(context):
     return render_to_string('workspace/daily_report_email.html', context)
 
@@ -348,4 +356,44 @@ def render_report_email():
     {cid_name: png_bytes} to attach as inline (Content-ID) parts.
     """
     context, images = build_report_context()
+    for key in CHART_CONTEXT_KEYS:
+        if context[key]:
+            context[key] = 'cid:' + context[key]
     return render_report_html(context), images
+
+
+REPORT_WEB_CACHE_KEY = 'workspace_daily_report_web_context'
+# Rendering 5 matplotlib charts is the slow part of assembling this
+# report - cheap enough for the email (a Celery task nobody's waiting on),
+# but noticeably slow as something a person loads in a browser and sits
+# waiting for. A usage dashboard doesn't need to be second-fresh, so cache
+# the assembled context instead of rebuilding it from scratch on every
+# single page view.
+REPORT_WEB_CACHE_TTL = 15 * 60
+
+
+def build_report_web_context(force_refresh=False):
+    """
+    Same report as render_report_email(), but for viewing directly in a
+    browser (workspace.views.daily_report_view): chart context values are
+    base64 data: URIs, which - unlike in an actual emailed message (see
+    render_report_email() and this module's docstring for why that
+    deliberately avoids them) - every browser renders just fine.
+
+    Cached for REPORT_WEB_CACHE_TTL seconds - see that constant. Pass
+    force_refresh=True to bypass and rebuild immediately (and re-cache
+    the fresh result).
+    """
+    if not force_refresh:
+        cached = cache.get(REPORT_WEB_CACHE_KEY)
+        if cached is not None:
+            return cached
+
+    context, images = build_report_context()
+    for key in CHART_CONTEXT_KEYS:
+        cid = context[key]
+        if cid:
+            context[key] = ('data:image/png;base64,' +
+                             base64.b64encode(images[cid]).decode('ascii'))
+    cache.set(REPORT_WEB_CACHE_KEY, context, REPORT_WEB_CACHE_TTL)
+    return context

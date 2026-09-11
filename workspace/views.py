@@ -1,6 +1,7 @@
 from __future__ import unicode_literals
 import json
 
+from django.contrib.admin.views.decorators import staff_member_required
 from django.http import HttpResponse
 from django.urls import reverse_lazy
 from django.utils.decorators import method_decorator
@@ -15,10 +16,27 @@ from workflows.tasks import deletegalaxyworkflow
 
 from galaxy.decorator import connection_galaxy
 from .models import WorkspaceHistory
+from .reports import build_report_web_context
 from tools.models import Tool
 from .tasks import updateworkspacestatus
 
 from utils import ip
+
+
+@staff_member_required
+def daily_report_view(request):
+    """
+    Web view of the same daily workflow-usage report emailed by
+    workspace.tasks.send_daily_report (see workspace/reports.py) - admin/
+    staff only (@staff_member_required redirects to the admin login page,
+    same as the Django admin itself, for anyone not logged in as staff).
+
+    Cached (see build_report_web_context()) - ?refresh=1 bypasses that
+    for anyone who wants to force an immediate up-to-date render.
+    """
+    force_refresh = request.GET.get('refresh') == '1'
+    return render(request, 'workspace/report_page.html',
+                  build_report_web_context(force_refresh=force_refresh))
 
 @connection_galaxy
 def create_history(request, name='', wf_category='', wf_steps=''):

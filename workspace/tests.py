@@ -1,16 +1,18 @@
 from datetime import timedelta
 from unittest.mock import Mock, patch
 
+from django.contrib.auth.models import User
 from django.core import mail
+from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from galaxy.models import Server
 from workflows.models import Workflow
 from workspace.models import WorkspaceHistory
-from workspace.reports import (build_report_context, gather_all_time,
-                                gather_last_7_days, gather_weekly_totals,
-                                render_report_html)
+from workspace.reports import (build_report_context, build_report_web_context,
+                                gather_all_time, gather_last_7_days,
+                                gather_weekly_totals, render_report_html)
 from workspace.tasks import deleteoldgalaxyhistory, send_daily_report
 
 
@@ -120,6 +122,10 @@ class DailyReportTest(TestCase):
     """
 
     def setUp(self):
+        # build_report_web_context() caches its result (see
+        # workspace/reports.py) - clear it so tests don't see a stale
+        # value left over from a previous test.
+        cache.clear()
         with patch('galaxy.models.requests.get',
                    return_value=Mock(status_code=200,
                                       json=lambda: {'version_major': '25.1'})):
@@ -288,3 +294,98 @@ class DailyReportTest(TestCase):
                               'inline')
             content_id = attachment['Content-ID'].strip('<>')
             self.assertIn('cid:%s' % content_id, html_body)
+
+    def test_build_report_web_context_uses_data_uris_not_cid(self):
+        """
+        Unlike the emailed report, the web page is rendered directly in a
+        browser, which has no trouble with data: URI images (it's only
+        mail clients like Outlook that don't render them - see
+        reports.py's module docstring) - so it embeds charts that way
+        instead of needing a separate cid:-matched attachment mechanism.
+        """
+        self._make_history('Tool', workflow_steps='MAFFT')
+        context = build_report_web_context()
+        self.assertTrue(context['alltime_category_chart'].startswith(
+            'data:image/png;base64,'))
+        self.assertIsNone(context['daily_oneclick_chart'])
+
+    def test_build_report_web_context_is_cached(self):
+        """
+        Rendering 5 matplotlib charts on every single page view was the
+        actual slow part a real user hit - build_report_web_context()
+        caches its result rather than rebuilding it from scratch on every
+        call within REPORT_WEB_CACHE_TTL.
+        """
+        self._make_history('Tool', workflow_steps='MAFFT')
+
+        with patch('workspace.reports.build_report_context',
+                   wraps=build_report_context) as mock_build:
+            first = build_report_web_context()
+            second = build_report_web_context()
+            self.assertEqual(mock_build.call_count, 1)
+        self.assertEqual(first, second)
+
+        with patch('workspace.reports.build_report_context',
+                   wraps=build_report_context) as mock_build:
+            build_report_web_context(force_refresh=True)
+            self.assertEqual(mock_build.call_count, 1)
+
+
+class DailyReportViewTest(TestCase):
+    """
+    Access-control tests for workspace.views.daily_report_view (URL name
+    'daily_report', /workspace/report) - must be admin/staff only.
+    """
+
+    def setUp(self):
+        cache.clear()
+        with patch('galaxy.models.requests.get',
+                   return_value=Mock(status_code=200,
+                                      json=lambda: {'version_major': '25.1'})):
+            self.server = Server.objects.create(
+                url='http://fake-galaxy.example.org', current=True)
+
+    def test_anonymous_user_is_redirected_to_login(self):
+        response = self.client.get('/workspace/report')
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/admin/login/', response.url)
+
+    def test_non_staff_user_is_redirected_to_login(self):
+        User.objects.create_user('regularuser', password='pw')
+        self.client.login(username='regularuser', password='pw')
+        response = self.client.get('/workspace/report')
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/admin/login/', response.url)
+
+    def test_staff_user_sees_the_report(self):
+        User.objects.create_user('staffuser', password='pw', is_staff=True)
+        self.client.login(username='staffuser', password='pw')
+        WorkspaceHistory.objects.create(
+            history='view-test', name='test', email='', monitored=True,
+            finished=True, source_ip='127.0.0.1', workflow_category='Tool',
+            workflow_steps='MAFFT', galaxy_server=self.server)
+
+        response = self.client.get('/workspace/report')
+
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn('Daily Workflow Report', content)
+        self.assertIn('MAFFT', content)
+        self.assertIn('data:image/png;base64,', content)
+
+    def test_refresh_param_bypasses_the_cache(self):
+        User.objects.create_user('staffuser', password='pw', is_staff=True)
+        self.client.login(username='staffuser', password='pw')
+
+        with patch('workspace.views.build_report_web_context',
+                   wraps=build_report_web_context) as mock_build:
+            self.client.get('/workspace/report')
+            self.client.get('/workspace/report')
+            self.assertEqual(
+                [c.kwargs.get('force_refresh', False)
+                 for c in mock_build.call_args_list],
+                [False, False])
+
+            self.client.get('/workspace/report?refresh=1')
+            self.assertTrue(
+                mock_build.call_args_list[-1].kwargs.get('force_refresh'))
