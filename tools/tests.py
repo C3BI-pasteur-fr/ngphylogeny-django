@@ -114,3 +114,60 @@ class AddGalaxyKeyCommandTest(TestCase):
                      galaxyurl=self.server.url, galaxykey='key2')
         self.assertEqual(GalaxyUser.objects.count(), 1)
         self.assertEqual(GalaxyUser.objects.get().api_key, 'key2')
+
+
+class ImportToolsCitationsTest(TestCase):
+    """
+    Regression test: Tool.import_tools() used to blindly append every
+    citation it fetched to a tool's Citation set, rather than replacing
+    them. docker/init.sh always calls importtools with --force on every
+    container start, which takes the "(re-)fetch citations" branch every
+    time regardless of whether the tool already existed - so real
+    production tools ended up with 25-75 duplicate rows of the same 1-3
+    actual citations after enough redeploys, visible as repeated
+    references on the history detail page. Only caught by inspecting the
+    real production database, not by any existing test.
+    """
+
+    TOOL_ID = 'toolshed.example.org/repos/x/y/mytool/1.0'
+
+    def setUp(self):
+        with patch('galaxy.models.requests.get',
+                   return_value=Mock(status_code=200,
+                                      json=lambda: {'version_major': '25.1'})):
+            self.server = Server.objects.create(
+                url='http://fake-galaxy.example.org', current=True)
+        # Every real tool in production already exists with its metadata
+        # populated (it was created once, long ago) - importtools --force
+        # is run against already-existing tools on every redeploy from
+        # then on, which is the actual scenario that duplicated citations.
+        # Tool.clean() (called by save()) unconditionally fetches
+        # tool_json - even here, not just on creation.
+        with patch('tools.models.requests.get', side_effect=self._fake_get):
+            self.tool = Tool.objects.create(
+                galaxy_server=self.server, id_galaxy=self.TOOL_ID,
+                name='MyTool', description='A tool', version='1.0')
+
+    def _fake_get(self, url, **kwargs):
+        if url.endswith('/citations'):
+            return Mock(status_code=200, json=lambda: [
+                {'content': '@article{a,title={Citation A}}'},
+                {'content': '@article{b,title={Citation B}}'},
+            ])
+        # tool_json (fetch_tool_json / import_tool_io) - minimal but valid.
+        return Mock(status_code=200, json=lambda: {
+            'id': self.TOOL_ID, 'name': 'MyTool', 'version': '1.0',
+            'inputs': [], 'outputs': [],
+        })
+
+    def test_force_reimport_replaces_citations_not_appends(self):
+        with patch('tools.models.requests.get', side_effect=self._fake_get):
+            Tool.import_tools(self.server, tools=[self.TOOL_ID], force=True)
+            self.assertEqual(self.tool.citation_set.count(), 2)
+
+            # Simulate a later redeploy re-running importtools --force
+            # against the same already-imported tool.
+            Tool.import_tools(self.server, tools=[self.TOOL_ID], force=True)
+
+        self.assertEqual(Tool.objects.count(), 1)
+        self.assertEqual(self.tool.citation_set.count(), 2)
