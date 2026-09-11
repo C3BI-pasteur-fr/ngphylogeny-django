@@ -153,8 +153,19 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
                 tmp_file.write(chunk)
             tmp_file.flush()
         else:
+            # Reached for pasted text (request.POST.get("file") is a plain
+            # str, unlike the uploaded-file case above) and BlastRun.to_fasta()
+            # results - NamedTemporaryFile() defaults to binary mode, and
+            # tmp_file.write(file_to_upload) here used to crash outright
+            # under Python 3 ("a bytes-like object is required, not 'str'")
+            # for any str input - only caught by actually pasting text
+            # through the live A La Carte / advanced form, not by any
+            # existing test.
             tmp_file = tempfile.NamedTemporaryFile()
-            tmp_file.write(file_to_upload)
+            data = file_to_upload
+            if isinstance(data, str):
+                data = data.encode('utf-8')
+            tmp_file.write(data)
             tmp_file.flush()
 
         # Check that input file is Fasta and is not empty
