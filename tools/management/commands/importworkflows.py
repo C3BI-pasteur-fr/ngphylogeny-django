@@ -70,6 +70,24 @@ class Command(BaseCommand):
                 )
                 if(re.search('oneclick', wfname, re.IGNORECASE) or
                    wfname in self.wfnames):
+                    # Galaxy's workflow list also contains every per-run
+                    # copy Workflow.duplicate() creates each time a user
+                    # actually launches this workflow (same name, fresh
+                    # Galaxy-side id, tracked locally as its own
+                    # category='duplicated' row) - those must not be
+                    # confused with the single canonical 'base' copy this
+                    # command is meant to (re)import. Skip any Galaxy id
+                    # already tracked locally under any category: this
+                    # both avoids re-processing already-known duplicates
+                    # (whose id_galaxy legitimately belongs to a different
+                    # row and would otherwise collide on the id_galaxy
+                    # unique constraint) and, for the base row itself,
+                    # avoids pointlessly overwriting it with whichever
+                    # same-named entry happens to be listed last.
+                    if Workflow.objects.filter(
+                            galaxy_server=galaxy_server,
+                            id_galaxy=wfid).exists():
+                        continue
                     # update_or_create, not a plain insert: Galaxy re-imports
                     # its bundled workflows (fresh id_galaxy each time) on
                     # every restart, so re-running this against the same

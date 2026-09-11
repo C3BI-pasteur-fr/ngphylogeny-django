@@ -93,6 +93,45 @@ class ImportWorkflowsCommandTest(TestCase):
         self.assertEqual(Workflow.objects.count(), 1)
         self.assertEqual(Workflow.objects.get().id_galaxy, 'galaxyid2')
 
+    def test_ignores_per_run_duplicates_sharing_the_same_name(self):
+        """
+        Regression test: Workflow.duplicate() gives every real user run its
+        own Galaxy-side copy of the base workflow (same name, fresh
+        Galaxy id, tracked locally as its own category='duplicated' row -
+        see workflows/models.py). Galaxy's /api/workflows/ list returns
+        those alongside the one true base workflow, all sharing the exact
+        same name and therefore the exact same slug. Re-running
+        importworkflows used to try to collapse every one of them into
+        the single 'base' row via update_or_create(slug=...), which
+        crashed with "duplicate key value violates unique constraint
+        workflows_workflow_id_galaxy_key" as soon as one of those already
+        belonged to an existing 'duplicated' row - only caught by
+        redeploying against a real Galaxy server that had accumulated
+        real workflow runs.
+        """
+        base = Workflow.objects.create(
+            galaxy_server=self.server, id_galaxy='base-id',
+            name='PhyML OneClick', category='base',
+            description='PhyML OneClick', slug='phyml-oneclick')
+        Workflow.objects.create(
+            galaxy_server=self.server, id_galaxy='dup-id',
+            name='PhyML OneClick', category='duplicated',
+            description='PhyML OneClick',
+            slug='dup-id_PhyML OneClick_copy')
+
+        mock_response = Mock(status_code=200, json=lambda: [
+            {'id': 'dup-id', 'name': 'PhyML OneClick'},
+            {'id': 'base-id', 'name': 'PhyML OneClick'},
+        ])
+        with patch('tools.management.commands.importworkflows.requests.get',
+                   return_value=mock_response):
+            call_command('importworkflows', galaxyurl=self.server.url,
+                         wfnamefile='wfnames.txt')
+
+        self.assertEqual(Workflow.objects.count(), 2)
+        base.refresh_from_db()
+        self.assertEqual(base.id_galaxy, 'base-id')
+
 
 class ProcessFileToUploadTest(TestCase):
     """
