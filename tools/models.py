@@ -256,23 +256,28 @@ class Tool(models.Model):
                 t, created = Tool.objects.get_or_create(
                     id_galaxy=id_tool, galaxy_server=galaxy_server)
                 t.save()
-                cite_url = '%s/%s/%s/%s/%s' % (galaxy_server.url, 'api', 'tools', id_tool, 'citations')
-                connection = requests.get(cite_url)
-                citations = connection.json()
-                for cite in citations:
-                    # No encode/decode roundtrip needed: unlike Python 2's
-                    # requests/json stack (which this iso-8859-1->utf8
-                    # roundtrip used to correct for), Python 3's
-                    # requests.json() already returns correctly-decoded
-                    # text - re-encoding it as iso-8859-1 just raises
-                    # UnicodeEncodeError on any citation containing a
-                    # character outside Latin-1 (en dashes, curly quotes,
-                    # ...), which is common in real citation text.
-                    c = Citation(reference=cite.get('content',''), tool=t)
-                    c.save()
                 if force:
                     t.import_tool_io(t.tool_json)
                 if created or force:
+                    # Citations are only (re-)fetched for newly-created or
+                    # force-reimported tools: fetching them unconditionally
+                    # on every run duplicated every Citation row each time
+                    # importtools was re-run against an already-imported
+                    # tool (no dedup on the Citation table).
+                    cite_url = '%s/%s/%s/%s/%s' % (galaxy_server.url, 'api', 'tools', id_tool, 'citations')
+                    connection = requests.get(cite_url)
+                    citations = connection.json()
+                    for cite in citations:
+                        # No encode/decode roundtrip needed: unlike Python 2's
+                        # requests/json stack (which this iso-8859-1->utf8
+                        # roundtrip used to correct for), Python 3's
+                        # requests.json() already returns correctly-decoded
+                        # text - re-encoding it as iso-8859-1 just raises
+                        # UnicodeEncodeError on any citation containing a
+                        # character outside Latin-1 (en dashes, curly quotes,
+                        # ...), which is common in real citation text.
+                        c = Citation(reference=cite.get('content',''), tool=t)
+                        c.save()
                     tools_import_report['new'].append(t)
                 else:
                     tools_import_report['already_exist'].append(t)
