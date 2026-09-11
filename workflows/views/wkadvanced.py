@@ -76,6 +76,7 @@ class WorkflowAdvancedListView(WorkflowListView):
     """
     template_name = 'workflows/workflows_advanced_list.html'
     restricted_toolset = Tool.objects.filter(toolflag__name=WORKFLOW_ADV_FLAG)
+    name_contains_oneclick = False
      
 
 @method_decorator(connection_galaxy, name="dispatch")

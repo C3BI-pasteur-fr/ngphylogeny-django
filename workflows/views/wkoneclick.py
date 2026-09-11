@@ -15,6 +15,7 @@ class WorkflowOneClickListView(WorkflowListView, UploadView):
     """
     template_name = 'workflows/workflows_oneclick_list.html'
     restricted_toolset = Tool.objects.filter(toolflag__name='oclik')
+    name_contains_oneclick = True
 
     # def get_context_data(self, **kwargs):
     #     context = super(WorkflowListView, self).get_context_data(**kwargs)
