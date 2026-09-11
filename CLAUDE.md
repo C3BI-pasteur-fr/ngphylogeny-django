@@ -273,6 +273,32 @@ DateTimeField Workflow.date received a naive datetime while time zone
 support is active` (harmless only by coincidence here, since
 `TIME_ZONE='UTC'` matches the container's system clock).
 
+### Daily workflow-usage report
+
+`workspace.tasks.send_daily_report` (`CELERY_BEAT_SCHEDULE`, 8am UTC) emails
+an HTML report — 7-day daily breakdown plus all-time totals, both by
+category and, for OneClick, by which of the 4 tools — with matplotlib
+charts embedded as base64 PNG `<img>` data URIs (not JS/SVG-based: email
+clients generally don't execute JS, so this is the reliable approach). All
+the data gathering/chart/HTML rendering lives in `workspace/reports.py`;
+the task itself just calls `render_report_html()` and emails it — see that
+module's docstrings for the full breakdown logic. No-ops (just logs) if
+`NGPHYLO_REPORT_RECIPIENTS` isn't set, so it's safe to leave enabled
+everywhere; see README.md's "Email" section for the env vars, and note
+that plain job-completion emails need the same SMTP config and were never
+actually wired into either `docker-compose.yml`'s or
+`docker-compose.standalone.yml`'s env passthrough before this — check
+`NGPHYLO_EMAIL_HOST` etc. are actually set on any deployment where email
+(this report or otherwise) is expected to work.
+
+One thing worth knowing if you touch the category breakdown:
+`WorkspaceHistory.workflow_category` is **not** a clean one-to-one mapping
+to "how the user submitted this" — see "Workflow duplicates and the Celery
+cleanup jobs" above for why `'duplicated'` covers both the ordinary
+Advanced-form path and an actual rerun. `reports.py`'s `CATEGORY_LABELS`
+relabels it for display (`'duplicated'` → `"Advanced"`) but doesn't change
+what's actually being counted.
+
 ### `upgrade` vs the old `master` branch
 
 `upgrade` (this branch) is a from-scratch Python 2→3 / Django 1.11→4.2 /

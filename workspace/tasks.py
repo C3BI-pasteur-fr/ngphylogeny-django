@@ -11,16 +11,20 @@ from datetime import timedelta
 
 from celery.utils.log import get_task_logger
 
+from email.mime.image import MIMEImage
 from smtplib import SMTPException
 from workspace.models import WorkspaceHistory
 from galaxy.decorator import galaxy_connection
 from workflows.tasks import deletegalaxyworkflow
 
-from django.core.mail import send_mail
+from django.conf import settings
+from django.core.mail import EmailMultiAlternatives, send_mail
 from django.db import transaction
 from django.urls import reverse
 from django.core.cache import cache
 from django.utils import timezone
+
+from workspace.reports import render_report_email
 
 LOCK_EXPIRE = 60 * 5 # Lock expires in 5 minutes
 LOCK_EXPIRE_SHORT = 9 # Lock expires in 9 seconds
@@ -200,3 +204,47 @@ def deleteoldgalaxyhistory():
                 "Problem while deleting old workspace %s: %s" %
                 (e.history, ex))
     logger.info("Old workspace deletion task finished")
+
+
+@shared_task
+def send_daily_report():
+    """
+    Emails the daily workflow-usage report (workspace/reports.py) to
+    settings.NGPHYLO_REPORT_RECIPIENTS - see CELERY_BEAT_SCHEDULE in
+    settings/base.py for the schedule (8am UTC daily). No-ops (just logs)
+    if no recipients are configured, so this is safe to leave enabled on
+    deployments that don't want it.
+    """
+    recipients = settings.NGPHYLO_REPORT_RECIPIENTS
+    if not recipients:
+        logger.info(
+            "NGPHYLO_REPORT_RECIPIENTS not set - skipping daily report")
+        return
+
+    try:
+        html, images = render_report_email()
+        msg = EmailMultiAlternatives(
+            'NGPhylogeny.fr - Daily workflow report',
+            'This report is only available in HTML - please enable '
+            'HTML email to view it.',
+            settings.NGPHYLO_REPORT_FROM_EMAIL,
+            recipients,
+        )
+        msg.attach_alternative(html, 'text/html')
+        # multipart/related, not the send_mail()-style multipart/mixed
+        # default - required for mail clients to treat the images below as
+        # inline (cid:-referenced) parts of the HTML rather than as
+        # ordinary file attachments alongside it.
+        msg.mixed_subtype = 'related'
+        for cid, png_bytes in images.items():
+            image = MIMEImage(png_bytes, 'png')
+            image.add_header('Content-ID', '<%s>' % cid)
+            image.add_header('Content-Disposition', 'inline',
+                              filename='%s.png' % cid)
+            msg.attach(image)
+        msg.send(fail_silently=False)
+        logger.info("Daily report sent to %s" % (recipients,))
+    except SMTPException as e:
+        logging.warning("Problem sending daily report: %s" % (e))
+    except Exception as e:
+        logging.warning("Problem building/sending daily report: %s" % (e))

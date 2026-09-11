@@ -218,8 +218,27 @@ EMAIL_HOST_USER = os.environ.get('NGPHYLO_EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.environ.get('NGPHYLO_EMAIL_HOST_PASSWORD')
 EMAIL_USE_TLS = (os.environ.get('NGPHYLO_EMAIL_USE_TLS')== 'True')
 
-if EMAIL_PORT is not None:
+if EMAIL_PORT:
+    # Truthy check, not "is not None": docker-compose.yml/
+    # docker-compose.standalone.yml pass this through as "${NGPHYLO_EMAIL_PORT:-}",
+    # which sets an empty string (not an absent var) when unconfigured -
+    # int('') raises ValueError, unlike int() on a value that was never
+    # set in the environment at all.
     EMAIL_PORT = int(EMAIL_PORT)
+else:
+    EMAIL_PORT = None
+
+# Daily workflow-usage report (workspace.tasks.send_daily_report, scheduled
+# via CELERY_BEAT_SCHEDULE below) - comma-separated recipient list. Left
+# unset, the task just logs and does nothing: no report is sent, and
+# nothing else is affected.
+NGPHYLO_REPORT_RECIPIENTS = [
+    r.strip() for r in
+    os.environ.get('NGPHYLO_REPORT_RECIPIENTS', '').split(',')
+    if r.strip()
+]
+NGPHYLO_REPORT_FROM_EMAIL = os.environ.get(
+    'NGPHYLO_REPORT_FROM_EMAIL', 'ngphylogeny@pasteur.fr')
 
 # CELERY SETTINGS
 #
@@ -282,6 +301,10 @@ CELERY_BEAT_SCHEDULE = {
     'workspace-delete-old-galaxy-history': {
         'task': 'workspace.tasks.deleteoldgalaxyhistory',
         'schedule': crontab(hour=2, minute=0),
+    },
+    'workspace-send-daily-report': {
+        'task': 'workspace.tasks.send_daily_report',
+        'schedule': crontab(hour=8, minute=0),
     },
 }
 

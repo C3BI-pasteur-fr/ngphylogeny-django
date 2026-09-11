@@ -157,6 +157,22 @@ override `NGPHYLO_SETTINGS_MODULE=NGPhylogeny_fr.settings.prod` for
 production-like behavior, but then something needs to serve `STATIC_ROOT`
 (`/static/`) separately - this compose file doesn't set that up.
 
+## Email: job-completion notices and the daily report
+
+Both job-completion emails and the daily workflow-usage report (HTML, with
+charts - `workspace/reports.py`, sent by `workspace.tasks.send_daily_report`
+at 8am UTC every day, see `CELERY_BEAT_SCHEDULE` in `settings/base.py`) need
+working SMTP config: `NGPHYLO_EMAIL_HOST`/`NGPHYLO_EMAIL_PORT`/
+`NGPHYLO_EMAIL_HOST_USER`/`NGPHYLO_EMAIL_HOST_PASSWORD`/`NGPHYLO_EMAIL_USE_TLS`.
+Left unset (the default), sending just fails silently - the app itself is
+unaffected either way.
+
+The daily report additionally needs `NGPHYLO_REPORT_RECIPIENTS` (comma-
+separated email addresses) set - without it, `send_daily_report` logs and
+does nothing, so it's safe to leave the periodic task enabled on
+deployments that don't want the report. `NGPHYLO_REPORT_FROM_EMAIL`
+overrides the sender address (defaults to `ngphylogeny@pasteur.fr`).
+
 ## Standalone (Django + Galaxy, all in one)
 
 `docker-compose.yml` above needs a Galaxy server to already be running

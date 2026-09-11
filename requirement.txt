@@ -35,3 +35,12 @@ psycopg2==2.9.9
 PyYAML==6.0.1
 # Static file serving under DEBUG=False - see MIDDLEWARE in settings/base.py.
 whitenoise==6.7.0
+# Chart rendering for the daily workflow report (workspace/reports.py) -
+# 3.7.x is the last line supporting Python 3.8, matching numpy==1.24.4
+# above. Always used with the non-interactive 'Agg' backend (no display in
+# a Celery worker container).
+matplotlib==3.7.5
+# Used by the Dockerfile to replace the frozen/stale Debian Buster
+# ca-certificates bundle with an actively-maintained one - see the comment
+# there. Not imported directly by any app code.
+certifi==2024.8.30

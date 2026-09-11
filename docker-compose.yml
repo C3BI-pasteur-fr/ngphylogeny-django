@@ -16,6 +16,19 @@ x-django-env: &django-env
   NGPHYLO_ADMIN_USER: "${NGPHYLO_ADMIN_USER:-admin}"
   NGPHYLO_ADMIN_EMAIL: "${NGPHYLO_ADMIN_EMAIL:-admin@example.org}"
   NGPHYLO_ADMIN_PASSWORD: "${NGPHYLO_ADMIN_PASSWORD:-password}"
+  # SMTP config for job-completion emails and the daily workflow report
+  # (workspace.tasks.send_daily_report, 8am UTC - see CLAUDE.md). Left
+  # unset, sending just fails/no-ops (send_daily_report specifically
+  # no-ops without NGPHYLO_REPORT_RECIPIENTS - it doesn't need working SMTP
+  # config to still be safe to leave enabled).
+  NGPHYLO_EMAIL_HOST: "${NGPHYLO_EMAIL_HOST:-}"
+  NGPHYLO_EMAIL_PORT: "${NGPHYLO_EMAIL_PORT:-}"
+  NGPHYLO_EMAIL_HOST_USER: "${NGPHYLO_EMAIL_HOST_USER:-}"
+  NGPHYLO_EMAIL_HOST_PASSWORD: "${NGPHYLO_EMAIL_HOST_PASSWORD:-}"
+  NGPHYLO_EMAIL_USE_TLS: "${NGPHYLO_EMAIL_USE_TLS:-False}"
+  # Comma-separated recipient list for the daily workflow report.
+  NGPHYLO_REPORT_RECIPIENTS: "${NGPHYLO_REPORT_RECIPIENTS:-}"
+  NGPHYLO_REPORT_FROM_EMAIL: "${NGPHYLO_REPORT_FROM_EMAIL:-ngphylogeny@pasteur.fr}"
 
 services:
   db:

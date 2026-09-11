@@ -1,13 +1,17 @@
 from datetime import timedelta
 from unittest.mock import Mock, patch
 
-from django.test import TestCase
+from django.core import mail
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from galaxy.models import Server
 from workflows.models import Workflow
 from workspace.models import WorkspaceHistory
-from workspace.tasks import deleteoldgalaxyhistory
+from workspace.reports import (build_report_context, gather_all_time,
+                                gather_last_7_days, gather_weekly_totals,
+                                render_report_html)
+from workspace.tasks import deleteoldgalaxyhistory, send_daily_report
 
 
 class DeleteOldGalaxyHistoryTest(TestCase):
@@ -105,3 +109,182 @@ class DeleteOldGalaxyHistoryTest(TestCase):
         h_ok.refresh_from_db()
         self.assertFalse(h_fail.deleted)
         self.assertTrue(h_ok.deleted)
+
+
+class DailyReportTest(TestCase):
+    """
+    Tests for workspace/reports.py (data gathering + chart/HTML rendering)
+    and workspace.tasks.send_daily_report, backing the daily HTML email
+    report of workflow usage (CELERY_BEAT_SCHEDULE's
+    'workspace-send-daily-report', 8am UTC).
+    """
+
+    def setUp(self):
+        with patch('galaxy.models.requests.get',
+                   return_value=Mock(status_code=200,
+                                      json=lambda: {'version_major': '25.1'})):
+            self.server = Server.objects.create(
+                url='http://fake-galaxy.example.org', current=True)
+
+    _history_counter = 0
+
+    def _make_history(self, category, workflow=None, workflow_steps='',
+                       days_ago=0):
+        DailyReportTest._history_counter += 1
+        h = WorkspaceHistory.objects.create(
+            history='h-%s-%s-%d-%d' % (
+                category, workflow_steps, days_ago,
+                DailyReportTest._history_counter),
+            name='test', email='', monitored=True, finished=True,
+            source_ip='127.0.0.1', workflow_category=category,
+            workflow_steps=workflow_steps, workflow=workflow,
+            galaxy_server=self.server)
+        if days_ago:
+            WorkspaceHistory.objects.filter(pk=h.pk).update(
+                created_date=timezone.now() - timedelta(days=days_ago))
+        return h
+
+    def test_gather_last_7_days_buckets_by_day_and_category(self):
+        wf = Workflow.objects.create(
+            galaxy_server=self.server, id_galaxy='wf1',
+            name='FastME OneClick', category='duplicated',
+            description='FastME OneClick', slug='wf1-copy')
+        self._make_history('OneClick', workflow=wf, days_ago=0)
+        self._make_history('OneClick', workflow=wf, days_ago=0)
+        self._make_history('Tool', workflow_steps='MAFFT', days_ago=3)
+        # Outside the 7-day window - must not be counted here.
+        self._make_history('OneClick', workflow=wf, days_ago=10)
+
+        days, by_day_category, by_day_oneclick_workflow = gather_last_7_days()
+
+        today = timezone.localdate()
+        self.assertEqual(by_day_category[today]['OneClick'], 2)
+        self.assertEqual(by_day_oneclick_workflow[today]['FastME OneClick'], 2)
+        three_days_ago = today - timedelta(days=3)
+        self.assertEqual(by_day_category[three_days_ago]['Tool'], 1)
+        self.assertEqual(sum(sum(c.values()) for c in by_day_category.values()), 3)
+
+    def test_gather_all_time_includes_everything_regardless_of_age(self):
+        self._make_history('Tool', workflow_steps='BMGE', days_ago=0)
+        self._make_history('Tool', workflow_steps='BMGE', days_ago=400)
+        self._make_history('automaker', days_ago=0)
+
+        by_category, by_workflow = gather_all_time()
+
+        self.assertEqual(by_category['Tool'], 2)
+        self.assertEqual(by_category['automaker'], 1)
+        self.assertEqual(by_workflow['BMGE'], 2)
+        self.assertEqual(by_workflow['A La Carte'], 1)
+
+    def test_gather_weekly_totals_buckets_across_iso_weeks(self):
+        # Two entries on the same day land in the same week's bucket; a
+        # third, 3 weeks earlier, leaves at least one fully-empty week in
+        # between that must still show up as a zero, not be skipped.
+        self._make_history('Tool', workflow_steps='MAFFT', days_ago=0)
+        self._make_history('Tool', workflow_steps='BMGE', days_ago=0)
+        self._make_history('Tool', workflow_steps='MAFFT', days_ago=21)
+
+        weekly_totals = gather_weekly_totals()
+
+        self.assertEqual(sum(n for _, n in weekly_totals), 3)
+        self.assertIn(0, [n for _, n in weekly_totals])
+        # oldest week first, and every consecutive pair is exactly one
+        # week apart - no gaps silently dropped.
+        self.assertLess(weekly_totals[0][0], weekly_totals[-1][0])
+        for (d1, _), (d2, _) in zip(weekly_totals, weekly_totals[1:]):
+            self.assertEqual((d2 - d1).days, 7)
+
+    def test_single_tool_runs_use_workflow_steps_not_a_workflow_fk(self):
+        """
+        Regression guard: 'Tool' category WorkspaceHistory rows never get
+        a Workflow FK (see tools/views.py's create_history() calls) - only
+        workflow_steps carries the tool name. If _workflow_label ever
+        started preferring workflow__name unconditionally, every
+        single-tool run would collapse into a single 'Unknown' bucket.
+        """
+        self._make_history('Tool', workflow=None, workflow_steps='Gblocks')
+        _, by_workflow = gather_all_time()
+        self.assertEqual(by_workflow['Gblocks'], 1)
+        self.assertNotIn('Unknown', by_workflow)
+
+    def test_build_report_context_renders_charts_when_data_present(self):
+        """
+        Charts are inline (Content-ID) attachments, not base64 data: URIs
+        - see workspace/reports.py's module docstring for why (many mail
+          clients, Outlook included, don't render data: URI images in
+          HTML email at all). build_report_context() returns the cid:
+          name a chart was rendered under in the context, and the actual
+          PNG bytes in a separate images dict for the caller to attach.
+        """
+        wf = Workflow.objects.create(
+            galaxy_server=self.server, id_galaxy='wf2',
+            name='PhyML OneClick', category='duplicated',
+            description='PhyML OneClick', slug='wf2-copy')
+        self._make_history('OneClick', workflow=wf)
+
+        context, images = build_report_context()
+
+        self.assertEqual(context['alltime_total'], 1)
+        self.assertEqual(context['week_total'], 1)
+        expected_charts = ['daily_category_chart', 'daily_oneclick_chart',
+                            'alltime_category_chart', 'alltime_workflow_chart',
+                            'weekly_chart']
+        for key in expected_charts:
+            cid = context[key]
+            self.assertIsNotNone(cid, key)
+            self.assertIn(cid, images)
+            self.assertGreater(len(images[cid]), 0)
+        # PNG magic bytes - these really are images, not placeholders.
+        for png_bytes in images.values():
+            self.assertTrue(png_bytes.startswith(b'\x89PNG\r\n\x1a\n'))
+        self.assertEqual(len(images), len(expected_charts))
+
+    def test_build_report_context_handles_no_data_at_all(self):
+        context, images = build_report_context()
+        self.assertEqual(context['alltime_total'], 0)
+        self.assertEqual(context['week_total'], 0)
+        self.assertIsNone(context['daily_category_chart'])
+        self.assertIsNone(context['daily_oneclick_chart'])
+        self.assertIsNone(context['alltime_category_chart'])
+        self.assertIsNone(context['alltime_workflow_chart'])
+        self.assertIsNone(context['weekly_chart'])
+        self.assertEqual(images, {})
+        # Must still render without error - the template has to handle
+        # every chart being None gracefully.
+        html = render_report_html(context)
+        self.assertIn('NGPhylogeny.fr', html)
+
+    @override_settings(NGPHYLO_REPORT_RECIPIENTS=[])
+    def test_send_daily_report_noops_without_recipients(self):
+        send_daily_report()
+        self.assertEqual(len(mail.outbox), 0)
+
+    @override_settings(NGPHYLO_REPORT_RECIPIENTS=['team@example.org'],
+                        NGPHYLO_REPORT_FROM_EMAIL='ngphylo@example.org')
+    def test_send_daily_report_sends_html_email_to_configured_recipients(self):
+        self._make_history('Tool', workflow_steps='MAFFT')
+
+        send_daily_report()
+
+        self.assertEqual(len(mail.outbox), 1)
+        sent = mail.outbox[0]
+        self.assertEqual(sent.to, ['team@example.org'])
+        self.assertEqual(sent.from_email, 'ngphylo@example.org')
+        self.assertEqual(len(sent.alternatives), 1)
+        html_body, mimetype = sent.alternatives[0]
+        self.assertEqual(mimetype, 'text/html')
+        self.assertIn('MAFFT', html_body)
+        # multipart/related, not multipart/mixed - and the HTML actually
+        # references the charts as cid:, not as data: URIs.
+        self.assertEqual(sent.mixed_subtype, 'related')
+        self.assertNotIn('data:image', html_body)
+        self.assertIn('cid:chart_alltime_category', html_body)
+        # The charts are attached as inline images with matching
+        # Content-IDs, not as ordinary (non-inline) file attachments.
+        self.assertGreater(len(sent.attachments), 0)
+        for attachment in sent.attachments:
+            self.assertEqual(attachment.get_content_type(), 'image/png')
+            self.assertEqual(attachment['Content-Disposition'].split(';')[0],
+                              'inline')
+            content_id = attachment['Content-ID'].strip('<>')
+            self.assertIn('cid:%s' % content_id, html_body)
