@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body { margin: 0; padding: 0; background: #eef1f4; font-family: Arial, Helvetica, sans-serif; color: #222; }
+  .wrapper { max-width: 600px; margin: 0 auto; }
+  .header { background: #2c3e50; padding: 24px 32px; text-align: center; }
+  .header img { height: 48px; }
+  .header .site-name { color: #ffffff; font-size: 20px; font-weight: bold; margin-top: 10px; letter-spacing: 0.5px; }
+  .body-card { background: #ffffff; padding: 32px; }
+  .status { display: inline-block; padding: 6px 16px; border-radius: 4px; font-size: 14px; font-weight: bold; color: #ffffff; }
+  .status-ok { background: #21bd8d; }
+  .status-error { background: #d9534f; }
+  .body-card p { line-height: 1.5; font-size: 14px; }
+  .btn { display: inline-block; margin: 20px 0; padding: 12px 28px; background: #446cb3; color: #ffffff !important; text-decoration: none; border-radius: 4px; font-size: 14px; font-weight: bold; }
+  .citation { margin-top: 28px; padding: 16px 18px; background: #f6f6f6; border-left: 3px solid #446cb3; font-size: 12px; color: #555; line-height: 1.5; }
+  .citation a { color: #446cb3; }
+  .footer { background: #f6f6f6; padding: 24px 32px; text-align: center; border-top: 1px solid #e1e4e8; }
+  .footer img { height: 34px; margin-bottom: 10px; }
+  .footer p { margin: 4px 0; font-size: 11px; color: #888; }
+  .footer a { color: #888; }
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+  <div class="header">
+    <img src="cid:{{ header_logo_cid }}" alt="NGPhylogeny.fr">
+    <div class="site-name">NGPhylogeny.fr</div>
+  </div>
+
+  <div class="body-card">
+    {% if error %}
+      <span class="status status-error">Finished with errors</span>
+      <p style="margin-top:18px;">Dear NGPhylogeny.fr user,</p>
+      <p>Your analysis has finished running, but one or more steps reported an error. You can inspect the details of each step from your results page.</p>
+    {% else %}
+      <span class="status status-ok">Finished successfully</span>
+      <p style="margin-top:18px;">Dear NGPhylogeny.fr user,</p>
+      <p>Your analysis has finished running successfully. Your results are ready to view.</p>
+    {% endif %}
+
+    <div style="text-align:center;">
+      <a class="btn" href="{{ results_url }}">View your results</a>
+    </div>
+
+    <p>Thank you for using NGPhylogeny.fr.</p>
+    <p>The NGPhylogeny.fr team</p>
+
+    <div class="citation">
+      If you use NGPhylogeny.fr in your work, please cite:<br>
+      Lemoine, F., Correia, D., Lefort, V., Doppelt-Azeroual, O., Mareuil, F., Cohen-Boulakia, S. and Gascuel, O.
+      <em>NGPhylogeny.fr: new generation phylogenetic services for non-specialists.</em>
+      Nucleic Acids Research, 47:W260-W265 (2019).
+      <a href="https://doi.org/10.1093/nar/gkz303">https://doi.org/10.1093/nar/gkz303</a>
+    </div>
+  </div>
+
+  <div class="footer">
+    <img src="cid:{{ footer_logo_cid }}" alt="Institut Pasteur">
+    <p>NGPhylogeny.fr is developed and hosted by Institut Pasteur.</p>
+    <p><a href="{{ site_home_url }}">ngphylogeny.fr</a></p>
+  </div>
+
+</div>
+</body>
+</html>

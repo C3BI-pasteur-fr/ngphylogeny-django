@@ -234,6 +234,47 @@ PhyML-SMS/Noisy combined images by reusing that repo's own
 dependency here — to import the 4 base `.ga` workflows) → this repo's own
 `init`. See README.md's "Standalone" section for usage.
 
+### `NGPHYLO_SETTINGS_MODULE` vs `DJANGO_SETTINGS_MODULE` in a prod override
+
+A production override (`docker-compose.prod.yml`, server-side only — see
+IFB_CLOUD.md) needs to set `DJANGO_SETTINGS_MODULE` directly, **not**
+`NGPHYLO_SETTINGS_MODULE`. The base `docker-compose.yml`'s
+`DJANGO_SETTINGS_MODULE: "${NGPHYLO_SETTINGS_MODULE:-NGPhylogeny_fr.settings.local}"`
+looks like it's meant to be overridden by setting `NGPHYLO_SETTINGS_MODULE`
+in a second `-f` file's `environment:` block — it isn't. That `${...}`
+substitution is resolved from the **host's** shell/`.env` at
+`docker compose` config-parse time, before any file's `environment:` map
+is merged; an override file setting `NGPHYLO_SETTINGS_MODULE` there just
+adds an unused env var under that name to the container, while
+`DJANGO_SETTINGS_MODULE` itself silently stays whatever the base file's
+substitution resolved to (`local` — dev settings, `DEBUG=True` — unless
+the host/`.env` happens to also define `NGPHYLO_SETTINGS_MODULE`, which
+it won't by default). This ran the real IFB Cloud deployment in `DEBUG=True`
+for its entire lifetime, undetected, until it broke something that only
+manifests under `settings.prod` (`NGPHYLO_HTTPS_HOST` doesn't even exist
+as a setting under `settings.local`, so anything reading it — e.g.
+`workspace/emails.py`'s job-completion email link — silently fell back to
+a wrong default host instead of raising). Fix in the override: set
+`DJANGO_SETTINGS_MODULE: NGPhylogeny_fr.settings.prod` directly.
+
+### `collectstatic` needs a volume shared between `init` and `web`
+
+`docker/init.sh` runs `collectstatic` inside the one-shot `init`
+container — but `init` and `web` are separate containers from the same
+image, each with their own independent, ephemeral filesystem. Without a
+shared volume for `STATIC_ROOT` (`/home/ngphylo/static` — see
+`ngphylo-static`/`ngphylo-standalone-static` in `docker-compose.yml`/
+`docker-compose.standalone.yml`), the files `init` collects vanish when
+it exits, and `web` starts with nothing there. Under `DEBUG=True`
+(`settings.local`, the default), this is invisible - Django's dev server
+serves static files directly from each app's own `static/` source
+directory and never touches `STATIC_ROOT` at all. It only 404s everything
+under `STATIC_URL` once `DEBUG=False` (`settings.prod`) actually takes
+effect and whitenoise starts serving from `STATIC_ROOT` instead - which is
+exactly how this went unnoticed for so long, compounding with the
+`DJANGO_SETTINGS_MODULE` bug above (a deployment that never actually ran
+`settings.prod` never hit this either).
+
 ### Workflow duplicates and the Celery cleanup jobs
 
 Every real OneClick/A La Carte run gives its own Galaxy-side copy of the

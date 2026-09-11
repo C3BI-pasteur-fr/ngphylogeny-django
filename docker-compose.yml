@@ -55,6 +55,18 @@ services:
     build: .
     command: ["docker/init.sh"]
     environment: *django-env
+    # collectstatic (run by docker/init.sh) writes to STATIC_ROOT
+    # (/home/ngphylo/static) inside *this* container's own filesystem -
+    # without this shared volume, those files never reach web (a
+    # separate container from the same image, but its own independent
+    # filesystem), so under DEBUG=False (settings.prod - see
+    # settings/base.py's STATICFILES_STORAGE/whitenoise setup) every
+    # static asset 404s. Only bit under DEBUG=True (settings.local, the
+    # default here), where Django's dev server serves static files
+    # directly and never needs STATIC_ROOT populated at all - easy to
+    # not notice locally.
+    volumes:
+      - ngphylo-static:/home/ngphylo/static
     depends_on:
       db:
         condition: service_healthy
@@ -66,6 +78,8 @@ services:
     ports:
       - "8000:8000"
     environment: *django-env
+    volumes:
+      - ngphylo-static:/home/ngphylo/static
     depends_on:
       init:
         condition: service_completed_successfully
@@ -88,3 +102,4 @@ services:
 
 volumes:
   ngphylo-db:
+  ngphylo-static:

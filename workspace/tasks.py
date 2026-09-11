@@ -4,7 +4,6 @@ import time
 import json
 import re
 import logging
-import os
 
 from celery import shared_task
 from datetime import timedelta
@@ -18,12 +17,12 @@ from galaxy.decorator import galaxy_connection
 from workflows.tasks import deletegalaxyworkflow
 
 from django.conf import settings
-from django.core.mail import EmailMultiAlternatives, send_mail
+from django.core.mail import EmailMultiAlternatives
 from django.db import transaction
-from django.urls import reverse
 from django.core.cache import cache
 from django.utils import timezone
 
+from workspace.emails import send_job_completion_email
 from workspace.reports import render_report_email
 
 LOCK_EXPIRE = 60 * 5 # Lock expires in 5 minutes
@@ -109,31 +108,7 @@ def updateworkspacestatus(historyid):
                 if w and w.email and re.match(r"[^@]+@[^@]+\.[^@]+", w.email):
                     logging.warning("Sending EMail to %s",w.email)
                     try:
-                        ngphylohost=os.environ.get('NGPHYLO_HOST')
-                        if ngphylohost is None:
-                            ngphylohost = "ngphylogeny.fr"
-                        citation = "Lemoine F, Correia D, Lefort V, Doppelt-Azeroual O, Mareuil F, Cohen-Boulakia S, Gascuel O\n" \
-                                   "NGPhylogeny.fr: new generation phylogenetic services for non-specialists.\n" \
-                                   "Nucleic Acids Research 2019 (https://doi.org/10.1093/nar/gkz303).\n"
-                        message = "Dear NGPhylogeny user, \n\n"
-                        if error:
-                            message= message + "Your NGPhylogeny job finished with errors.\n\n"
-                        else:
-                            message=message + "Your NGPhylogeny job finished successfuly.\n"
-                        please = 'Please visit http://%s%s to check results\n\n' % (ngphylohost, reverse('history_detail', kwargs={'history_id':historyid}))
-                        message = message + please
-                        message = message + "Thank you for using ngphylogeny.fr\n\n"
-                        message = message + "NGPhylogeny.fr development team.\n\n"
-                        message = message + citation
-                        
-                        send_mail(
-                            'NGPhylogeny.fr results',
-                            message,
-                            'ngphylogeny@pasteur.fr',
-                            [w.email],
-                            fail_silently=False,
-                        )
-                        #print(message)
+                        send_job_completion_email(historyid, w.email, error)
                     except SMTPException as e:
                         logging.warning("Problem with smtp server : %s" % (e))
                     except Exception as e:
