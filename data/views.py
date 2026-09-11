@@ -5,6 +5,7 @@ import json
 import tempfile
 import requests
 from django.http import StreamingHttpResponse
+from django.http import HttpResponse
 from django.http import JsonResponse
 from django.shortcuts import render, redirect
 from django.urls import reverse_lazy
@@ -113,13 +114,22 @@ def download_file(request, file_id):
             url = urljoin(gi.base_url, dlurl)
             req = Request(url, headers={'x-api-key': gi.key})
             response = urlopen(req)
-            stream_response = StreamingHttpResponse(response.read())
+            # HttpResponse, not StreamingHttpResponse: response.read()
+            # already reads the whole thing into memory, so there's no
+            # actual streaming happening here - and passing bytes
+            # straight to StreamingHttpResponse is broken under Python 3
+            # regardless (iterating a bytes object yields ints, one per
+            # byte, which StreamingHttpResponse then writes out each as
+            # its own chunk - "Hello World" came out as
+            # "721011081081113287111114108100", each byte's decimal
+            # value concatenated, instead of the actual content).
+            stream_response = HttpResponse(response.read())
             stream_response['Content-Disposition'] = 'attachment; filename=' + name
         else:
-            stream_response = StreamingHttpResponse("No file download URL corresponds to the given dataset id " + file_id)
+            stream_response = HttpResponse("No file download URL corresponds to the given dataset id " + file_id)
 
     else:
-        stream_response = StreamingHttpResponse(data)
+        stream_response = HttpResponse(data)
     return stream_response
 
 @connection_galaxy
@@ -138,7 +148,7 @@ def display_file(request, file_id):
     if isinstance(data, dict):
         historyid = data.get('history_id')
         if historyid:
-            if request.is_ajax():
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                 return display_raw(request, file_id)
             else:
                 return render(request, 'display.html', {'history_id': historyid})
@@ -152,7 +162,7 @@ def display_params(request, file_id):
     if isinstance(data, dict):
         job_id = data.get('creating_job')
         if job_id:
-            if request.is_ajax():
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                 job = gi.jobs.show_job(job_id)
                 return JsonResponse(job)
             else:
@@ -167,7 +177,7 @@ def display_msa(request, file_id):
     if isinstance(data, dict):
         historyid = data.get('history_id')
         if historyid:
-            if request.is_ajax():
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                 return display_raw(request, file_id)
             else:
                 return render(request, 'msaviz/msa.html', {'history_id': historyid})
@@ -186,9 +196,16 @@ def tree_visualization(request, file_id):
             url = urljoin(gi.base_url, dlurl)
             req = Request(url, headers={'x-api-key': gi.key})
             response = urlopen(req)
+            # .decode(): the template embeds this in a JS string literal
+            # via {{ newick_tree|escapejs }} (see treeviz/tree.html) -
+            # passing raw bytes through, Django's template rendering
+            # calls str() on it, which for bytes produces the Python
+            # repr ("b'(A:0.1,B:0.2);\\n'", literal b-quote-backslash-n
+            # and all) instead of the actual tree text, breaking every
+            # tree visualization.
             return render(request,
                           template_name='treeviz/tree.html',
-                          context={'newick_tree': response.read(),
+                          context={'newick_tree': response.read().decode('utf-8'),
                                    'history_id': historyid})
     return render(request, 'error.html', {'errortitle': 'Error querying galaxy', 'errormessage': data})
 

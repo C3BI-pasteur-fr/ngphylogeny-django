@@ -171,3 +171,37 @@ class ImportToolsCitationsTest(TestCase):
 
         self.assertEqual(Tool.objects.count(), 1)
         self.assertEqual(self.tool.citation_set.count(), 2)
+
+
+class GetToolNameViewTest(TestCase):
+    """
+    Regression test: get_tool_name (used by AJAX from the history
+    provenance panel - templates/workspace/include/
+    history_contents_provenance_ajax.html) used to call
+    gi.tools.get_tools(tool_id=...). bioblend's get_tools() still accepts
+    that kwarg in its signature, but its implementation now just raises
+    "ValueError: The tool_id parameter has been removed, use the
+    show_tool() method..." - every request to this endpoint 500'd (hit
+    live viewing a real history's provenance panel; not covered by any
+    existing test). Fixed by calling show_tool() instead, which returns
+    a single dict rather than a list.
+    """
+
+    def setUp(self):
+        with patch('galaxy.models.requests.get',
+                   return_value=Mock(status_code=200,
+                                      json=lambda: {'version_major': '25.1'})):
+            self.server = Server.objects.create(
+                url='http://fake-galaxy.example.org', current=True)
+        user = User.objects.create_user('admin')
+        GalaxyUser.objects.create(
+            user=user, galaxy_server=self.server, api_key='fakekey',
+            anonymous=True)
+
+    def test_returns_tool_name_without_crashing(self):
+        with patch('bioblend.galaxy.tools.ToolClient.show_tool',
+                   return_value={'id': 'mytool', 'name': 'MyTool'}):
+            response = self.client.post(
+                '/tools/tool/galaxy_id/', {'tool_id': 'mytool'})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'MyTool', response.content)

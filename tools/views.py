@@ -251,7 +251,12 @@ def get_tool_name(request):
         toolid = request.POST.get('tool_id')
 
         if toolid:
-            tool = gi.tools.get_tools(tool_id=toolid)[0]
+            # get_tools(tool_id=...) was removed from bioblend (its
+            # signature still accepts the kwarg, but the implementation
+            # now just raises ValueError telling you to use this
+            # instead) - show_tool() is the direct replacement and
+            # returns a single dict, not a list.
+            tool = gi.tools.show_tool(tool_id=toolid)
             context.update({'tool_id': toolid, 'name': tool.get('name')})
 
     return HttpResponse(json.dumps(context), content_type='application/json')
