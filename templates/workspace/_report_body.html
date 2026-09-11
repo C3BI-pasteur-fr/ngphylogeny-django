@@ -1,0 +1,78 @@
+{% comment %}
+Shared report content, included by both daily_report_email.html
+(chart src values already prefixed "cid:...") and report_page.html
+(chart src values already full "data:image/png;base64,..." URIs) - see
+workspace/reports.py's render_report_email()/build_report_web_context().
+This partial never decides the src format itself, just renders whatever's
+already in context.
+{% endcomment %}
+<h1>NGPhylogeny.fr &ndash; Daily Workflow Report</h1>
+<p class="report-subtitle">Generated {{ generated_at|date:"l, F j, Y H:i" }} UTC</p>
+
+<div class="report-card">
+  <h2>Last 7 days ({{ week_total }} workflow{{ week_total|pluralize }} run)</h2>
+
+  {% if daily_category_chart %}
+    <img class="report-chart" src="{{ daily_category_chart }}" alt="Workflows per day, by category">
+  {% else %}
+    <p class="report-empty">No workflows were run in the last 7 days.</p>
+  {% endif %}
+
+  <table>
+    <tr>
+      <th>Date</th>
+      {% for col in category_columns %}<th class="report-num">{{ col }}</th>{% endfor %}
+      <th class="report-num">Total</th>
+    </tr>
+    {% for row in daily_table %}
+    <tr>
+      <td>{{ row.date|date:"D, M j" }}</td>
+      {% for label, count in row.per_category %}<td class="report-num">{{ count }}</td>{% endfor %}
+      <td class="report-num"><strong>{{ row.total }}</strong></td>
+    </tr>
+    {% endfor %}
+    <tr class="report-total-row">
+      <td>Total</td>
+      {% for count in category_totals %}<td class="report-num">{{ count }}</td>{% endfor %}
+      <td class="report-num">{{ week_total }}</td>
+    </tr>
+  </table>
+
+  {% if daily_oneclick_chart %}
+    <h3>OneClick workflows, by tool</h3>
+    <img class="report-chart" src="{{ daily_oneclick_chart }}" alt="OneClick workflows per day, by tool">
+  {% endif %}
+</div>
+
+<div class="report-card">
+  <h2>Since the beginning ({{ alltime_total }} workflow{{ alltime_total|pluralize }} run in total)</h2>
+
+  {% if weekly_chart %}
+    <h3>Per week</h3>
+    <img class="report-chart" src="{{ weekly_chart }}" alt="Workflows per week, since the beginning">
+  {% endif %}
+
+  <h3>By category</h3>
+  {% if alltime_category_chart %}
+    <img class="report-chart" src="{{ alltime_category_chart }}" alt="All-time workflows by category">
+  {% else %}
+    <p class="report-empty">No workflows have been run yet.</p>
+  {% endif %}
+  <table>
+    <tr><th>Category</th><th class="report-num">Count</th></tr>
+    {% for label, count in alltime_category_table %}
+    <tr><td>{{ label }}</td><td class="report-num">{{ count }}</td></tr>
+    {% endfor %}
+  </table>
+
+  <h3>By workflow / tool</h3>
+  {% if alltime_workflow_chart %}
+    <img class="report-chart" src="{{ alltime_workflow_chart }}" alt="All-time workflows by workflow or tool">
+  {% endif %}
+  <table>
+    <tr><th>Workflow / tool</th><th class="report-num">Count</th></tr>
+    {% for label, count in alltime_workflow_table %}
+    <tr><td>{{ label }}</td><td class="report-num">{{ count }}</td></tr>
+    {% endfor %}
+  </table>
+</div>

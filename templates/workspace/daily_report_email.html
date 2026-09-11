@@ -2,101 +2,15 @@
 <html>
 <head>
 <meta charset="utf-8">
+{% include "workspace/_report_styles.html" %}
 <style>
-  body { font-family: Arial, Helvetica, sans-serif; color: #222; background: #f4f5f7; margin: 0; padding: 0; }
-  .wrapper { max-width: 820px; margin: 0 auto; padding: 24px; }
-  .card { background: #ffffff; border-radius: 6px; padding: 20px 24px; margin-bottom: 24px; border: 1px solid #e1e4e8; }
-  h1 { font-size: 20px; color: #1a1a2e; margin: 0 0 4px 0; }
-  .subtitle { color: #666; font-size: 13px; margin: 0 0 20px 0; }
-  h2 { font-size: 16px; color: #1a1a2e; border-bottom: 2px solid #4C72B0; padding-bottom: 6px; margin-top: 0; }
-  h3 { font-size: 14px; color: #333; margin: 20px 0 8px 0; }
-  table { border-collapse: collapse; width: 100%; margin: 8px 0 16px 0; font-size: 13px; }
-  th { background: #f0f2f5; text-align: left; padding: 6px 10px; border: 1px solid #e1e4e8; }
-  td { padding: 6px 10px; border: 1px solid #e1e4e8; }
-  tr:nth-child(even) td { background: #fafbfc; }
-  .total-row td { font-weight: bold; background: #eef1f6; }
-  .num { text-align: right; }
-  img.chart { max-width: 100%; height: auto; display: block; margin: 10px 0; }
-  .empty { color: #888; font-style: italic; font-size: 13px; }
-  .footer { color: #999; font-size: 11px; text-align: center; margin-top: 8px; }
+  body { background: #f4f5f7; margin: 0; padding: 0; }
 </style>
 </head>
 <body>
-<div class="wrapper">
-
-  <h1>NGPhylogeny.fr &ndash; Daily Workflow Report</h1>
-  <p class="subtitle">Generated {{ generated_at|date:"l, F j, Y H:i" }} UTC</p>
-
-  <div class="card">
-    <h2>Last 7 days ({{ week_total }} workflow{{ week_total|pluralize }} run)</h2>
-
-    {% if daily_category_chart %}
-      <img class="chart" src="cid:{{ daily_category_chart }}" alt="Workflows per day, by category">
-    {% else %}
-      <p class="empty">No workflows were run in the last 7 days.</p>
-    {% endif %}
-
-    <table>
-      <tr>
-        <th>Date</th>
-        {% for col in category_columns %}<th class="num">{{ col }}</th>{% endfor %}
-        <th class="num">Total</th>
-      </tr>
-      {% for row in daily_table %}
-      <tr>
-        <td>{{ row.date|date:"D, M j" }}</td>
-        {% for label, count in row.per_category %}<td class="num">{{ count }}</td>{% endfor %}
-        <td class="num"><strong>{{ row.total }}</strong></td>
-      </tr>
-      {% endfor %}
-      <tr class="total-row">
-        <td>Total</td>
-        {% for count in category_totals %}<td class="num">{{ count }}</td>{% endfor %}
-        <td class="num">{{ week_total }}</td>
-      </tr>
-    </table>
-
-    {% if daily_oneclick_chart %}
-      <h3>OneClick workflows, by tool</h3>
-      <img class="chart" src="cid:{{ daily_oneclick_chart }}" alt="OneClick workflows per day, by tool">
-    {% endif %}
-  </div>
-
-  <div class="card">
-    <h2>Since the beginning ({{ alltime_total }} workflow{{ alltime_total|pluralize }} run in total)</h2>
-
-    {% if weekly_chart %}
-      <h3>Per week</h3>
-      <img class="chart" src="cid:{{ weekly_chart }}" alt="Workflows per week, since the beginning">
-    {% endif %}
-
-    <h3>By category</h3>
-    {% if alltime_category_chart %}
-      <img class="chart" src="cid:{{ alltime_category_chart }}" alt="All-time workflows by category">
-    {% else %}
-      <p class="empty">No workflows have been run yet.</p>
-    {% endif %}
-    <table>
-      <tr><th>Category</th><th class="num">Count</th></tr>
-      {% for label, count in alltime_category_table %}
-      <tr><td>{{ label }}</td><td class="num">{{ count }}</td></tr>
-      {% endfor %}
-    </table>
-
-    <h3>By workflow / tool</h3>
-    {% if alltime_workflow_chart %}
-      <img class="chart" src="cid:{{ alltime_workflow_chart }}" alt="All-time workflows by workflow or tool">
-    {% endif %}
-    <table>
-      <tr><th>Workflow / tool</th><th class="num">Count</th></tr>
-      {% for label, count in alltime_workflow_table %}
-      <tr><td>{{ label }}</td><td class="num">{{ count }}</td></tr>
-      {% endfor %}
-    </table>
-  </div>
-
-  <p class="footer">NGPhylogeny.fr &mdash; automated daily report</p>
-
+<div class="report-wrapper">
+{% include "workspace/_report_body.html" %}
+<p class="report-footer">NGPhylogeny.fr &mdash; automated daily report</p>
 </div>
 </body>
 </html>
