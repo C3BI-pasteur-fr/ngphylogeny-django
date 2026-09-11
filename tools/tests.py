@@ -1,7 +1,11 @@
+from unittest.mock import Mock, patch
+
+from django.contrib.auth.models import User
+from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
 
-from galaxy.models import Server
+from galaxy.models import GalaxyUser, Server
 from tools.models import Tool, ToolFlag
 
 
@@ -76,3 +80,37 @@ class ToolListViewGroupingTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, self.tool.name)
         self.assertContains(response, self.flag.verbose_name)
+
+
+class AddGalaxyKeyCommandTest(TestCase):
+    """
+    Regression test: addgalaxykey used to build a new GalaxyUser row with a
+    plain GalaxyUser(...).save() every run. Re-running it for a user/server
+    pair that already has one - e.g. docker-compose's init service running
+    again on an existing DB - crashed with "duplicate key value violates
+    unique constraint
+    galaxy_galaxyuser_user_id_galaxy_server_id_53f2ea9d_uniq" instead of
+    refreshing the key. Only caught by actually redeploying against a
+    server that already had one imported.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user('admin')
+        with patch('galaxy.models.requests.get',
+                   return_value=Mock(status_code=200,
+                                      json=lambda: {'version_major': '25.1'})):
+            self.server = Server.objects.create(
+                url='http://fake-galaxy.example.org', current=True)
+
+    def test_rerunning_for_the_same_user_and_server_updates_not_duplicates(self):
+        call_command('addgalaxykey', user='admin',
+                     galaxyurl=self.server.url, galaxykey='key1')
+        self.assertEqual(GalaxyUser.objects.count(), 1)
+        self.assertEqual(GalaxyUser.objects.get().api_key, 'key1')
+
+        # Simulate re-running the same setup step later (e.g. a redeployed
+        # Galaxy with a freshly generated admin key).
+        call_command('addgalaxykey', user='admin',
+                     galaxyurl=self.server.url, galaxykey='key2')
+        self.assertEqual(GalaxyUser.objects.count(), 1)
+        self.assertEqual(GalaxyUser.objects.get().api_key, 'key2')
