@@ -1,13 +1,17 @@
+from datetime import timedelta
 from unittest.mock import Mock, patch
 
 from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.test import TestCase
+from django.utils import timezone
 
 from galaxy.models import GalaxyUser, Server
 from tools.models import Tool
 from workflows.models import Workflow, WorkflowStepInformation
+from workflows.tasks import deleteoldgalaxyworkflows
 from workflows.views.wkadvanced import WorkflowAdvancedFormView
+from workspace.models import WorkspaceHistory
 
 
 class WorkflowStepInformationTest(TestCase):
@@ -131,6 +135,77 @@ class ImportWorkflowsCommandTest(TestCase):
         self.assertEqual(Workflow.objects.count(), 2)
         base.refresh_from_db()
         self.assertEqual(base.id_galaxy, 'base-id')
+
+
+class DeleteOldGalaxyWorkflowsTest(TestCase):
+    """
+    Regression tests for deleteoldgalaxyworkflows(): it used to call
+    Galaxy's delete_workflow() directly and unconditionally follow up with
+    w.delete() (a hard delete of the Django row) regardless of whether the
+    Galaxy call actually succeeded - delete_workflow() failures only
+    surfaced as an exception caught by the loop's own try/except, which
+    logged a warning and then aborted the *entire* remaining batch for
+    that run (rather than skipping just the one problem row), and any
+    workflow processed before the failure was already gone from Django
+    even on runs where the Galaxy-side delete silently didn't take
+    effect. Only caught by code review, not by any existing test.
+    """
+
+    def setUp(self):
+        with patch('galaxy.models.requests.get',
+                   return_value=Mock(status_code=200,
+                                      json=lambda: {'version_major': '25.1'})):
+            self.server = Server.objects.create(
+                url='http://fake-galaxy.example.org', current=True)
+
+    def _make_orphan_workflow(self, id_galaxy):
+        return Workflow.objects.create(
+            galaxy_server=self.server, id_galaxy=id_galaxy,
+            name='PhyML OneClick', category='duplicated',
+            description='PhyML OneClick',
+            slug='%s_PhyML OneClick_copy' % id_galaxy,
+            date=timezone.now() - timedelta(days=2))
+
+    def test_deletes_orphaned_workflow_on_success(self):
+        wf = self._make_orphan_workflow('orphan-ok')
+        with patch('workflows.tasks.deletegalaxyworkflow',
+                   return_value=True):
+            deleteoldgalaxyworkflows()
+        self.assertFalse(Workflow.objects.filter(pk=wf.pk).exists())
+
+    def test_keeps_workflow_row_when_galaxy_delete_fails(self):
+        wf = self._make_orphan_workflow('orphan-fail')
+        with patch('workflows.tasks.deletegalaxyworkflow',
+                   return_value=False):
+            deleteoldgalaxyworkflows()
+        self.assertTrue(Workflow.objects.filter(pk=wf.pk).exists())
+
+    def test_one_failure_does_not_block_the_rest_of_the_batch(self):
+        wf_fail = self._make_orphan_workflow('orphan-fail')
+        wf_ok = self._make_orphan_workflow('orphan-ok')
+
+        def fake_delete(id_galaxy):
+            return id_galaxy != 'orphan-fail'
+
+        with patch('workflows.tasks.deletegalaxyworkflow',
+                   side_effect=fake_delete):
+            deleteoldgalaxyworkflows()
+
+        self.assertTrue(Workflow.objects.filter(pk=wf_fail.pk).exists())
+        self.assertFalse(Workflow.objects.filter(pk=wf_ok.pk).exists())
+
+    def test_workflow_still_associated_with_a_history_is_not_touched(self):
+        wf = self._make_orphan_workflow('in-use')
+        WorkspaceHistory.objects.create(
+            history='hist1', name='test', email='', monitored=True,
+            finished=False, source_ip='127.0.0.1',
+            workflow_category='OneClick', workflow_steps='',
+            galaxy_server=self.server, workflow=wf)
+        with patch('workflows.tasks.deletegalaxyworkflow',
+                   return_value=True) as mock_delete:
+            deleteoldgalaxyworkflows()
+        mock_delete.assert_not_called()
+        self.assertTrue(Workflow.objects.filter(pk=wf.pk).exists())
 
 
 class ProcessFileToUploadTest(TestCase):

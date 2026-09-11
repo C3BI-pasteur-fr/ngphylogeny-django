@@ -7,7 +7,7 @@ import logging
 import os
 
 from celery import shared_task
-from datetime import date, timedelta, datetime
+from datetime import timedelta
 
 from celery.utils.log import get_task_logger
 
@@ -20,6 +20,7 @@ from django.core.mail import send_mail
 from django.db import transaction
 from django.urls import reverse
 from django.core.cache import cache
+from django.utils import timezone
 
 LOCK_EXPIRE = 60 * 5 # Lock expires in 5 minutes
 LOCK_EXPIRE_SHORT = 9 # Lock expires in 9 seconds
@@ -142,30 +143,60 @@ def updateworkspacestatus(historyid):
 @shared_task
 def deletegalaxyhistory(historyid):
     """
-    Celery task that will delete an history on the galaxy server in background
+    Celery task that will delete an history on the galaxy server in background.
+
+    Returns True if the deletion actually succeeded, False otherwise - so
+    callers can decide whether it's safe to mark their own bookkeeping as
+    deleted, rather than assuming success just because this didn't raise.
     """
     logging.info("Deleting history %s" % (historyid))
     try:
         galaxycon = galaxy_connection()
         galaxycon.nocache = True
         galaxycon.histories.delete_history(historyid, purge=True)
+        return True
     except Exception as e:
         logging.warning("Problem while deleting history: %s" % (e))
+        return False
 
-        
+
 # Every day at 2am, clears analyses older than 14 days
 @shared_task
 def deleteoldgalaxyhistory():
     logger.info("Start old workspace deletion task")
-    galaxycon = galaxy_connection()
-    galaxycon.nocache = True
-    datecutoff = datetime.now() - timedelta(days=14)
+    datecutoff = timezone.now() - timedelta(days=14)
     for e in WorkspaceHistory.objects.filter(deleted=False).filter(finished=True).filter(created_date__lte=datecutoff):
-        if e.workflow is not None:
-            deletegalaxyworkflow(e.workflow.id_galaxy)
-            e.workflow.deleted = True
-            e.workflow.save()
-        e.deleted = True
-        e.save()
-        deletegalaxyhistory(e.history)
+        try:
+            workflow_deleted = True
+            if e.workflow is not None:
+                workflow_deleted = deletegalaxyworkflow(e.workflow.id_galaxy)
+                if workflow_deleted:
+                    e.workflow.deleted = True
+                    e.workflow.save()
+
+            history_deleted = deletegalaxyhistory(e.history)
+
+            if workflow_deleted and history_deleted:
+                e.deleted = True
+                # Also drop the cached Galaxy history contents: once the
+                # underlying Galaxy history is purged these would just be
+                # stale JSON forever, and there's no other cleanup that
+                # reclaims this (potentially sizeable) storage.
+                e.history_content_json = ""
+                e.history_info_json = ""
+                e.save()
+            else:
+                # Leave deleted=False: deletegalaxyworkflow/
+                # deletegalaxyhistory already logged why, and this will be
+                # picked up again on the next run instead of being marked
+                # "cleaned up" while the data may still exist on Galaxy.
+                logging.warning(
+                    "Could not fully delete workspace history %s "
+                    "(workflow_deleted=%r, history_deleted=%r) - will "
+                    "retry on the next run" %
+                    (e.history, workflow_deleted, history_deleted))
+        except Exception as ex:
+            logging.warning(
+                "Problem while deleting old workspace %s: %s" %
+                (e.history, ex))
     logger.info("Old workspace deletion task finished")
