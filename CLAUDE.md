@@ -234,6 +234,45 @@ PhyML-SMS/Noisy combined images by reusing that repo's own
 dependency here — to import the 4 base `.ga` workflows) → this repo's own
 `init`. See README.md's "Standalone" section for usage.
 
+### Workflow duplicates and the Celery cleanup jobs
+
+Every real OneClick/A La Carte run gives its own Galaxy-side copy of the
+workflow it launches (`Workflow.duplicate()` in `workflows/models.py`) —
+same name as the base workflow (e.g. `"FastME OneClick"`), fresh Galaxy id,
+tracked locally as its own `category='duplicated'` row. Over time, real
+usage means Galaxy's `/api/workflows/` list accumulates many entries
+sharing the exact same name as the one true base workflow.
+`importworkflows` matches by name (`re.search('oneclick', wfname, ...)`),
+so it has to explicitly skip any Galaxy id it already knows about under any
+category — otherwise it tries to collapse every same-named entry into the
+single `category='base'` row via `slug=slugify(wfname)`, and crashes with
+`duplicate key value violates unique constraint
+"workflows_workflow_id_galaxy_key"` the moment one of those ids already
+belongs to an existing `'duplicated'` row. Only surfaced by redeploying
+against a real Galaxy that had accumulated enough real workflow runs — see
+`ImportWorkflowsCommandTest.test_ignores_per_run_duplicates_sharing_the_same_name`
+in `workflows/tests.py`.
+
+The two Celery-beat cleanup jobs that delete old data
+(`workspace.tasks.deleteoldgalaxyhistory`, `workflows.tasks.deleteoldgalaxyworkflows`
+— `CELERY_BEAT_SCHEDULE` in `settings/base.py`, daily at 2am) call
+`deletegalaxyworkflow()`/`deletegalaxyhistory()`, which each swallow their
+own Galaxy API exceptions and just log a warning. Both cleanup tasks now
+check the actual return value and only mark their Django rows deleted (or
+hard-delete them) when the Galaxy-side delete really succeeded — a row that
+fails is left `deleted=False` and retried on the next run. This used to be
+unconditional: a transient Galaxy failure at exactly 2am made a row look
+"cleaned up" in Django forever, since every future run only looks at
+`deleted=False` rows, while the actual data could still be sitting on
+Galaxy with nothing left to ever notice or retry it. See
+`workspace/tests.py`/`workflows/tests.py` for the regression tests. Also
+worth remembering: `Workflow.date`'s field default and both tasks' cutoffs
+use `django.utils.timezone.now()`, not `datetime.now()` — `USE_TZ=True` is
+on, and the naive version is exactly what throws `RuntimeWarning:
+DateTimeField Workflow.date received a naive datetime while time zone
+support is active` (harmless only by coincidence here, since
+`TIME_ZONE='UTC'` matches the container's system clock).
+
 ### `upgrade` vs the old `master` branch
 
 `upgrade` (this branch) is a from-scratch Python 2→3 / Django 1.11→4.2 /
