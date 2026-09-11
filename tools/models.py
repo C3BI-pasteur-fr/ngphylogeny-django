@@ -260,13 +260,18 @@ class Tool(models.Model):
                     t.import_tool_io(t.tool_json)
                 if created or force:
                     # Citations are only (re-)fetched for newly-created or
-                    # force-reimported tools: fetching them unconditionally
-                    # on every run duplicated every Citation row each time
-                    # importtools was re-run against an already-imported
-                    # tool (no dedup on the Citation table).
+                    # force-reimported tools - but docker/init.sh always
+                    # calls importtools with --force on every container
+                    # start, so this branch runs on every single redeploy
+                    # for every tool. Replace (clear then re-insert)
+                    # rather than blindly append: appending here used to
+                    # duplicate every Citation row on every redeploy -
+                    # real production tools ended up with 25-75 duplicate
+                    # rows of the same 1-3 actual citations.
                     cite_url = '%s/%s/%s/%s/%s' % (galaxy_server.url, 'api', 'tools', id_tool, 'citations')
                     connection = requests.get(cite_url)
                     citations = connection.json()
+                    t.citation_set.all().delete()
                     for cite in citations:
                         # No encode/decode roundtrip needed: unlike Python 2's
                         # requests/json stack (which this iso-8859-1->utf8
