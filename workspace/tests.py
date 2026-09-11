@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from galaxy.models import Server
 from workflows.models import Workflow
+from workspace.emails import build_job_completion_email, send_job_completion_email
 from workspace.models import WorkspaceHistory
 from workspace.reports import (build_report_context, build_report_web_context,
                                 gather_all_time, gather_last_7_days,
@@ -389,3 +390,93 @@ class DailyReportViewTest(TestCase):
             self.client.get('/workspace/report?refresh=1')
             self.assertTrue(
                 mock_build.call_args_list[-1].kwargs.get('force_refresh'))
+
+
+class JobCompletionEmailTest(TestCase):
+    """
+    Tests for workspace/emails.py (the HTML job-completion email sent by
+    workspace.tasks.updateworkspacestatus once a monitored history's jobs
+    are all done) - NGPhylogeny.fr/Institut Pasteur branded, with inline
+    (Content-ID) header/footer logos rather than base64 data: URIs (see
+    the module docstring - same reasoning as the daily report).
+    """
+
+    def _built(self, error=False):
+        return build_job_completion_email('hist123', 'user@example.org', error)
+
+    @override_settings(NGPHYLO_REPORT_FROM_EMAIL='ngphylogeny@pasteur.fr')
+    def test_success_email_content_and_structure(self):
+        msg = self._built(error=False)
+
+        self.assertEqual(msg.to, ['user@example.org'])
+        self.assertEqual(msg.from_email, 'ngphylogeny@pasteur.fr')
+        self.assertIn('finished', msg.subject)
+        self.assertNotIn('error', msg.subject.lower())
+
+        self.assertEqual(len(msg.alternatives), 1)
+        html_body, mimetype = msg.alternatives[0]
+        self.assertEqual(mimetype, 'text/html')
+        self.assertIn('Institut Pasteur', html_body)
+        self.assertIn('Finished successfully', html_body)
+        self.assertNotIn('Finished with errors', html_body)
+        self.assertIn('hist123', html_body)
+        self.assertIn('doi.org/10.1093/nar/gkz303', html_body)
+        # No C3BI/CNRS branding - just Institut Pasteur.
+        self.assertNotIn('C3BI', html_body)
+        self.assertNotIn('CNRS', html_body)
+
+        # multipart/related with two inline logo attachments, matching
+        # cid: references in the HTML - not data: URIs, and not ordinary
+        # (non-inline) file attachments - see reports.py/tasks.py's
+        # daily-report email for why this exact structure matters.
+        self.assertEqual(msg.mixed_subtype, 'related')
+        self.assertNotIn('data:image', html_body)
+        self.assertEqual(len(msg.attachments), 2)
+        for attachment in msg.attachments:
+            self.assertEqual(attachment.get_content_type(), 'image/png')
+            self.assertEqual(attachment['Content-Disposition'].split(';')[0],
+                              'inline')
+            content_id = attachment['Content-ID'].strip('<>')
+            self.assertIn('cid:%s' % content_id, html_body)
+
+    def test_error_email_shows_error_status(self):
+        msg = self._built(error=True)
+        self.assertIn('error', msg.subject.lower())
+        html_body, _ = msg.alternatives[0]
+        self.assertIn('Finished with errors', html_body)
+        self.assertNotIn('Finished successfully', html_body)
+
+    @override_settings(NGPHYLO_HTTPS_HOST='ngphylogeny.fr')
+    def test_results_link_uses_https_when_configured(self):
+        msg = self._built()
+        html_body, _ = msg.alternatives[0]
+        self.assertIn('https://ngphylogeny.fr/workspace/history/hist123',
+                       html_body)
+
+    @override_settings(NGPHYLO_HTTPS_HOST=None)
+    def test_results_link_falls_back_to_http(self):
+        msg = self._built()
+        html_body, _ = msg.alternatives[0]
+        # Only the site links should fall back to http - the citation's
+        # DOI link is always https regardless of site config.
+        self.assertIn('http://ngphylogeny.fr/workspace/history/hist123',
+                       html_body)
+        self.assertNotIn('https://ngphylogeny.fr', html_body)
+
+    def test_send_job_completion_email_actually_sends(self):
+        send_job_completion_email('hist456', 'someone@example.org', False)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['someone@example.org'])
+
+    @override_settings(NGPHYLO_REPORT_FROM_EMAIL='authorized@pasteur.fr')
+    def test_sender_reuses_the_report_from_email_setting(self):
+        """
+        Regression test: this used to hardcode 'ngphylogeny@pasteur.fr' as
+        the sender, which the real SMTP account isn't authorized to send
+        as (institutional "Send As" restriction) - hit for real sending a
+        live test email, exactly like the daily report hit the same class
+        of issue earlier. Reuses NGPHYLO_REPORT_FROM_EMAIL instead of a
+        second, independently-hardcoded address.
+        """
+        msg = self._built()
+        self.assertEqual(msg.from_email, 'authorized@pasteur.fr')

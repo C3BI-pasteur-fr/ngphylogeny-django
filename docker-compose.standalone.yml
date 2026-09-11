@@ -151,6 +151,12 @@ services:
     build: .
     command: ["docker/init.sh"]
     environment: *django-env
+    # See docker-compose.yml for why this is needed - collectstatic
+    # (docker/init.sh) writes to STATIC_ROOT in this container's own
+    # filesystem, which web (a separate container) never sees otherwise.
+    # Only bites under DEBUG=False; harmless to have either way.
+    volumes:
+      - ngphylo-standalone-static:/home/ngphylo/static
     depends_on:
       db:
         condition: service_healthy
@@ -166,6 +172,8 @@ services:
     ports:
       - "8000:8000"
     environment: *django-env
+    volumes:
+      - ngphylo-standalone-static:/home/ngphylo/static
     depends_on:
       init:
         condition: service_completed_successfully
@@ -188,6 +196,7 @@ services:
 
 volumes:
   ngphylo-standalone-db:
+  ngphylo-standalone-static:
   ngphylo-standalone-galaxy-export:
   ngphylo-standalone-galaxy-docker:
   ngphylo-standalone-galaxy-data:
