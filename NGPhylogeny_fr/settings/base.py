@@ -34,6 +34,12 @@ DEBUG = False
 ALLOWED_HOSTS = ["*", ]
 INTERNAL_IPS = ["127.0.0.1", ]
 
+# Trust a reverse proxy's X-Forwarded-Proto header to know a request was
+# actually HTTPS (Django can't tell otherwise - it only sees the plain HTTP
+# connection from the proxy). Inert unless that header is actually present,
+# so this is safe to leave on for deployments with no proxy in front too.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 CRISPY_TEMPLATE_PACK = "bootstrap3"
 TESTDATA_DIR = os.path.join(BASE_DIR, 'testdata')
 # Preserves pre-3.2 behavior (AutoField) instead of opting into the new
