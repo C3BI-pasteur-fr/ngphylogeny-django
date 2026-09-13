@@ -59,4 +59,15 @@ COPY . .
 
 RUN chmod +x docker/init.sh
 
+# Baked in at build time, not run by docker/init.sh alone: on Kubernetes,
+# the one-shot init Job and the web Deployment are separate pods with no
+# shared filesystem by default (unlike docker-compose.yml's
+# ngphylo-static volume) - collectstatic here means every container from
+# this image already has STATIC_ROOT populated, no shared volume needed.
+# Doesn't need real secrets/DB connectivity: collectstatic only reads
+# each app's own static/ directory and settings.STATIC_ROOT, and
+# NGPHYLO_SECRET_KEY/DATABASES both have safe fallback defaults (see
+# settings/base.py) that let Django's settings module load at all.
+RUN python manage.py collectstatic --noinput
+
 CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]

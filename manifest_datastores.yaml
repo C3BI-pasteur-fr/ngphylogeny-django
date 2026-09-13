@@ -1,0 +1,185 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-claim
+  labels:
+    app: postgres
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      # Adjust against this project's actual storage quota once known -
+      # see manifest_mysql.yaml's PVC comment in drmab-web for how to
+      # discover it (a too-large request fails at apply time with a
+      # clear quota-rejection error, not silently).
+      storage: 5Gi
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-credentials
+type: Opaque
+data:
+  # Placeholder credentials - decode/replace these (or override the
+  # Secret out-of-band, e.g. via a separate `kubectl apply` from a
+  # secrets-management pipeline) before relying on this for a real
+  # deployment. Same pattern as drmab-web's manifest_mysql.yaml.
+  username: bmdwaHlsbw==
+  password: bmdwaHlsb19rOHNfZGV2
+  database: bmdwaHlsbw==
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  labels:
+    app: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  strategy:
+    # Not RollingUpdate: two Postgres pods can't share the same
+    # ReadWriteOnce PVC at once - same reasoning as drmab-web's mysql
+    # Deployment.
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: postgres
+        tier: db
+    spec:
+      securityContext:
+        # postgres:15's own image runs as uid/gid 999 - match that so the
+        # PVC (freshly provisioned, owned by root by default) is writable.
+        fsGroup: 999
+      containers:
+        - name: postgres
+          image: postgres:15
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: password
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: database
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          securityContext:
+            runAsUser: 999
+            runAsGroup: 999
+          ports:
+            - containerPort: 5432
+              name: postgres
+          resources:
+            requests:
+              memory: "256Mi"
+            limits:
+              memory: "1Gi"
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "$(POSTGRES_USER)"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "$(POSTGRES_USER)"]
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          volumeMounts:
+            - name: postgres
+              mountPath: /var/lib/postgresql/data
+              # subPath, not the bare mount: PGDATA above points one level
+              # deeper (.../data/pgdata) specifically so postgres doesn't
+              # choke on the PVC's own lost+found directory, which the
+              # bare mount root of a fresh ext4/xfs volume commonly has -
+              # same trap avoided in drmab-web's mysql Deployment via its
+              # own subPath.
+              subPath: postgres
+      volumes:
+        - name: postgres
+          persistentVolumeClaim:
+            claimName: postgres-claim
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels:
+    app: postgres
+spec:
+  ports:
+    - port: 5432
+  selector:
+    app: postgres
+    tier: db
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  labels:
+    app: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+        tier: cache
+    spec:
+      containers:
+        - name: redis
+          image: redis:7
+          ports:
+            - containerPort: 6379
+              name: redis
+          resources:
+            requests:
+              memory: "64Mi"
+            limits:
+              memory: "256Mi"
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 15
+            periodSeconds: 10
+      # No PersistentVolumeClaim: this is only ever used as the Celery
+      # broker (see NGPHYLO_REDIS_URL), not for anything that needs to
+      # survive a restart - losing queued/in-flight task state on a pod
+      # restart is the same behavior a docker-compose redeploy already
+      # has today (see docker-compose.yml, which also runs redis with no
+      # volume).
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  labels:
+    app: redis
+spec:
+  ports:
+    - port: 6379
+  selector:
+    app: redis
+    tier: cache

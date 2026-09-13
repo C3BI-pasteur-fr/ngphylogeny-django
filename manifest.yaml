@@ -1,0 +1,574 @@
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ngphylogeny-credentials
+type: Opaque
+data:
+  # Placeholder values - decode/replace these (or override the Secret
+  # out-of-band, e.g. from a separate secrets-management pipeline) before
+  # relying on this for a real deployment. Same pattern as
+  # postgres-credentials/drmab-web's mysql-credentials.
+  #
+  # secret-key: Django's SECRET_KEY - generate a real one with
+  #   `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
+  secret-key: cGxhY2Vob2xkZXItZGphbmdvLXNlY3JldC1rZXk=
+  # admin-password: the Django admin/superuser account init creates.
+  admin-password: cGxhY2Vob2xkZXItYWRtaW4tcGFzc3dvcmQ=
+  # galaxy-key: an API key for the Pasteur Galaxy server
+  # (galaxy.pasteur.fr, or whichever instance NGPHYLO_GALAXY_URL below
+  # points at) that this app authenticates to Galaxy with - NOT a k8s
+  # secret drmab-web itself bothered to protect (it passed the
+  # equivalent GALAXYKEY as a plain envsubst'd value), but there's no
+  # reason not to do better here.
+  galaxy-key: cGxhY2Vob2xkZXItZ2FsYXh5LWFwaS1rZXk=
+  # email-host-password: SMTP password for job-completion emails and the
+  # daily report (see CLAUDE.md) - leave as the placeholder if email
+  # isn't needed yet, sending just fails/no-ops either way.
+  email-host-password: cGxhY2Vob2xkZXItc210cC1wYXNzd29yZA==
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  # Fixed name, not one templated per commit/run: kept simple to delete-
+  # and-recreate on every deploy (Jobs are immutable once created, so a
+  # bare `kubectl apply` on an existing completed Job errors) - see
+  # .gitlab-ci.yml's `kubectl delete job ... --ignore-not-found` before
+  # this is applied, same idiom as drmab-web's registry-gitlab secret.
+  name: ngphylogeny-init
+spec:
+  # Auto-cleaned after an hour so completed Jobs don't pile up across
+  # every redeploy - kubectl delete above also gets rid of the previous
+  # one immediately regardless.
+  ttlSecondsAfterFinished: 3600
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app: ${NAMESPACE}
+        role: init
+    spec:
+      restartPolicy: Never
+      imagePullSecrets:
+        - name: registry-gitlab
+      containers:
+        - name: init
+          image: ${CI_REGISTRY_IMAGE}:${CI_COMMIT_REF_SLUG}
+          # Runs docker/init.sh as-is (migrations, admin user, tool_flags
+          # fixture, and - since NGPHYLO_GALAXY_URL/KEY are set below -
+          # linking the Galaxy server and importing its tools/workflows).
+          # No changes needed there for Kubernetes: it's already the
+          # same one-shot "run once before web/celery start" step
+          # docker-compose.yml's own `init` service uses, just run here
+          # as a Job instead of a compose service.
+          command: ["docker/init.sh"]
+          env:
+            - name: DJANGO_SETTINGS_MODULE
+              # Explicit on every single container below, not left to
+              # manage.py's own default (settings.local, DEBUG=True) -
+              # see CLAUDE.md's "NGPHYLO_SETTINGS_MODULE vs
+              # DJANGO_SETTINGS_MODULE" section for exactly how easy it
+              # is to silently end up running production under dev
+              # settings by getting this one variable name wrong.
+              value: "NGPhylogeny_fr.settings.prod"
+            - name: NGPHYLO_DATABASE_ENGINE
+              value: "django.db.backends.postgresql"
+            - name: NGPHYLO_DATABASE_HOST
+              value: "postgres"
+            - name: NGPHYLO_DATABASE_PORT
+              value: "5432"
+            - name: NGPHYLO_DATABASE_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: database
+            - name: NGPHYLO_DATABASE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: username
+            - name: NGPHYLO_DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: password
+            - name: NGPHYLO_REDIS_URL
+              value: "redis://redis:6379/0"
+            # The Pasteur Galaxy server - external to this cluster, not
+            # something this deployment runs (see CLAUDE.md's "upgrade
+            # vs the old master branch" / the bioblend x-api-key notes
+            # for what this app expects from whatever Galaxy it points
+            # at).
+            - name: NGPHYLO_GALAXY_URL
+              value: "${GALAXY_URL}"
+            - name: NGPHYLO_GALAXY_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ngphylogeny-credentials
+                  key: galaxy-key
+            - name: NGPHYLO_ADMIN_USER
+              value: "${ADMIN_USER}"
+            - name: NGPHYLO_ADMIN_EMAIL
+              value: "${ADMIN_EMAIL}"
+            - name: NGPHYLO_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ngphylogeny-credentials
+                  key: admin-password
+            - name: NGPHYLO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ngphylogeny-credentials
+                  key: secret-key
+            # Tells Django it's behind a TLS-terminating Ingress for this
+            # specific hostname - makes login/CSRF/session cookies work
+            # correctly (see settings/prod.py). Must match the Ingress
+            # host below.
+            - name: NGPHYLO_HTTPS_HOST
+              value: "${PUBLIC_URL}"
+            - name: NGPHYLO_EMAIL_HOST
+              value: "${EMAIL_HOST}"
+            - name: NGPHYLO_EMAIL_PORT
+              value: "${EMAIL_PORT}"
+            - name: NGPHYLO_EMAIL_HOST_USER
+              value: "${EMAIL_HOST_USER}"
+            - name: NGPHYLO_EMAIL_HOST_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ngphylogeny-credentials
+                  key: email-host-password
+            - name: NGPHYLO_EMAIL_USE_TLS
+              value: "${EMAIL_USE_TLS}"
+            - name: NGPHYLO_REPORT_RECIPIENTS
+              value: "${REPORT_RECIPIENTS}"
+            - name: NGPHYLO_REPORT_FROM_EMAIL
+              value: "${REPORT_FROM_EMAIL}"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ngphylogeny-web
+spec:
+  selector:
+    matchLabels:
+      app: ${NAMESPACE}
+      role: web
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: ${NAMESPACE}
+        role: web
+    spec:
+      imagePullSecrets:
+        - name: registry-gitlab
+      containers:
+        - name: web
+          image: ${CI_REGISTRY_IMAGE}:${CI_COMMIT_REF_SLUG}
+          imagePullPolicy: Always
+          # uwsgi (already a dependency - see requirement.txt), not
+          # `manage.py runserver` (Django's dev server, what
+          # docker-compose.yml uses for local/IFB-Cloud-VM deployment) -
+          # this is the one place across every existing deployment of
+          # this app that's actually meant to take real traffic behind a
+          # load balancer, so it gets a real WSGI server. Static files
+          # are already baked into the image (see Dockerfile's
+          # collectstatic step) and served by whitenoise regardless of
+          # which of these fronts it.
+          command: ["uwsgi"]
+          args:
+            - "--http"
+            - ":8000"
+            - "--module"
+            - "NGPhylogeny_fr.wsgi"
+            - "--master"
+            - "--processes"
+            - "4"
+            - "--threads"
+            - "2"
+            - "--harakiri"
+            - "120"
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DJANGO_SETTINGS_MODULE
+              # Explicit on every single container below, not left to
+              # manage.py's own default (settings.local, DEBUG=True) -
+              # see CLAUDE.md's "NGPHYLO_SETTINGS_MODULE vs
+              # DJANGO_SETTINGS_MODULE" section for exactly how easy it
+              # is to silently end up running production under dev
+              # settings by getting this one variable name wrong.
+              value: "NGPhylogeny_fr.settings.prod"
+            - name: NGPHYLO_DATABASE_ENGINE
+              value: "django.db.backends.postgresql"
+            - name: NGPHYLO_DATABASE_HOST
+              value: "postgres"
+            - name: NGPHYLO_DATABASE_PORT
+              value: "5432"
+            - name: NGPHYLO_DATABASE_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: database
+            - name: NGPHYLO_DATABASE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: username
+            - name: NGPHYLO_DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: password
+            - name: NGPHYLO_REDIS_URL
+              value: "redis://redis:6379/0"
+            # The Pasteur Galaxy server - external to this cluster, not
+            # something this deployment runs (see CLAUDE.md's "upgrade
+            # vs the old master branch" / the bioblend x-api-key notes
+            # for what this app expects from whatever Galaxy it points
+            # at).
+            - name: NGPHYLO_GALAXY_URL
+              value: "${GALAXY_URL}"
+            - name: NGPHYLO_GALAXY_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ngphylogeny-credentials
+                  key: galaxy-key
+            - name: NGPHYLO_ADMIN_USER
+              value: "${ADMIN_USER}"
+            - name: NGPHYLO_ADMIN_EMAIL
+              value: "${ADMIN_EMAIL}"
+            - name: NGPHYLO_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ngphylogeny-credentials
+                  key: admin-password
+            - name: NGPHYLO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ngphylogeny-credentials
+                  key: secret-key
+            # Tells Django it's behind a TLS-terminating Ingress for this
+            # specific hostname - makes login/CSRF/session cookies work
+            # correctly (see settings/prod.py). Must match the Ingress
+            # host below.
+            - name: NGPHYLO_HTTPS_HOST
+              value: "${PUBLIC_URL}"
+            - name: NGPHYLO_EMAIL_HOST
+              value: "${EMAIL_HOST}"
+            - name: NGPHYLO_EMAIL_PORT
+              value: "${EMAIL_PORT}"
+            - name: NGPHYLO_EMAIL_HOST_USER
+              value: "${EMAIL_HOST_USER}"
+            - name: NGPHYLO_EMAIL_HOST_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ngphylogeny-credentials
+                  key: email-host-password
+            - name: NGPHYLO_EMAIL_USE_TLS
+              value: "${EMAIL_USE_TLS}"
+            - name: NGPHYLO_REPORT_RECIPIENTS
+              value: "${REPORT_RECIPIENTS}"
+            - name: NGPHYLO_REPORT_FROM_EMAIL
+              value: "${REPORT_FROM_EMAIL}"
+          resources:
+            requests:
+              memory: "512Mi"
+            limits:
+              memory: "1Gi"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8000
+            # Generous initial delay: a cold uwsgi worker's first request
+            # (Django app loading, first DB connection) measured ~1-2s
+            # locally but can run longer under load/slower storage -
+            # matches drmab-web's own choice of a non-trivial delay here
+            # rather than assuming instant readiness.
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ngphylogeny-celery-worker
+spec:
+  selector:
+    matchLabels:
+      app: ${NAMESPACE}
+      role: celery-worker
+  # celery-beat (below) is a singleton by design - don't scale that one -
+  # but this one can go beyond 1 replica later if job-monitoring/BLAST
+  # throughput needs it; matches CELERY_TASK_ROUTES' default/monitor/
+  # ncbi_blast queues, all handled by the same worker process here, same
+  # as docker-compose.yml.
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: ${NAMESPACE}
+        role: celery-worker
+    spec:
+      imagePullSecrets:
+        - name: registry-gitlab
+      containers:
+        - name: celery-worker
+          image: ${CI_REGISTRY_IMAGE}:${CI_COMMIT_REF_SLUG}
+          imagePullPolicy: Always
+          command: ["celery"]
+          args: ["-A", "NGPhylogeny_fr.celery:app", "worker", "-l", "INFO",
+                  "-Q", "default,monitor,ncbi_blast"]
+          env:
+            - name: DJANGO_SETTINGS_MODULE
+              # Explicit on every single container below, not left to
+              # manage.py's own default (settings.local, DEBUG=True) -
+              # see CLAUDE.md's "NGPHYLO_SETTINGS_MODULE vs
+              # DJANGO_SETTINGS_MODULE" section for exactly how easy it
+              # is to silently end up running production under dev
+              # settings by getting this one variable name wrong.
+              value: "NGPhylogeny_fr.settings.prod"
+            - name: NGPHYLO_DATABASE_ENGINE
+              value: "django.db.backends.postgresql"
+            - name: NGPHYLO_DATABASE_HOST
+              value: "postgres"
+            - name: NGPHYLO_DATABASE_PORT
+              value: "5432"
+            - name: NGPHYLO_DATABASE_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: database
+            - name: NGPHYLO_DATABASE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: username
+            - name: NGPHYLO_DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: password
+            - name: NGPHYLO_REDIS_URL
+              value: "redis://redis:6379/0"
+            # The Pasteur Galaxy server - external to this cluster, not
+            # something this deployment runs (see CLAUDE.md's "upgrade
+            # vs the old master branch" / the bioblend x-api-key notes
+            # for what this app expects from whatever Galaxy it points
+            # at).
+            - name: NGPHYLO_GALAXY_URL
+              value: "${GALAXY_URL}"
+            - name: NGPHYLO_GALAXY_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ngphylogeny-credentials
+                  key: galaxy-key
+            - name: NGPHYLO_ADMIN_USER
+              value: "${ADMIN_USER}"
+            - name: NGPHYLO_ADMIN_EMAIL
+              value: "${ADMIN_EMAIL}"
+            - name: NGPHYLO_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ngphylogeny-credentials
+                  key: admin-password
+            - name: NGPHYLO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ngphylogeny-credentials
+                  key: secret-key
+            # Tells Django it's behind a TLS-terminating Ingress for this
+            # specific hostname - makes login/CSRF/session cookies work
+            # correctly (see settings/prod.py). Must match the Ingress
+            # host below.
+            - name: NGPHYLO_HTTPS_HOST
+              value: "${PUBLIC_URL}"
+            - name: NGPHYLO_EMAIL_HOST
+              value: "${EMAIL_HOST}"
+            - name: NGPHYLO_EMAIL_PORT
+              value: "${EMAIL_PORT}"
+            - name: NGPHYLO_EMAIL_HOST_USER
+              value: "${EMAIL_HOST_USER}"
+            - name: NGPHYLO_EMAIL_HOST_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ngphylogeny-credentials
+                  key: email-host-password
+            - name: NGPHYLO_EMAIL_USE_TLS
+              value: "${EMAIL_USE_TLS}"
+            - name: NGPHYLO_REPORT_RECIPIENTS
+              value: "${REPORT_RECIPIENTS}"
+            - name: NGPHYLO_REPORT_FROM_EMAIL
+              value: "${REPORT_FROM_EMAIL}"
+          resources:
+            requests:
+              memory: "256Mi"
+            limits:
+              memory: "1Gi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ngphylogeny-celery-beat
+spec:
+  selector:
+    matchLabels:
+      app: ${NAMESPACE}
+      role: celery-beat
+  # Must stay 1: celery-beat is a scheduler, not a work queue consumer -
+  # running more than one replica fires every periodic task (see
+  # CELERY_BEAT_SCHEDULE in settings/base.py: old-history cleanup, the
+  # daily report, BLAST monitoring, ...) multiple times over.
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: ${NAMESPACE}
+        role: celery-beat
+    spec:
+      imagePullSecrets:
+        - name: registry-gitlab
+      containers:
+        - name: celery-beat
+          image: ${CI_REGISTRY_IMAGE}:${CI_COMMIT_REF_SLUG}
+          imagePullPolicy: Always
+          command: ["celery"]
+          args: ["-A", "NGPhylogeny_fr.celery:app", "beat", "-l", "INFO"]
+          env:
+            - name: DJANGO_SETTINGS_MODULE
+              # Explicit on every single container below, not left to
+              # manage.py's own default (settings.local, DEBUG=True) -
+              # see CLAUDE.md's "NGPHYLO_SETTINGS_MODULE vs
+              # DJANGO_SETTINGS_MODULE" section for exactly how easy it
+              # is to silently end up running production under dev
+              # settings by getting this one variable name wrong.
+              value: "NGPhylogeny_fr.settings.prod"
+            - name: NGPHYLO_DATABASE_ENGINE
+              value: "django.db.backends.postgresql"
+            - name: NGPHYLO_DATABASE_HOST
+              value: "postgres"
+            - name: NGPHYLO_DATABASE_PORT
+              value: "5432"
+            - name: NGPHYLO_DATABASE_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: database
+            - name: NGPHYLO_DATABASE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: username
+            - name: NGPHYLO_DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: password
+            - name: NGPHYLO_REDIS_URL
+              value: "redis://redis:6379/0"
+            # The Pasteur Galaxy server - external to this cluster, not
+            # something this deployment runs (see CLAUDE.md's "upgrade
+            # vs the old master branch" / the bioblend x-api-key notes
+            # for what this app expects from whatever Galaxy it points
+            # at).
+            - name: NGPHYLO_GALAXY_URL
+              value: "${GALAXY_URL}"
+            - name: NGPHYLO_GALAXY_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ngphylogeny-credentials
+                  key: galaxy-key
+            - name: NGPHYLO_ADMIN_USER
+              value: "${ADMIN_USER}"
+            - name: NGPHYLO_ADMIN_EMAIL
+              value: "${ADMIN_EMAIL}"
+            - name: NGPHYLO_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ngphylogeny-credentials
+                  key: admin-password
+            - name: NGPHYLO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ngphylogeny-credentials
+                  key: secret-key
+            # Tells Django it's behind a TLS-terminating Ingress for this
+            # specific hostname - makes login/CSRF/session cookies work
+            # correctly (see settings/prod.py). Must match the Ingress
+            # host below.
+            - name: NGPHYLO_HTTPS_HOST
+              value: "${PUBLIC_URL}"
+            - name: NGPHYLO_EMAIL_HOST
+              value: "${EMAIL_HOST}"
+            - name: NGPHYLO_EMAIL_PORT
+              value: "${EMAIL_PORT}"
+            - name: NGPHYLO_EMAIL_HOST_USER
+              value: "${EMAIL_HOST_USER}"
+            - name: NGPHYLO_EMAIL_HOST_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ngphylogeny-credentials
+                  key: email-host-password
+            - name: NGPHYLO_EMAIL_USE_TLS
+              value: "${EMAIL_USE_TLS}"
+            - name: NGPHYLO_REPORT_RECIPIENTS
+              value: "${REPORT_RECIPIENTS}"
+            - name: NGPHYLO_REPORT_FROM_EMAIL
+              value: "${REPORT_FROM_EMAIL}"
+          resources:
+            requests:
+              memory: "128Mi"
+            limits:
+              memory: "256Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ngphylogeny-web
+  labels:
+    app: ${NAMESPACE}
+    role: web
+spec:
+  selector:
+    app: ${NAMESPACE}
+    role: web
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8000
+      protocol: TCP
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ngphylogeny-web
+  labels:
+    app: ${NAMESPACE}
+    role: web
+  annotations:
+    kubernetes.io/ingress.class: "${INGRESS_CLASS}"
+    # Uploaded alignment files can be sizeable - don't let nginx's
+    # default body-size cap silently reject them (matches drmab-web,
+    # which handles arbitrarily large FASTQ uploads for the same
+    # reason).
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+spec:
+  rules:
+    - host: ${PUBLIC_URL}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ngphylogeny-web
+                port:
+                  number: 80

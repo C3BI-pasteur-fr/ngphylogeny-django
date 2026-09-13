@@ -211,3 +211,17 @@ Re-running `docker compose -f docker-compose.standalone.yml up -d` (without
 `down -v` first) is safe: the workflow import step skips workflows that
 already exist by name, and NGPhylogeny's own `init` is idempotent for the
 same reasons the regular `docker-compose.yml` deployment is (see CLAUDE.md).
+
+## Kubernetes (GitLab CI)
+
+`.gitlab-ci.yml`'s `build`/`deploy-dev`/`deploy-prod` stages build this
+same `Dockerfile` image and deploy it to a Kubernetes cluster via
+`kubectl apply` of `manifest_datastores.yaml` (Postgres, Redis) and
+`manifest.yaml` (the app itself - a one-shot init `Job`, `web`/
+`celery-worker`/`celery-beat` Deployments, a Service, and an Ingress),
+env-var-templated via `envsubst`. Galaxy itself is external - point
+`NGPHYLO_GALAXY_URL`/the Secret's `galaxy-key` at an already-running
+Galaxy server (the Pasteur Galaxy server, for this deployment), same as
+every other deployment path in this repo. See CLAUDE.md's "Kubernetes
+deployment" section for what's still a placeholder (cluster/namespace
+access doesn't exist yet) and what each manifest actually does.
