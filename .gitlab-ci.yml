@@ -1,7 +1,10 @@
 # GitLab CI/CD for NGPhylogeny_fr_django.
 #
-# Current scope: lint + test only, targeting Python 3.8 / Django 4.2
-# (the last Django LTS). No Docker build/push/deploy stage yet.
+# lint + test (Python 3.8 / Django 4.2), then build (Docker image, pushed
+# to this project's own GitLab registry) and deploy (Kubernetes, via
+# kubectl) - see CLAUDE.md's "Kubernetes deployment" section and
+# manifest.yaml/manifest_datastores.yaml for the actual resources.
+# Structure mirrors drmab-web's own .gitlab-ci.yml.
 #
 # NOTE: if your GitLab runners are tag-scoped, add a `tags:` list to each
 # job below matching your runner setup - this file intentionally leaves
@@ -13,10 +16,19 @@ workflow:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    # This repo's default branch is `master` (the old pre-rewrite
+    # codebase, kept as-is - see CLAUDE.md's "upgrade vs the old master
+    # branch") - without this rule, pipelines never ran at all on
+    # `upgrade`, which is where every actual deployment in this repo's
+    # history has come from. Adjust if/when `upgrade` is promoted to the
+    # project's actual default branch instead.
+    - if: '$CI_COMMIT_BRANCH == "upgrade"'
 
 stages:
   - lint
   - test
+  - build
+  - deploy
 
 variables:
   DJANGO_SETTINGS_MODULE: "NGPhylogeny_fr.settings.local"
@@ -50,3 +62,109 @@ test:
     - python manage.py migrate
     - python manage.py check
     - python manage.py test
+
+build:
+  image: docker:24.0.9
+  stage: build
+  services:
+    - docker:24.0.9-dind
+  variables:
+    # The dind service generates TLS certs by default and listens on
+    # 2376, but nothing here shares that cert dir with this job's own
+    # container -- hence "x509: certificate signed by unknown authority
+    # ... docker:dind CA" on docker login/build. The dind service is only
+    # reachable within this job's own isolated network, not exposed
+    # externally, so drop TLS for it instead of wiring up a shared certs
+    # volume. DOCKER_TLS_VERIFY/DOCKER_CERT_PATH must also be cleared
+    # explicitly -- the runner predefines them (pointing at
+    # /client/ca.pem), and DOCKER_TLS_CERTDIR="" alone only stops the
+    # dind *service* from generating certs, it doesn't stop the *client*
+    # from still trying to verify against a cert path that now has
+    # nothing in it. Same setup as drmab-web's own build job.
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+    DOCKER_TLS_VERIFY: ""
+    DOCKER_CERT_PATH: ""
+  before_script:
+    # The dind service container starting doesn't mean its dockerd is
+    # already accepting connections yet -- GitLab's `services:` has no
+    # readiness check for this, so a job that immediately runs `docker
+    # login`/`build` can hit "Cannot connect to the Docker daemon at
+    # tcp://docker:2375" as a transient startup race. Wait for it.
+    - |
+      for i in $(seq 1 30); do
+          docker info >/dev/null 2>&1 && break
+          echo "Waiting for the docker daemon to be ready ($i/30)..."
+          sleep 1
+      done
+      docker info >/dev/null 2>&1 || (echo "docker daemon never became ready" && exit 1)
+  script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
+    - docker build --cache-from "$CI_REGISTRY_IMAGE:latest" --cache-from "$CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG" --tag "$CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG" --tag "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA" --tag "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA" .
+    - docker push "$CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG"
+    - docker push "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA"
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "upgrade"'
+
+.deploy: &deploy
+  stage: deploy
+  image: registry-gitlab.pasteur.fr/dsi-tools/docker-images:docker_kubernetes_image
+  script:
+    - yum install gettext -y
+    - kubectl delete secret registry-gitlab -n $NAMESPACE --ignore-not-found=true || true
+    - kubectl create secret docker-registry -n ${NAMESPACE} registry-gitlab --docker-server=registry-gitlab.pasteur.fr --docker-username=${DEPLOY_USER} --docker-password=${DEPLOY_TOKEN} --docker-email=kubernetes@pasteur.fr --dry-run -o yaml | kubectl apply -n ${NAMESPACE} -f -
+    - envsubst < manifest_datastores.yaml | kubectl apply -n ${NAMESPACE} -f -
+    - kubectl wait --for=condition=available --timeout=600s deployment/postgres -n ${NAMESPACE}
+    - kubectl wait --for=condition=available --timeout=600s deployment/redis -n ${NAMESPACE}
+    # Jobs are immutable once created - delete the previous run's before
+    # applying this one, same idiom as the registry secret above.
+    - kubectl delete job ngphylogeny-init -n $NAMESPACE --ignore-not-found=true || true
+    - envsubst < manifest.yaml | kubectl apply -n ${NAMESPACE} -f -
+    - kubectl wait --for=condition=complete --timeout=600s job/ngphylogeny-init -n ${NAMESPACE}
+    # Forces a rollout even though the image tag itself
+    # (${CI_COMMIT_REF_SLUG}) doesn't change between deploys - without
+    # this, imagePullPolicy: Always still only re-pulls on a pod's next
+    # *natural* restart, not on demand. Same trick as drmab-web.
+    - kubectl patch deployment -n ${NAMESPACE} ngphylogeny-web -p "{\"spec\":{\"template\":{\"metadata\":{\"labels\":{\"date\":\"`date +'%s'`\"}}}}}"
+    - kubectl patch deployment -n ${NAMESPACE} ngphylogeny-celery-worker -p "{\"spec\":{\"template\":{\"metadata\":{\"labels\":{\"date\":\"`date +'%s'`\"}}}}}"
+    - kubectl patch deployment -n ${NAMESPACE} ngphylogeny-celery-beat -p "{\"spec\":{\"template\":{\"metadata\":{\"labels\":{\"date\":\"`date +'%s'`\"}}}}}"
+
+# Both deploy jobs, the namespace/environment/domain names, and the
+# Kubernetes cluster access itself (Deploy Token, kubectl context for the
+# runner) are placeholders/assumptions - none of this exists yet for
+# NGPhylogeny at Pasteur (unlike drmab-prod/drmab-dev, which already did
+# when drmab-web's own pipeline was written). Confirm the real namespace/
+# environment/domain names once cluster access is actually provisioned,
+# and set DEPLOY_USER/DEPLOY_TOKEN plus every ${...}-templated value
+# manifest.yaml/manifest_datastores.yaml reference (GALAXY_URL, ADMIN_USER,
+# ADMIN_EMAIL, EMAIL_HOST, EMAIL_PORT, EMAIL_HOST_USER, EMAIL_USE_TLS,
+# REPORT_RECIPIENTS, REPORT_FROM_EMAIL) as GitLab CI/CD variables, scoped
+# to each job's "Environment" (Settings -> CI/CD -> Variables) - see
+# CLAUDE.md for the full list and what each controls.
+deploy-dev:
+  <<: *deploy
+  variables:
+    NAMESPACE: "ngphylogeny-dev"
+    PUBLIC_URL: "ngphylogeny.dev.pasteur.cloud"
+    INGRESS_CLASS: "internal"
+  environment:
+    name: k8sdev-ngphylogeny-dev
+    url: https://ngphylogeny.dev.pasteur.cloud
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "upgrade"'
+
+deploy-prod:
+  <<: *deploy
+  variables:
+    NAMESPACE: "ngphylogeny-prod"
+    PUBLIC_URL: "ngphylogeny.pasteur.cloud"
+    INGRESS_CLASS: "external"
+  environment:
+    name: k8sprod-ngphylogeny
+    url: https://ngphylogeny.pasteur.cloud
+  rules:
+    # Manual, not automatic on every push - unlike dev, a production
+    # rollout should be a deliberate action even once this pipeline is
+    # otherwise green. Trigger it from the pipeline's own page in GitLab.
+    - if: '$CI_COMMIT_BRANCH == "upgrade"'
+      when: manual

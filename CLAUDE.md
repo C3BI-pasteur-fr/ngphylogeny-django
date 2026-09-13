@@ -340,6 +340,75 @@ Advanced-form path and an actual rerun. `reports.py`'s `CATEGORY_LABELS`
 relabels it for display (`'duplicated'` → `"Advanced"`) but doesn't change
 what's actually being counted.
 
+### Kubernetes deployment (GitLab CI)
+
+A third deployment path, alongside `docker-compose.yml` (local/dev) and
+the IFB Cloud VM setup (`IFB_CLOUD.md`, untracked — see below): `.gitlab-ci.yml`'s
+`build`/`deploy-dev`/`deploy-prod` stages build the same `Dockerfile` image,
+push it to this project's own GitLab container registry, and `kubectl
+apply` `manifest_datastores.yaml` (Postgres + Redis, each their own
+Deployment+PVC/none) then `manifest.yaml` (a one-shot `Job` for
+`docker/init.sh`, then `web`/`celery-worker`/`celery-beat` Deployments +
+Service + Ingress) to a Kubernetes cluster. Structure mirrors
+[drmab-web](https://github.com/evolbioinfo/drmab-web)'s own
+`.gitlab-ci.yml`/`manifest.yaml`/`manifest_mysql.yaml` closely (same
+`docker:dind` build job, same env-var-templated-via-`envsubst` deploy
+jobs, same `kubectl patch ... labels: {date: ...}` forced-rollout trick),
+adapted for this app's shape.
+
+**Galaxy is external, not deployed by this** — per an explicit decision:
+`NGPHYLO_GALAXY_URL`/`NGPHYLO_GALAXY_KEY` point at the Pasteur Galaxy
+server, the same way drmab-web's own `GALAXYURL`/`GALAXYKEY` point at a
+Galaxy instance it doesn't run either. Deploying Galaxy itself into
+Kubernetes (its current job-execution model is privileged Docker-in-
+Docker — see `NGPhylogeny_fr_galaxytools`'s CLAUDE.md — which doesn't
+translate directly to Kubernetes without re-architecting around Galaxy's
+own Kubernetes job runner or the official Galaxy Helm chart) was
+deliberately out of scope here.
+
+**None of the actual cluster access exists yet** — unlike drmab-prod/
+drmab-dev, which already had a namespace, GitLab Environment, and Deploy
+Token configured when drmab-web's pipeline was written. Every namespace/
+environment/domain name in `.gitlab-ci.yml` (`ngphylogeny-dev`/
+`ngphylogeny-prod`, `k8sdev-ngphylogeny-dev`/`k8sprod-ngphylogeny`,
+`ngphylogeny.dev.pasteur.cloud`/`ngphylogeny.pasteur.cloud`) is a
+placeholder guess following drmab-web's own naming convention, not a real,
+provisioned target — confirm the real ones once cluster access exists, and
+update both `.gitlab-ci.yml` and (for the public hostname) `manifest.yaml`'s
+`NGPHYLO_HTTPS_HOST`/Ingress `host` to match. `deploy-dev` triggers on
+every push to `upgrade`; `deploy-prod` requires a manual trigger from the
+pipeline page even then, on purpose — nothing rolls out to production
+automatically.
+
+**Static files are baked into the image at build time**
+(`Dockerfile`'s `RUN python manage.py collectstatic --noinput`), not
+shared via a volume between the init step and `web` the way
+`docker-compose.yml`'s `ngphylo-static` volume does — Kubernetes' one-shot
+init `Job` and the `web` Deployment are separate pods with no shared
+filesystem by default, and provisioning a PVC just to share static assets
+between them would be needless complexity when baking them into the image
+works everywhere (docker-compose included — `docker/init.sh` still runs
+its own `collectstatic` too, redundant but harmless there).
+
+**`manifest.yaml`'s Secret (`ngphylogeny-credentials`) has placeholder
+values checked in**, same pattern as drmab-web's `mysql-credentials` —
+decode/replace them (or override the Secret out-of-band) before relying on
+this for anything real; the comments directly on it say what each key is
+for. Unlike drmab-web (which passed its Galaxy API key as a plain
+`envsubst`'d value, not a Secret), `NGPHYLO_GALAXY_KEY` here does go
+through the Secret — no reason to leave an API key less protected than the
+DB password sitting right next to it.
+
+**Every container (`init` Job, `web`, `celery-worker`, `celery-beat`) sets
+`DJANGO_SETTINGS_MODULE` explicitly** to `NGPhylogeny_fr.settings.prod` in
+its own `env:` list (no anchor/YAML-reuse across them — anchors don't
+survive across `---`-separated documents in the same file, only within
+one; `kubectl apply --dry-run` catching an unresolvable anchor reference is
+exactly how this was found while writing these manifests). This is the
+same variable-name trap documented in "`NGPHYLO_SETTINGS_MODULE` vs
+`DJANGO_SETTINGS_MODULE`" above for the IFB Cloud deployment — getting it
+wrong doesn't error, it just silently serves `DEBUG=True`.
+
 ### `upgrade` vs the old `master` branch
 
 `upgrade` (this branch) is a from-scratch Python 2→3 / Django 1.11→4.2 /
