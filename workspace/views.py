@@ -91,8 +91,12 @@ def get_or_create_history(request, name=''):
     """
     history_id = get_history(request)
     if not history_id:
-        # Create a new galaxy history
-        history_id = create_history(request, name)
+        # Create a new galaxy history - create_history() returns the
+        # WorkspaceHistory model instance (other callers, e.g.
+        # tools/views.py, need it for its FKs/wf_category/wf_steps), not
+        # a plain id - unwrap .history here to actually satisfy this
+        # function's own "return: history_id" contract.
+        history_id = create_history(request, name).history
 
     return history_id
 
