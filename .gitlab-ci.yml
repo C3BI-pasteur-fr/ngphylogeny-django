@@ -109,6 +109,18 @@ build:
 .deploy: &deploy
   stage: deploy
   image: registry-gitlab.pasteur.fr/dsi-tools/docker-images:docker_kubernetes_image
+  # Pin to a runner that actually has kubectl access to the target
+  # cluster - without this, GitLab can schedule the job on any available
+  # runner (this project has several), including one with no route to
+  # this cluster/namespace at all. That looks identical to a missing RBAC
+  # grant from the job's own output (same generic gitlab-runner:default
+  # identity in the resulting Forbidden error either way), so this may or
+  # may not have been the actual cause of the first two failed deploy
+  # attempts - k8s-rbac-gitlab-runner.yaml is still needed regardless,
+  # since routing to the right runner doesn't by itself grant that
+  # runner's ServiceAccount any RBAC in this namespace.
+  tags:
+    - k8s
   # Override the global before_script (pip install -r requirement.txt) -
   # this job's image is kubectl/yum-based, not Python, and doesn't need
   # this repo's Python deps at all. Without this override it inherits the
@@ -181,7 +193,7 @@ deploy-dev:
     PUBLIC_URL: "ngphylogenyfr.dev.pasteur.cloud"
     INGRESS_CLASS: "internal"
   environment:
-    name: k8sdev-ngphylogenyfr-dev
+    name: k8sdev-01-ngphylogenyfr-dev
     url: https://ngphylogenyfr.dev.pasteur.cloud
   rules:
     - if: '$CI_COMMIT_BRANCH == "upgrade"'
@@ -189,12 +201,12 @@ deploy-dev:
 deploy-prod:
   <<: *deploy
   variables:
-    NAMESPACE: "ngphylogeny-prod"
-    PUBLIC_URL: "ngphylogeny.pasteur.cloud"
+    NAMESPACE: "ngphylogenyfr-prod"
+    PUBLIC_URL: "ngphylogenyfr.pasteur.cloud"
     INGRESS_CLASS: "external"
   environment:
-    name: k8sprod-ngphylogeny
-    url: https://ngphylogeny.pasteur.cloud
+    name: k8sprod-02-ngphylogenyfr
+    url: https://ngphylogenyfr.pasteur.cloud
   rules:
     # Manual, not automatic on every push - unlike dev, a production
     # rollout should be a deliberate action even once this pipeline is
