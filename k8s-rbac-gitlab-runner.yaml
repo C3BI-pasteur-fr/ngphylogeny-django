@@ -1,0 +1,45 @@
+# Not applied by the pipeline itself - the gitlab-runner:default
+# ServiceAccount lacks write access in this namespace to begin with, so it
+# can't grant itself more (chicken-and-egg). Hand this to whoever
+# administers the cluster/runner to `kubectl apply -f` once, or have them
+# reproduce it however namespace RBAC is normally granted there.
+#
+# Needed because deploy-dev/deploy-prod's `.deploy` script (.gitlab-ci.yml)
+# creates/updates/deletes Secrets, Deployments, Jobs, Services and
+# Ingresses in this namespace, and `kubectl wait` needs get/watch on
+# Deployments and Jobs. First surfaced as:
+#   Error from server (Forbidden): secrets "registry-gitlab" is forbidden:
+#   User "system:serviceaccount:gitlab-runner:default" cannot delete
+#   resource "secrets" in API group "" in the namespace "ngphylogenyfr-dev"
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: ngphylogenyfr-dev
+  name: gitlab-deploy
+rules:
+  - apiGroups: [""]
+    resources: ["secrets", "services", "pods", "persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  namespace: ngphylogenyfr-dev
+  name: gitlab-deploy-binding
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: gitlab-runner
+roleRef:
+  kind: Role
+  name: gitlab-deploy
+  apiGroup: rbac.authorization.k8s.io

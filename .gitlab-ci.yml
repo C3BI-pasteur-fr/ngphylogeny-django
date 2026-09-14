@@ -117,6 +117,23 @@ build:
   # its own dind-readiness before_script).
   before_script: []
   script:
+    # Fail fast with a clear message if a required CI/CD variable isn't
+    # actually reaching this job (wrong name, wrong Environment scope, or
+    # a Protected variable on an unprotected branch all look identical
+    # from here) - without this, a missing variable instead surfaces many
+    # steps later as a cryptic kubectl error (e.g. "flag docker-username
+    # is required" for an empty $DEPLOY_USER).
+    - |
+      missing=""
+      for var in NAMESPACE PUBLIC_URL INGRESS_CLASS DEPLOY_USER DEPLOY_TOKEN GALAXY_URL ADMIN_USER ADMIN_EMAIL POSTGRES_PASSWORD DJANGO_SECRET_KEY ADMIN_PASSWORD GALAXY_KEY; do
+        eval "val=\${$var:-}"
+        if [ -z "$val" ]; then missing="$missing $var"; fi
+      done
+      if [ -n "$missing" ]; then
+        echo "Missing required CI/CD variable(s):$missing"
+        echo "Check they're set in Settings -> CI/CD -> Variables, scoped to this job's Environment (${CI_ENVIRONMENT_NAME:-unset}) or 'All environments', and that Protected variables are allowed on this branch."
+        exit 1
+      fi
     - yum install gettext -y
     - kubectl delete secret registry-gitlab -n $NAMESPACE --ignore-not-found=true || true
     - kubectl create secret docker-registry -n ${NAMESPACE} registry-gitlab --docker-server=registry-gitlab.pasteur.fr --docker-username=${DEPLOY_USER} --docker-password=${DEPLOY_TOKEN} --docker-email=kubernetes@pasteur.fr --dry-run -o yaml | kubectl apply -n ${NAMESPACE} -f -
