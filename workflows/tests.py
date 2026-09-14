@@ -164,7 +164,8 @@ class DeleteOldGalaxyWorkflowsTest(TestCase):
             name='PhyML OneClick', category='duplicated',
             description='PhyML OneClick',
             slug='%s_PhyML OneClick_copy' % id_galaxy,
-            date=timezone.now() - timedelta(days=2))
+            # Older than deleteoldgalaxyworkflows()'s 7-day cutoff.
+            date=timezone.now() - timedelta(days=8))
 
     def test_deletes_orphaned_workflow_on_success(self):
         wf = self._make_orphan_workflow('orphan-ok')
@@ -194,9 +195,20 @@ class DeleteOldGalaxyWorkflowsTest(TestCase):
         self.assertTrue(Workflow.objects.filter(pk=wf_fail.pk).exists())
         self.assertFalse(Workflow.objects.filter(pk=wf_ok.pk).exists())
 
-    def test_workflow_still_associated_with_a_history_is_not_touched(self):
+    def test_workflow_associated_with_a_history_is_also_deleted(self):
+        """
+        deleteoldgalaxyworkflows() no longer skips a workflow just because
+        a WorkspaceHistory references it - real usage left hundreds of
+        thousands of old, actually-run duplicated workflows never cleaned
+        up by either this task (originally never-run-only) or
+        deleteoldgalaxyhistory's own narrower per-history cleanup. A
+        workflow's Galaxy definition is safe to drop independently of its
+        history's own (much longer) retention window, since the history's
+        actual data lives separately from the workflow "recipe" that
+        launched it.
+        """
         wf = self._make_orphan_workflow('in-use')
-        WorkspaceHistory.objects.create(
+        history = WorkspaceHistory.objects.create(
             history='hist1', name='test', email='', monitored=True,
             finished=False, source_ip='127.0.0.1',
             workflow_category='OneClick', workflow_steps='',
@@ -204,8 +216,14 @@ class DeleteOldGalaxyWorkflowsTest(TestCase):
         with patch('workflows.tasks.deletegalaxyworkflow',
                    return_value=True) as mock_delete:
             deleteoldgalaxyworkflows()
-        mock_delete.assert_not_called()
-        self.assertTrue(Workflow.objects.filter(pk=wf.pk).exists())
+        mock_delete.assert_called_once_with('in-use')
+        self.assertFalse(Workflow.objects.filter(pk=wf.pk).exists())
+        # w.delete() SET_NULLs any WorkspaceHistory.workflow FK pointing
+        # here - deleteoldgalaxyhistory relies on seeing workflow=None to
+        # know there's nothing left to delete if it processes this same
+        # history afterwards.
+        history.refresh_from_db()
+        self.assertIsNone(history.workflow)
 
 
 class ProcessFileToUploadTest(TestCase):

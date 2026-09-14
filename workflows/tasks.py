@@ -8,7 +8,6 @@ from datetime import timedelta
 from celery.utils.log import get_task_logger
 
 from workflows.models import Workflow
-from workspace.models import WorkspaceHistory
 from galaxy.decorator import galaxy_connection
 from django.db import transaction
 from django.utils import timezone
@@ -37,23 +36,41 @@ def deletegalaxyworkflow(workflow_galaxyid):
         return False
 
 
-# Every day at 2am, remove workflows older than 1 day from galaxy and that are not
-# associated to a workspace (i.e. have not been executed)
+# Every day at 2am (same schedule as workspace.tasks.deleteoldgalaxyhistory's
+# own per-history workflow cleanup, see below), remove every non-base
+# workflow older than 7 days from Galaxy - regardless of whether it was
+# ever actually run. This used to only catch workflows with zero
+# associated WorkspaceHistory (created but never run) on a 1-day cutoff -
+# anything that WAS run stayed in Galaxy forever unless its own specific
+# linked WorkspaceHistory happened to independently satisfy
+# deleteoldgalaxyhistory's narrower conditions (finished=True, 14-day
+# cutoff, workflow FK actually set) at cleanup time. Real usage over years
+# left hundreds of thousands of duplicated-category rows never touched by
+# either task - see the one-off cleanup this mirrors,
+# scripts/cleanup_old_galaxy_workflows.sh.
+#
+# Deleting a workflow definition doesn't touch its associated History's
+# actual data (datasets/job outputs live in the History, not the
+# Workflow) - so there's no need to wait for that history's own 14-day
+# retention window before dropping the workflow "recipe" that launched
+# it. w.delete() also SET_NULLs any WorkspaceHistory.workflow FK pointing
+# here (see that field's on_delete), so if deleteoldgalaxyhistory
+# processes the same history afterwards it correctly sees workflow=None
+# and skips re-deleting anything already gone; if it runs first instead,
+# it already marks the Workflow row deleted=True itself, so this task's
+# own deleted=False filter skips it in turn - safe regardless of which of
+# the two tasks Celery happens to run first.
 @shared_task
 def deleteoldgalaxyworkflows():
     logger.info("Start old workflow deletion task")
-    datecutoff = timezone.now() - timedelta(days=1)
+    datecutoff = timezone.now() - timedelta(days=7)
     for w in Workflow.objects.exclude(category='base').filter(date__lte=datecutoff).filter(deleted=False):
         try:
-            # No associated workspace: this workflow was created (e.g. the
-            # user opened a submission form) but never actually run - safe
-            # to drop.
-            if WorkspaceHistory.objects.filter(workflow=w.id).count() == 0:
-                if deletegalaxyworkflow(w.id_galaxy):
-                    w.delete()
-                # else: leave deleted=False - deletegalaxyworkflow already
-                # logged why, and this will be retried on the next run
-                # instead of silently disappearing from future cleanups.
+            if deletegalaxyworkflow(w.id_galaxy):
+                w.delete()
+            # else: leave deleted=False - deletegalaxyworkflow already
+            # logged why, and this will be retried on the next run
+            # instead of silently disappearing from future cleanups.
         except Exception as e:
             logging.warning(
                 "Problem while deleting old workflow %s: %s" %
