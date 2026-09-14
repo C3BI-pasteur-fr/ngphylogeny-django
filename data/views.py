@@ -94,7 +94,7 @@ class UploadView(UploadMixin, FormView):
 
         self.success_url = reverse_lazy("history_detail", kwargs={'history_id': self.history_id}, )
 
-        return super(UploadView, self).form_valid()
+        return super(UploadView, self).form_valid(form)
     
 
 @connection_galaxy
