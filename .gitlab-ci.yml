@@ -109,6 +109,13 @@ build:
 .deploy: &deploy
   stage: deploy
   image: registry-gitlab.pasteur.fr/dsi-tools/docker-images:docker_kubernetes_image
+  # Override the global before_script (pip install -r requirement.txt) -
+  # this job's image is kubectl/yum-based, not Python, and doesn't need
+  # this repo's Python deps at all. Without this override it inherits the
+  # global one and fails immediately with "pip: command not found" before
+  # ever reaching `script:` (the `build` job avoids this the same way, via
+  # its own dind-readiness before_script).
+  before_script: []
   script:
     - yum install gettext -y
     - kubectl delete secret registry-gitlab -n $NAMESPACE --ignore-not-found=true || true
