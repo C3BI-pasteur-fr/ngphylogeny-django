@@ -129,27 +129,36 @@ build:
     - kubectl patch deployment -n ${NAMESPACE} ngphylogeny-celery-worker -p "{\"spec\":{\"template\":{\"metadata\":{\"labels\":{\"date\":\"`date +'%s'`\"}}}}}"
     - kubectl patch deployment -n ${NAMESPACE} ngphylogeny-celery-beat -p "{\"spec\":{\"template\":{\"metadata\":{\"labels\":{\"date\":\"`date +'%s'`\"}}}}}"
 
-# Both deploy jobs, the namespace/environment/domain names, and the
-# Kubernetes cluster access itself (Deploy Token, kubectl context for the
-# runner) are placeholders/assumptions - none of this exists yet for
-# NGPhylogeny at Pasteur (unlike drmab-prod/drmab-dev, which already did
-# when drmab-web's own pipeline was written). Confirm the real namespace/
-# environment/domain names once cluster access is actually provisioned,
-# and set DEPLOY_USER/DEPLOY_TOKEN plus every ${...}-templated value
-# manifest.yaml/manifest_datastores.yaml reference (GALAXY_URL, ADMIN_USER,
-# ADMIN_EMAIL, EMAIL_HOST, EMAIL_PORT, EMAIL_HOST_USER, EMAIL_USE_TLS,
-# REPORT_RECIPIENTS, REPORT_FROM_EMAIL) as GitLab CI/CD variables, scoped
-# to each job's "Environment" (Settings -> CI/CD -> Variables) - see
-# CLAUDE.md for the full list and what each controls.
+# deploy-dev's namespace/domain are real and confirmed (2026-09: the
+# ngphylogenyfr-dev namespace + Deploy Token + kubectl context for the
+# runner already exist). deploy-prod's are still a placeholder/guess
+# matching drmab-web's naming convention - nothing prod-side exists yet;
+# confirm the real namespace/environment/domain once it does.
+#
+# Every job scoped to each deploy's "Environment" (Settings -> CI/CD ->
+# Variables in GitLab) needs:
+#   - DEPLOY_USER / DEPLOY_TOKEN: a GitLab Deploy Token (read_registry
+#     scope) for the `registry-gitlab` imagePullSecret.
+#   - Plain (unmasked) values, envsubst'd straight into manifest.yaml:
+#     GALAXY_URL, ADMIN_USER, ADMIN_EMAIL, EMAIL_HOST, EMAIL_PORT,
+#     EMAIL_HOST_USER, EMAIL_USE_TLS, REPORT_RECIPIENTS, REPORT_FROM_EMAIL.
+#   - Masked + protected values, envsubst'd into the two Secrets in
+#     manifest.yaml/manifest_datastores.yaml (stringData, never committed):
+#     POSTGRES_PASSWORD, DJANGO_SECRET_KEY (generate with
+#     `python -c "import secrets; print(secrets.token_urlsafe(48))"`),
+#     ADMIN_PASSWORD, GALAXY_KEY (a Pasteur Galaxy admin API key),
+#     EMAIL_HOST_PASSWORD (leave unset/empty if email isn't needed yet -
+#     sending just no-ops, same as every other deployment in this repo).
+# See CLAUDE.md's "Kubernetes deployment" section for more detail.
 deploy-dev:
   <<: *deploy
   variables:
-    NAMESPACE: "ngphylogeny-dev"
-    PUBLIC_URL: "ngphylogeny.dev.pasteur.cloud"
+    NAMESPACE: "ngphylogenyfr-dev"
+    PUBLIC_URL: "ngphylogenyfr.dev.pasteur.cloud"
     INGRESS_CLASS: "internal"
   environment:
-    name: k8sdev-ngphylogeny-dev
-    url: https://ngphylogeny.dev.pasteur.cloud
+    name: k8sdev-ngphylogenyfr-dev
+    url: https://ngphylogenyfr.dev.pasteur.cloud
   rules:
     - if: '$CI_COMMIT_BRANCH == "upgrade"'
 

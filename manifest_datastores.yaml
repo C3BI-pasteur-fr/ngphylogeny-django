@@ -21,14 +21,15 @@ kind: Secret
 metadata:
   name: postgres-credentials
 type: Opaque
-data:
-  # Placeholder credentials - decode/replace these (or override the
-  # Secret out-of-band, e.g. via a separate `kubectl apply` from a
-  # secrets-management pipeline) before relying on this for a real
-  # deployment. Same pattern as drmab-web's manifest_mysql.yaml.
-  username: bmdwaHlsbw==
-  password: bmdwaHlsb19rOHNfZGV2
-  database: bmdwaHlsbw==
+stringData:
+  # username/database aren't sensitive - fixed across every environment.
+  # password comes from the POSTGRES_PASSWORD GitLab CI/CD variable
+  # (masked, protected, scoped to this job's Environment) via envsubst -
+  # never committed to git. See .gitlab-ci.yml's `.deploy` comment for the
+  # full list of variables a real deploy needs set.
+  username: ngphylo
+  database: ngphylo
+  password: "${POSTGRES_PASSWORD}"
 ---
 apiVersion: apps/v1
 kind: Deployment

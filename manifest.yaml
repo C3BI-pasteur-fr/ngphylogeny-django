@@ -4,28 +4,28 @@ kind: Secret
 metadata:
   name: ngphylogeny-credentials
 type: Opaque
-data:
-  # Placeholder values - decode/replace these (or override the Secret
-  # out-of-band, e.g. from a separate secrets-management pipeline) before
-  # relying on this for a real deployment. Same pattern as
-  # postgres-credentials/drmab-web's mysql-credentials.
+stringData:
+  # Every value here comes from a masked/protected GitLab CI/CD variable
+  # (scoped to this job's Environment), substituted by envsubst at deploy
+  # time - none of it is committed to git. See .gitlab-ci.yml's `.deploy`
+  # comment for the full list of variables a real deploy needs set.
   #
   # secret-key: Django's SECRET_KEY - generate a real one with
   #   `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
-  secret-key: cGxhY2Vob2xkZXItZGphbmdvLXNlY3JldC1rZXk=
+  secret-key: "${DJANGO_SECRET_KEY}"
   # admin-password: the Django admin/superuser account init creates.
-  admin-password: cGxhY2Vob2xkZXItYWRtaW4tcGFzc3dvcmQ=
+  admin-password: "${ADMIN_PASSWORD}"
   # galaxy-key: an API key for the Pasteur Galaxy server
   # (galaxy.pasteur.fr, or whichever instance NGPHYLO_GALAXY_URL below
   # points at) that this app authenticates to Galaxy with - NOT a k8s
   # secret drmab-web itself bothered to protect (it passed the
   # equivalent GALAXYKEY as a plain envsubst'd value), but there's no
   # reason not to do better here.
-  galaxy-key: cGxhY2Vob2xkZXItZ2FsYXh5LWFwaS1rZXk=
+  galaxy-key: "${GALAXY_KEY}"
   # email-host-password: SMTP password for job-completion emails and the
-  # daily report (see CLAUDE.md) - leave as the placeholder if email
-  # isn't needed yet, sending just fails/no-ops either way.
-  email-host-password: cGxhY2Vob2xkZXItc210cC1wYXNzd29yZA==
+  # daily report (see CLAUDE.md) - leave the CI/CD variable unset (empty)
+  # if email isn't needed yet, sending just fails/no-ops either way.
+  email-host-password: "${EMAIL_HOST_PASSWORD}"
 ---
 apiVersion: batch/v1
 kind: Job
