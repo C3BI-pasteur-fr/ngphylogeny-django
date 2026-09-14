@@ -366,19 +366,18 @@ translate directly to Kubernetes without re-architecting around Galaxy's
 own Kubernetes job runner or the official Galaxy Helm chart) was
 deliberately out of scope here.
 
-**None of the actual cluster access exists yet** — unlike drmab-prod/
-drmab-dev, which already had a namespace, GitLab Environment, and Deploy
-Token configured when drmab-web's pipeline was written. Every namespace/
-environment/domain name in `.gitlab-ci.yml` (`ngphylogeny-dev`/
-`ngphylogeny-prod`, `k8sdev-ngphylogeny-dev`/`k8sprod-ngphylogeny`,
-`ngphylogeny.dev.pasteur.cloud`/`ngphylogeny.pasteur.cloud`) is a
-placeholder guess following drmab-web's own naming convention, not a real,
-provisioned target — confirm the real ones once cluster access exists, and
-update both `.gitlab-ci.yml` and (for the public hostname) `manifest.yaml`'s
-`NGPHYLO_HTTPS_HOST`/Ingress `host` to match. `deploy-dev` triggers on
-every push to `upgrade`; `deploy-prod` requires a manual trigger from the
-pipeline page even then, on purpose — nothing rolls out to production
-automatically.
+**`deploy-dev`'s cluster access is real** (since 2026-09): namespace
+`ngphylogenyfr-dev`, GitLab Environment `k8sdev-ngphylogenyfr-dev`, domain
+`ngphylogenyfr.dev.pasteur.cloud`, Deploy Token + kubectl context already
+wired into a runner. **`deploy-prod`'s are still a placeholder guess**
+(`ngphylogeny-prod`/`k8sprod-ngphylogeny`/`ngphylogeny.pasteur.cloud`,
+following drmab-web's own naming convention) — nothing prod-side is
+provisioned yet; confirm the real values once it is, and update both
+`.gitlab-ci.yml` and (for the public hostname) manifest.yaml's
+`NGPHYLO_HTTPS_HOST`/Ingress `host` to match, same as was just done for
+dev. `deploy-dev` triggers on every push to `upgrade`; `deploy-prod`
+requires a manual trigger from the pipeline page even then, on purpose —
+nothing rolls out to production automatically.
 
 **Static files are baked into the image at build time**
 (`Dockerfile`'s `RUN python manage.py collectstatic --noinput`), not
@@ -390,14 +389,19 @@ between them would be needless complexity when baking them into the image
 works everywhere (docker-compose included — `docker/init.sh` still runs
 its own `collectstatic` too, redundant but harmless there).
 
-**`manifest.yaml`'s Secret (`ngphylogeny-credentials`) has placeholder
-values checked in**, same pattern as drmab-web's `mysql-credentials` —
-decode/replace them (or override the Secret out-of-band) before relying on
-this for anything real; the comments directly on it say what each key is
-for. Unlike drmab-web (which passed its Galaxy API key as a plain
-`envsubst`'d value, not a Secret), `NGPHYLO_GALAXY_KEY` here does go
-through the Secret — no reason to leave an API key less protected than the
-DB password sitting right next to it.
+**Both Secrets (`ngphylogeny-credentials` in `manifest.yaml`,
+`postgres-credentials` in `manifest_datastores.yaml`) are `stringData`
+templated via `envsubst` from masked/protected GitLab CI/CD variables**
+(`POSTGRES_PASSWORD`, `DJANGO_SECRET_KEY`, `ADMIN_PASSWORD`, `GALAXY_KEY`,
+`EMAIL_HOST_PASSWORD` — see `.gitlab-ci.yml`'s `.deploy` comment for the
+full list), not committed placeholder base64 values — unlike drmab-web's
+`mysql-credentials`, which does check in a placeholder to decode/replace
+later. Went straight to the more secure form here since this pipeline
+already had a real cluster to target the moment it was written, rather
+than leaving a live secret-rotation step for later. Same reasoning as
+`NGPHYLO_GALAXY_KEY` going through a Secret at all in the first place
+(unlike drmab-web's plain-`envsubst`'d `GALAXYKEY`) — no reason to leave
+an API key or the DB/Django secrets less protected than they need to be.
 
 **Every container (`init` Job, `web`, `celery-worker`, `celery-beat`) sets
 `DJANGO_SETTINGS_MODULE` explicitly** to `NGPhylogeny_fr.settings.prod` in
