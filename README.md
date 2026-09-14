@@ -222,6 +222,22 @@ same `Dockerfile` image and deploy it to a Kubernetes cluster via
 env-var-templated via `envsubst`. Galaxy itself is external - point
 `NGPHYLO_GALAXY_URL`/the Secret's `galaxy-key` at an already-running
 Galaxy server (the Pasteur Galaxy server, for this deployment), same as
-every other deployment path in this repo. See CLAUDE.md's "Kubernetes
-deployment" section for what's still a placeholder (cluster/namespace
-access doesn't exist yet) and what each manifest actually does.
+every other deployment path in this repo.
+
+`deploy-dev` is live and confirmed working end to end against
+`ngphylogenyfr-dev` (a real OneClick workflow has been submitted and
+completed there); `deploy-prod`'s namespace/domain are still a
+placeholder pending real provisioning. See CLAUDE.md's "Kubernetes
+deployment" section for the full detail, including what each manifest
+does, the required GitLab CI/CD variables, and a list of real-cluster-
+only issues (RBAC, runner selection, the migrations-vs-a-persistent-
+database trap) hit getting `deploy-dev` working - worth reading before
+setting up `deploy-prod`, since the same class of issues will likely
+recur there.
+
+`scripts/cleanup_old_galaxy_workflows.sh` is a standalone maintenance
+script (not run by any pipeline) for bulk-deleting old, non-base
+workflows directly from a Galaxy server's own `/api/workflows` - see its
+own header comment and CLAUDE.md's "Workflow duplicates and the Celery
+cleanup jobs" section for why this was needed (832,000+ accumulated rows
+on `galaxy.pasteur.fr`) and how it's meant to be used.
