@@ -166,6 +166,12 @@ build:
 #   - Plain (unmasked) values, envsubst'd straight into manifest.yaml:
 #     GALAXY_URL, ADMIN_USER, ADMIN_EMAIL, EMAIL_HOST, EMAIL_PORT,
 #     EMAIL_HOST_USER, EMAIL_USE_TLS, REPORT_RECIPIENTS, REPORT_FROM_EMAIL.
+#   - GALAXY_WORKFLOW_IDS (plain, optional): comma-separated known Galaxy
+#     workflow ids for the init Job's importworkflows --wfids call - skips
+#     GALAXY_URL's /api/workflows/ listing entirely and imports exactly
+#     these. Left unset, importworkflows falls back to its previous
+#     name-based listing behavior instead. See CLAUDE.md's "Kubernetes
+#     deployment" section for the actual galaxy.pasteur.fr ids in use.
 #   - Masked + protected values, envsubst'd into the two Secrets in
 #     manifest.yaml/manifest_datastores.yaml (stringData, never committed):
 #     POSTGRES_PASSWORD, DJANGO_SECRET_KEY (generate with
