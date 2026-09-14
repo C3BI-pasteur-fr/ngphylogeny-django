@@ -109,18 +109,6 @@ build:
 .deploy: &deploy
   stage: deploy
   image: registry-gitlab.pasteur.fr/dsi-tools/docker-images:docker_kubernetes_image
-  # Pin to a runner that actually has kubectl access to the target
-  # cluster - without this, GitLab can schedule the job on any available
-  # runner (this project has several), including one with no route to
-  # this cluster/namespace at all. That looks identical to a missing RBAC
-  # grant from the job's own output (same generic gitlab-runner:default
-  # identity in the resulting Forbidden error either way), so this may or
-  # may not have been the actual cause of the first two failed deploy
-  # attempts - k8s-rbac-gitlab-runner.yaml is still needed regardless,
-  # since routing to the right runner doesn't by itself grant that
-  # runner's ServiceAccount any RBAC in this namespace.
-  tags:
-    - k8s
   # Override the global before_script (pip install -r requirement.txt) -
   # this job's image is kubectl/yum-based, not Python, and doesn't need
   # this repo's Python deps at all. Without this override it inherits the
