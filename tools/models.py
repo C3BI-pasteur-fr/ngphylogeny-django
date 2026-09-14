@@ -394,7 +394,15 @@ class Citation(models.Model):
     """
     Tool references
     """
-    reference = models.CharField(max_length=1000, null=True, blank=True)
+    # TextField, not a length-bounded CharField: this stores raw BibTeX
+    # citation text straight from Galaxy's /api/tools/{id}/citations
+    # (import_tools() in this module) - real citations (long abstracts,
+    # many authors) routinely exceed any fixed length, and Postgres
+    # enforces a CharField's max_length as a hard varchar() constraint at
+    # the DB level, aborting the whole importtools run with
+    # "value too long for type character varying(N)" the moment one
+    # citation is too long, rather than failing just that one tool.
+    reference = models.TextField(null=True, blank=True)
     tool = models.ForeignKey(Tool, on_delete=models.CASCADE)
 
     def format(self):
