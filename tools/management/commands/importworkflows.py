@@ -48,14 +48,26 @@ class Command(BaseCommand):
             galaxy_server__url=galaxy_url,
             anonymous=True)
         print(galaxy_key)
+        api_key = galaxy_key.first().api_key
         workflows_url = '%s/%s/%s/?key=%s' % (
             galaxy_server.url,
             'api',
             'workflows',
-            galaxy_key.first().api_key)
+            api_key)
 
-        # fetch list of tools
-        connection = requests.get(workflows_url)
+        # This is a raw (non-bioblend) Galaxy call, like the ones in
+        # data/views.py - bioblend>=1.4.0 moved auth from ?key= query
+        # params to an x-api-key header automatically, but this command
+        # predates that and never picked it up. Against a permissive
+        # Galaxy (e.g. a local dev instance) the query param alone is
+        # enough and this silently worked; against galaxy.pasteur.fr it
+        # doesn't - this request just gets a non-200 back, which this
+        # command already handles by logging "Problem while querying
+        # galaxy server" and returning without importing anything or
+        # raising, so importworkflows "succeeds" with zero workflows
+        # imported and no error in the init Job's own exit code. Send
+        # both, same as data/views.py's fix for the identical issue.
+        connection = requests.get(workflows_url, headers={'x-api-key': api_key})
         print(workflows_url)
         print(connection.status_code)
         if connection.status_code == 200:
