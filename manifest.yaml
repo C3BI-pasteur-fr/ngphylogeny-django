@@ -324,8 +324,19 @@ spec:
           image: ${CI_REGISTRY_IMAGE}:${CI_COMMIT_REF_SLUG}
           imagePullPolicy: Always
           command: ["celery"]
+          # --concurrency is explicit, not left to celery's own default
+          # (billiard.cpu_count(), i.e. the node's total visible CPU
+          # count with no CPU `limits:` set below to give it a cgroup
+          # quota to detect instead) - on a shared node that can fork far
+          # more worker processes than intended, each duplicating the
+          # full Django+biopython+matplotlib process image, which OOMKilled
+          # this container almost immediately on startup, before any real
+          # task ever ran. This worker's actual job is polling Galaxy for
+          # status and sending email, not heavy local compute (the real
+          # tool execution happens on Galaxy), so a small fixed pool is
+          # plenty.
           args: ["-A", "NGPhylogeny_fr.celery:app", "worker", "-l", "INFO",
-                  "-Q", "default,monitor,ncbi_blast"]
+                  "-Q", "default,monitor,ncbi_blast", "--concurrency=2"]
           env:
             - name: DJANGO_SETTINGS_MODULE
               # Explicit on every single container below, not left to
@@ -409,9 +420,9 @@ spec:
               value: "${REPORT_FROM_EMAIL}"
           resources:
             requests:
-              memory: "256Mi"
+              memory: "384Mi"
             limits:
-              memory: "1Gi"
+              memory: "1536Mi"
 ---
 apiVersion: apps/v1
 kind: Deployment
