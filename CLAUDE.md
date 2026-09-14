@@ -393,18 +393,72 @@ translate directly to Kubernetes without re-architecting around Galaxy's
 own Kubernetes job runner or the official Galaxy Helm chart) was
 deliberately out of scope here.
 
-**`deploy-dev`'s cluster access is real** (since 2026-09): namespace
-`ngphylogenyfr-dev`, GitLab Environment `k8sdev-ngphylogenyfr-dev`, domain
-`ngphylogenyfr.dev.pasteur.cloud`, Deploy Token + kubectl context already
-wired into a runner. **`deploy-prod`'s are still a placeholder guess**
+**`deploy-dev`'s cluster access is real and confirmed working end to end**
+(since 2026-09): namespace `ngphylogenyfr-dev`, GitLab Environment
+`k8sdev-ngphylogenyfr-dev`, domain `ngphylogenyfr.dev.pasteur.cloud`,
+Deploy Token + kubectl context wired into a runner — a real OneClick
+workflow has been submitted and completed successfully against it. **See
+"Getting `deploy-dev` from green pipeline to actually working" below for
+everything that took to get there** — none of it was a manifest/pipeline
+authoring mistake caught by review, all of it only surfaced by actually
+running a real deploy against a real cluster. **`deploy-prod`'s
+namespace/environment/domain are still a placeholder guess**
 (`ngphylogeny-prod`/`k8sprod-ngphylogeny`/`ngphylogeny.pasteur.cloud`,
 following drmab-web's own naming convention) — nothing prod-side is
-provisioned yet; confirm the real values once it is, and update both
-`.gitlab-ci.yml` and (for the public hostname) manifest.yaml's
-`NGPHYLO_HTTPS_HOST`/Ingress `host` to match, same as was just done for
-dev. `deploy-dev` triggers on every push to `upgrade`; `deploy-prod`
-requires a manual trigger from the pipeline page even then, on purpose —
-nothing rolls out to production automatically.
+provisioned yet; confirm the real values once it is (same process as
+dev: update `.gitlab-ci.yml`'s `deploy-prod` block and, for the public
+hostname, manifest.yaml's `NGPHYLO_HTTPS_HOST`/Ingress `host`), and
+expect to hit the same class of first-real-deploy issues listed below
+again against whatever cluster/namespace prod actually turns out to be.
+`deploy-dev` triggers on every push to `upgrade`; `deploy-prod` requires
+a manual trigger from the pipeline page even then, on purpose — nothing
+rolls out to production automatically.
+
+**Getting `deploy-dev` from green pipeline to actually working** took
+several rounds of real-cluster-only issues, worth knowing about before
+repeating this for prod:
+- **RBAC**: the GitLab runner's ServiceAccount
+  (`system:serviceaccount:gitlab-runner:default`) has no write access to
+  a namespace by default — `kubectl delete/create/apply` all fail with
+  `Forbidden`. `k8s-rbac-gitlab-runner.yaml` (checked into this repo, not
+  applied by the pipeline itself — the runner's SA can't grant itself
+  more access) is the `Role`/`RoleBinding` a cluster admin needs to apply
+  once per namespace, granting CRUD on Secrets/Deployments/Jobs/Services/
+  Ingresses/PVCs/Pods.
+- **Runner selection**: this project has multiple runners (some `k8s`-
+  tagged, presumably others not), but the `.deploy` job currently sets no
+  `tags:` at all — it relies on whichever runner(s) accept untagged jobs
+  actually being the right one for the cluster this repo targets. If a
+  redeploy ever lands on the wrong runner, this looks identical to a
+  missing RBAC grant (same generic `gitlab-runner:default` identity in
+  the resulting `Forbidden` error either way) — check the job's actual
+  runner on its GitLab page, and this project's registered runners under
+  Settings → CI/CD → Runners, before assuming it's RBAC again.
+- **The global `before_script` breaks the deploy job**: `pip install -r
+  requirement.txt` runs by default for every job, but `.deploy`'s image
+  is kubectl/yum-based with no Python at all — needs its own empty
+  `before_script: []` override (same fix `build` already needed for its
+  own reasons).
+- **Migrations vs. a *persistent* database**: `makemigrations`-fresh-
+  every-start (see "Migrations are not committed" above) only produces a
+  correct schema the *first* time it runs against a given database.
+  `ngphylogenyfr-dev`'s Postgres is a PVC-backed Deployment, not wiped
+  between deploys — its `django_migrations` table already has
+  `<app>.0001_initial` recorded as applied from the very first `init`
+  run. On every later redeploy, `makemigrations` regenerates a migration
+  file with the *same* name (Django numbers from scratch since there's no
+  history file to build on) but whatever the *current* `models.py` says,
+  and `migrate` matches purely by app+name — sees that name already
+  applied, and silently no-ops the real `ALTER TABLE`, even though the
+  regenerated file's actual operations changed. Any field change (e.g.
+  `Citation.reference` going from `CharField(1000)` to `TextField` this
+  session) needs a manual `ALTER TABLE ... ALTER COLUMN ... TYPE ...`
+  run directly against the live Postgres pod to actually take effect —
+  `migrate`'s own success/failure tells you nothing about whether it did.
+  This will recur for every future model change deployed here; the
+  durable fix (committing migration files to git, so `migrate` can apply
+  real incremental changes) was discussed and deliberately deferred in
+  favor of handling drift manually case by case.
 
 **Static files are baked into the image at build time**
 (`Dockerfile`'s `RUN python manage.py collectstatic --noinput`), not
@@ -456,6 +510,43 @@ exactly how this was found while writing these manifests). This is the
 same variable-name trap documented in "`NGPHYLO_SETTINGS_MODULE` vs
 `DJANGO_SETTINGS_MODULE`" above for the IFB Cloud deployment — getting it
 wrong doesn't error, it just silently serves `DEBUG=True`.
+
+### Two long-standing history/upload bugs only a real submission surfaced
+
+Getting the very first real OneClick workflow to actually complete
+against `deploy-dev` (see above) surfaced two bugs that predate this
+session's Python 2→3 rewrite entirely — neither one is Kubernetes-
+specific, both apply to every deployment, they were just never exercised
+by a genuinely fresh session hitting these exact code paths before:
+
+- **`workspace/views.py`'s `get_or_create_history()` returned the wrong
+  type on a session's first history.** `create_history()` returns the
+  full `WorkspaceHistory` model instance (other callers, e.g.
+  `tools/views.py`, need it for its FKs/`wf_category`/`wf_steps`) — a
+  return-type change from commit `488070129` (2018!) that
+  `get_or_create_history()` never picked up, despite its own docstring
+  saying `:return: history_id`. `data/views.py`'s `UploadMixin` (which
+  `WorkflowOneClickListView` inherits `form_valid` from unmodified, so
+  this is OneClick's actual paste/upload step) passes that straight into
+  bioblend's `paste_content`/`upload_file` as `history_id`, which then
+  crashed trying to JSON-encode it: `TypeError: Object of type
+  WorkspaceHistory is not JSON serializable`. Only fires on a session's
+  *first* history (later requests reuse the correct string id already
+  cached in `request.session['last_history']`), which is exactly what a
+  brand-new namespace's very first real submission guarantees and normal
+  repeated testing in the same browser session almost never does. Fixed
+  by unwrapping `.history` in `get_or_create_history()`.
+- **`data/views.py`'s `UploadView.form_valid()` called `super().form_valid()`
+  with no arguments** — Django's `FormMixin.form_valid(self, form)` has
+  always required `form`; this specific call has been missing it since
+  commit `e97ad0bc` (2018-03-14), predating even the bug above. The
+  Galaxy upload itself (`self.upload_content()`/`self.upload_file()`)
+  already succeeds by the time this runs, so the practical effect was
+  always a 500 error page immediately *after* a technically-successful
+  submission rather than a clean redirect to the history page — easy to
+  mistake for a harmless glitch since the user's actual data/analysis
+  still went through, which is the likely reason this went unnoticed for
+  8 years. Fixed by passing `form` through.
 
 ### `upgrade` vs the old `master` branch
 
