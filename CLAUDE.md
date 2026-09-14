@@ -314,6 +314,33 @@ DateTimeField Workflow.date received a naive datetime while time zone
 support is active` (harmless only by coincidence here, since
 `TIME_ZONE='UTC'` matches the container's system clock).
 
+`deleteoldgalaxyworkflows()` used to only delete a duplicated workflow if
+it had **zero** associated `WorkspaceHistory` (i.e. created, e.g. the user
+opened a submission form, but never actually run), on a 1-day cutoff -
+anything that was actually run stayed in Galaxy forever unless its own
+specific linked history happened to independently satisfy
+`deleteoldgalaxyhistory`'s much narrower conditions (`finished=True`,
+14-day cutoff, `workflow` FK actually set) at cleanup time. A real
+production dump (`galaxy.pasteur.fr`, years of usage) turned up 832,000+
+`category='duplicated'` rows never touched by either task - see
+`scripts/cleanup_old_galaxy_workflows.sh` for the one-off bash/curl-based
+cleanup this backlog needed (batches through Galaxy's own
+`/api/workflows`, oldest-first, since the Django-tracked rows alone don't
+reflect what's actually accumulated in Galaxy over that many years).
+`deleteoldgalaxyworkflows()` now deletes any non-base workflow past a
+7-day cutoff regardless of whether it was ever run - deleting a
+workflow's Galaxy *definition* doesn't touch its history's actual data
+(datasets/job outputs live in the History, not the Workflow), so there's
+no need to wait for that history's own 14-day retention window. This
+safely overlaps with `deleteoldgalaxyhistory`'s own per-history workflow
+cleanup regardless of which of the two Celery tasks happens to run first
+in a given 2am cycle: `w.delete()` here `SET_NULL`s any
+`WorkspaceHistory.workflow` FK pointing to it, so `deleteoldgalaxyhistory`
+correctly sees `workflow=None` and skips re-deleting anything already
+gone if it runs second; if it runs first instead, it already marks the
+row `deleted=True` itself, so this task's own `deleted=False` filter
+skips it in turn.
+
 ### Daily workflow-usage report
 
 `workspace.tasks.send_daily_report` (`CELERY_BEAT_SCHEDULE`, 8am UTC) emails

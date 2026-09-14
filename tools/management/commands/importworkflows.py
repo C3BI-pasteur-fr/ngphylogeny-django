@@ -49,11 +49,27 @@ class Command(BaseCommand):
             anonymous=True)
         print(galaxy_key)
         api_key = galaxy_key.first().api_key
-        workflows_url = '%s/%s/%s/?key=%s' % (
+        # Real usage over years leaves Galaxy's full /api/workflows/ list
+        # dominated by per-run duplicates (Workflow.duplicate() - see
+        # workflows/models.py) - 800,000+ of them on galaxy.pasteur.fr, none
+        # of them relevant here, since this command only ever imports the 4
+        # canonical "<Tool> OneClick" base workflows. Fetching the whole
+        # list on every single redeploy was a heavy, slow request for
+        # nothing this command actually needs. Those base workflows are
+        # long-lived (created once, e.g. 2019-01-16 on galaxy.pasteur.fr,
+        # and never touched again) - they're reliably among Galaxy's
+        # OLDEST workflows, not its newest, so sort_by=create_time,
+        # sort_desc=false + a small limit finds them without paging
+        # through the duplicate backlog at all. See
+        # scripts/cleanup_old_galaxy_workflows.sh for the matching
+        # oldest-first reasoning on the deletion side.
+        workflows_list_limit = 100
+        workflows_url = '%s/%s/%s/?key=%s&limit=%d&offset=0&sort_by=create_time&sort_desc=false' % (
             galaxy_server.url,
             'api',
             'workflows',
-            api_key)
+            api_key,
+            workflows_list_limit)
 
         # This is a raw (non-bioblend) Galaxy call, like the ones in
         # data/views.py - bioblend>=1.4.0 moved auth from ?key= query
