@@ -37,7 +37,19 @@ if [ -n "${NGPHYLO_GALAXY_URL:-}" ] && [ -n "${NGPHYLO_GALAXY_KEY:-}" ]; then
     python manage.py addgalaxykey --user "${NGPHYLO_ADMIN_USER:-admin}" --galaxyurl "$NGPHYLO_GALAXY_URL" --galaxykey "$NGPHYLO_GALAXY_KEY"
     python manage.py importtools --galaxyurl="$NGPHYLO_GALAXY_URL" --query="phylogeny" --flags=toolflags.txt --force --inputfields=toolfields.txt
     python manage.py import_links --linkfile=toollinks.txt
-    python manage.py importworkflows --galaxyurl="$NGPHYLO_GALAXY_URL" --wfnamefile=wfnames.txt
+    if [ -n "${NGPHYLO_GALAXY_WORKFLOW_IDS:-}" ]; then
+        # Precise/fast path: import specific known base-workflow ids
+        # directly (one GET per id), skipping the /api/workflows/ listing
+        # entirely - only meaningful once a target Galaxy's stable
+        # base-workflow ids are already known (e.g. from a database dump).
+        # Not set here for docker-compose/standalone, which use a
+        # different, freshly-created Galaxy instance with no such fixed
+        # ids - see CLAUDE.md's "Kubernetes deployment" section for where
+        # this is actually used.
+        python manage.py importworkflows --galaxyurl="$NGPHYLO_GALAXY_URL" --wfids="$NGPHYLO_GALAXY_WORKFLOW_IDS"
+    else
+        python manage.py importworkflows --galaxyurl="$NGPHYLO_GALAXY_URL" --wfnamefile=wfnames.txt
+    fi
 else
     echo "NGPHYLO_GALAXY_URL/NGPHYLO_GALAXY_KEY not set - skipping Galaxy server setup (see README.md)."
 fi

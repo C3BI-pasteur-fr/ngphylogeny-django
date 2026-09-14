@@ -63,6 +63,14 @@ spec:
           # as a Job instead of a compose service.
           command: ["docker/init.sh"]
           env:
+            # Optional - only this Job needs it (docker/init.sh's own
+            # NGPHYLO_GALAXY_WORKFLOW_IDS check, see CLAUDE.md's
+            # "Kubernetes deployment" section). Left unset, importworkflows
+            # falls back to its previous name-based listing behavior -
+            # not set on web/celery-worker/celery-beat below since only
+            # the init step ever runs importworkflows.
+            - name: NGPHYLO_GALAXY_WORKFLOW_IDS
+              value: "${GALAXY_WORKFLOW_IDS}"
             - name: DJANGO_SETTINGS_MODULE
               # Explicit on every single container below, not left to
               # manage.py's own default (settings.local, DEBUG=True) -

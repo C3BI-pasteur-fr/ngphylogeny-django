@@ -97,6 +97,27 @@ class ImportWorkflowsCommandTest(TestCase):
         self.assertEqual(Workflow.objects.count(), 1)
         self.assertEqual(Workflow.objects.get().id_galaxy, 'galaxyid2')
 
+    def test_wfids_imports_directly_by_id(self):
+        """
+        --wfids fetches specific known workflow ids directly
+        (/api/workflows/{id}, one GET per id) instead of listing/filtering
+        the server's whole workflow collection - precise and fast once
+        the target Galaxy's stable base-workflow ids are already known
+        (e.g. from a database dump), unlike the oldest-N heuristic
+        import_workflows() uses.
+        """
+        mock_response = Mock(status_code=200, json=lambda: {
+            'id': 'known-id', 'name': 'FastME OneClick'})
+        with patch('tools.management.commands.importworkflows.requests.get',
+                   return_value=mock_response):
+            call_command('importworkflows', galaxyurl=self.server.url,
+                         wfids='known-id')
+
+        self.assertEqual(Workflow.objects.count(), 1)
+        wf = Workflow.objects.get()
+        self.assertEqual(wf.id_galaxy, 'known-id')
+        self.assertEqual(wf.category, 'base')
+
     def test_ignores_per_run_duplicates_sharing_the_same_name(self):
         """
         Regression test: Workflow.duplicate() gives every real user run its

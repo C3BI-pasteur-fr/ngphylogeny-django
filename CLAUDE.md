@@ -430,6 +430,23 @@ than leaving a live secret-rotation step for later. Same reasoning as
 (unlike drmab-web's plain-`envsubst`'d `GALAXYKEY`) — no reason to leave
 an API key or the DB/Django secrets less protected than they need to be.
 
+**The init Job's `GALAXY_WORKFLOW_IDS` CI/CD variable (plain, optional)
+should be set to the 4 known galaxy.pasteur.fr base-workflow ids**:
+`0c0a83400cbba3e9` (FastME/OneClick), `7e182aa7ef0fb860`
+(FastTree/OneClick), `617de6dd70aae83a` (PhyML/OneClick),
+`6f4b7c17419da3e5` (PhyML+SMS/OneClick) — long-lived ids, created once on
+2019-01-16 and never touched since (found via the real production
+database dump, `ngphylo_dump.sql`, not the k8s namespace's own near-empty
+dev DB). Passed as `NGPHYLO_GALAXY_WORKFLOW_IDS` to `docker/init.sh`,
+which uses `importworkflows --wfids=...` (fetches those specific ids
+directly, one GET per id) instead of `--wfnamefile=wfnames.txt` (lists
+and filters Galaxy's whole workflow collection by name) whenever this
+variable is set — see `tools/management/commands/importworkflows.py`.
+Left unset, `docker/init.sh` falls back to the name-based listing
+behavior unchanged, which is what `docker-compose.yml`/
+`docker-compose.standalone.yml` still use (a different, freshly-created
+Galaxy instance on each of those has no such stable pre-known ids).
+
 **Every container (`init` Job, `web`, `celery-worker`, `celery-beat`) sets
 `DJANGO_SETTINGS_MODULE` explicitly** to `NGPhylogeny_fr.settings.prod` in
 its own `env:` list (no anchor/YAML-reuse across them — anchors don't
