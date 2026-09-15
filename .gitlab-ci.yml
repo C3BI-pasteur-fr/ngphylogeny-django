@@ -179,6 +179,13 @@ build:
 #     the next deploy - re-run/retry the deploy job to flip it either way,
 #     changing the GitLab CI/CD variable alone doesn't affect an
 #     already-running pod.
+#   - PASTEUR_BLAST_ENABLED (plain, optional): "true" activates the
+#     Pasteur Galaxy BLAST server option (settings.BLASTS['pasteur']
+#     ['activated'], off by default) and deactivates NCBI's public server
+#     option at the same time (mutually exclusive, not independently
+#     toggleable - see CLAUDE.md). Note the whole BLAST analysis page is
+#     currently disabled regardless (BlastView.dispatch() in
+#     blast/views.py) - this variable alone won't bring the page back.
 #   - Masked + protected values, envsubst'd into the two Secrets in
 #     manifest.yaml/manifest_datastores.yaml (stringData, never committed):
 #     POSTGRES_PASSWORD, DJANGO_SECRET_KEY (generate with

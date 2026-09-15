@@ -550,6 +550,38 @@ every other CI/CD variable here - re-run/retry the deploy job to flip it
 either way, changing the GitLab variable alone doesn't touch an
 already-running pod.
 
+**Pasteur BLAST activation**: `settings.BLASTS['pasteur']['activated']`
+(gates the Pasteur Galaxy BLAST server option throughout `blast/models.py`
+- 6 separate checks) is env-var driven the same way, via
+`NGPHYLO_PASTEUR_BLAST_ENABLED`/the `PASTEUR_BLAST_ENABLED` CI/CD
+variable, set on both `web` and `celery-worker` (`launch_pasteur_blast`/
+`checkblastruns` in `blast/tasks.py` read it too, not just the form).
+Off by default, matching the hardcoded `False` it replaced. **Mutually
+exclusive with `BLASTS['ncbi']['activated']`, not independently
+toggleable** - enabling Pasteur deactivates NCBI's public server option
+(previously unconditionally `True`), and vice versa: prefer Pasteur's own
+controlled Galaxy BLAST server exclusively once it's available, rather
+than also still offering NCBI's shared, rate-limited public
+infrastructure. Both read the same `_PASTEUR_BLAST_ENABLED` module-level
+variable in `settings/base.py` (Python dict literals can't
+cross-reference each other's values directly). Note this doesn't by
+itself bring BLAST analysis back - the whole page is currently disabled
+regardless of this setting (see below).
+
+**BLAST analysis is currently disabled**, code-level, not via a CI/CD
+variable: `BlastView.dispatch()` (`blast/views.py`) unconditionally
+serves `templates/blast/blast_disabled.html` (503) for both GET and
+POST, before any form processing, instead of the real submission form -
+both submission paths had open issues (`launch_ncbi_blast`'s NCBI client
+could hang indefinitely with no timeout, now bounded to 10 minutes via
+`soft_time_limit`/`time_limit` - see `blast/tasks.py` - and Pasteur BLAST
+had never been activated at all, see above). The "Blast Analysis" menu
+link is commented out in `templates/base.html`, not deleted. Existing
+runs (viewing/downloading/deleting results already submitted) are
+untouched - only this one entry point for *new* submissions is blocked.
+Re-enable by reverting `BlastView.dispatch()`'s override and
+uncommenting the menu link once both issues have been reviewed.
+
 **`/status` is deliberately exempt from maintenance mode** - both
 `readinessProbe` and `livenessProbe` on the `web` Deployment point at it,
 not `/`. First real use of `MAINTENANCE=true` (2026-09-15, `deploy-dev`)
