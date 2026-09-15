@@ -367,6 +367,39 @@ Advanced-form path and an actual rerun. `reports.py`'s `CATEGORY_LABELS`
 relabels it for display (`'duplicated'` → `"Advanced"`) but doesn't change
 what's actually being counted.
 
+**Restoring historical `workspace_workspacehistory` data** (e.g. into a
+fresh deployment like `ngphylogenyfr-dev`, so the report reflects real
+usage instead of just a handful of test submissions) only needs that one
+table from a production dump — `reports.py` reads `created_date`,
+`workflow_category`, `workflow_steps`, and `workflow__name` (the last via
+a LEFT JOIN through the `workflow` FK, used only as a display fallback
+and gracefully `None` if it doesn't resolve). It deliberately does **not**
+need `workflows_workflow` restored alongside it (a real production dump
+can have 800,000+ rows there from years of per-run duplicates — see
+"Workflow duplicates" above — reimporting it would undo any cleanup done
+on the target Galaxy for no report benefit) or `auth_user` (the report
+doesn't group by user). Restore by extracting just that table's `COPY`
+block from the dump (`grep -n "^COPY workspace_workspacehistory "
+dump.sql` to find it, then the matching `\.` terminator), with three
+columns rewritten before import:
+- `workflow_id` / `user_id` → `\N` (both nullable - drops the FK
+  references to data deliberately not being restored).
+- `id` → dropped from the `COPY` column list entirely, letting Postgres
+  assign fresh ids via the table's own sequence - avoids any collision
+  with rows already created by real usage/testing on the target
+  deployment (a production dump's ids can be arbitrarily large/small) and
+  needs no manual sequence resync afterward.
+- `galaxy_server_id` is **not** nullable, so it can't just be dropped -
+  wrap the `COPY` in `BEGIN; ALTER TABLE workspace_workspacehistory
+  DISABLE TRIGGER ALL; COPY ...; UPDATE workspace_workspacehistory SET
+  galaxy_server_id = (SELECT id FROM galaxy_server WHERE url LIKE
+  '%<real galaxy host>%') WHERE galaxy_server_id = <dump's original
+  value>; ALTER TABLE workspace_workspacehistory ENABLE TRIGGER ALL;
+  COMMIT;` - Django's FK constraints aren't `DEFERRABLE`, so temporarily
+  disabling the table's FK-enforcement triggers is the only way to let
+  the value briefly not resolve to a real row while the fixup `UPDATE`
+  runs in the same transaction.
+
 ### Kubernetes deployment (GitLab CI)
 
 A third deployment path, alongside `docker-compose.yml` (local/dev) and

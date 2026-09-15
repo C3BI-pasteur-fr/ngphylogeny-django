@@ -27,7 +27,7 @@ import matplotlib.pyplot as plt
 
 from django.core.cache import cache
 from django.db.models import Count
-from django.db.models.functions import TruncWeek
+from django.db.models.functions import TruncMonth, TruncWeek
 from django.template.loader import render_to_string
 from django.utils import timezone
 
@@ -145,33 +145,64 @@ def gather_all_time():
     return by_category, by_workflow
 
 
-def gather_weekly_totals():
+# Above this total history span, gather_period_totals() switches from
+# weekly to monthly buckets - see that function's docstring.
+WEEKLY_TO_MONTHLY_SPAN_DAYS = 731  # ~2 years
+
+
+def _add_month(d):
+    return d.replace(year=d.year + 1, month=1) if d.month == 12 \
+        else d.replace(month=d.month + 1)
+
+
+def gather_period_totals():
     """
-    Returns a list of (week_start_date, count) tuples, one per ISO week
-    (Monday-starting) from the first ever WorkspaceHistory row through the
-    current week, oldest first - including weeks with zero runs, so a
-    sparse early history reads as a real gap rather than being silently
-    compressed out of the chart.
+    Returns (granularity, totals): granularity is 'week' or 'month', and
+    totals is a list of (period_start_date, count) tuples, oldest first,
+    covering the first ever WorkspaceHistory row through the current
+    period - including empty periods, so a sparse stretch of history reads
+    as a real gap rather than being silently compressed out of the chart.
+
+    Buckets by ISO week (Monday-starting) while the total history span is
+    <= WEEKLY_TO_MONTHLY_SPAN_DAYS, by calendar month otherwise. A real
+    production history restored from years of usage (see CLAUDE.md) can
+    span enough weeks that a literal one-bar-per-week chart becomes
+    hundreds of bars wide - squeezed into a normal page/email width
+    (.report-chart's max-width: 100%), that crushes the chart's height
+    down to an illegible sliver. Rolling up into monthly buckets once the
+    span gets that long keeps "since the beginning" readable indefinitely,
+    however much real history eventually accumulates.
     """
+    first = (WorkspaceHistory.objects.order_by('created_date')
+             .values_list('created_date', flat=True).first())
+    if first is None:
+        return 'week', []
+
+    span_days = (timezone.now() - first).days
+    granularity = 'week' if span_days <= WEEKLY_TO_MONTHLY_SPAN_DAYS else 'month'
+    trunc = TruncWeek if granularity == 'week' else TruncMonth
+
     rows = (
         WorkspaceHistory.objects
-        .annotate(week=TruncWeek('created_date'))
-        .values('week')
+        .annotate(period=trunc('created_date'))
+        .values('period')
         .annotate(count=Count('id'))
-        .order_by('week')
+        .order_by('period')
     )
-    counts_by_week = {row['week'].date(): row['count'] for row in rows}
-    if not counts_by_week:
-        return []
+    counts_by_period = {row['period'].date(): row['count'] for row in rows}
+    if not counts_by_period:
+        return granularity, []
 
-    first_week = min(counts_by_week)
-    last_week = max(counts_by_week)
-    weekly_totals = []
-    week = first_week
-    while week <= last_week:
-        weekly_totals.append((week, counts_by_week.get(week, 0)))
-        week += timedelta(weeks=1)
-    return weekly_totals
+    first_period = min(counts_by_period)
+    last_period = max(counts_by_period)
+    advance = (lambda d: d + timedelta(weeks=1)) if granularity == 'week' \
+        else _add_month
+    totals = []
+    period = first_period
+    while period <= last_period:
+        totals.append((period, counts_by_period.get(period, 0)))
+        period = advance(period)
+    return granularity, totals
 
 
 def render_daily_category_chart(days, by_day_category):
@@ -249,18 +280,21 @@ def render_alltime_workflow_bar(by_workflow, top_n=15):
     return _fig_to_png_bytes(fig)
 
 
-def render_weekly_chart(weekly_totals):
-    if not weekly_totals:
+def render_period_chart(granularity, totals):
+    if not totals:
         return None
-    labels = [d.strftime('%Y-%m-%d') for d, _ in weekly_totals]
-    values = [n for _, n in weekly_totals]
-    # Widen the figure for long histories so weekly bars/labels don't
-    # overlap into an unreadable smear.
-    fig, ax = plt.subplots(figsize=(max(9, 0.35 * len(weekly_totals)), 4))
+    date_fmt = '%Y-%m-%d' if granularity == 'week' else '%Y-%m'
+    labels = [d.strftime(date_fmt) for d, _ in totals]
+    values = [n for _, n in totals]
+    # Widen the figure for long histories so bars/labels don't overlap
+    # into an unreadable smear - gather_period_totals() itself keeps the
+    # bar count bounded by switching to monthly buckets for long spans,
+    # this just handles however many of either granularity there are.
+    fig, ax = plt.subplots(figsize=(max(9, 0.35 * len(totals)), 4))
     ax.bar(labels, values, color='#4C72B0')
     ax.set_ylabel('Workflows run')
-    ax.set_xlabel('Week starting')
-    ax.set_title('Workflows per week, since the beginning')
+    ax.set_xlabel('Week starting' if granularity == 'week' else 'Month')
+    ax.set_title('Workflows per %s, since the beginning' % granularity)
     plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
     return _fig_to_png_bytes(fig)
 
@@ -308,7 +342,7 @@ def build_report_context():
         CID_DAILY_CATEGORY: render_daily_category_chart(days, by_day_category),
         CID_DAILY_ONECLICK: render_daily_oneclick_chart(
             days, by_day_oneclick_workflow),
-        CID_WEEKLY: render_weekly_chart(gather_weekly_totals()),
+        CID_WEEKLY: render_period_chart(*gather_period_totals()),
         CID_ALLTIME_CATEGORY: render_alltime_category_pie(by_category),
         CID_ALLTIME_WORKFLOW: render_alltime_workflow_bar(by_workflow),
     }
