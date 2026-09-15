@@ -566,6 +566,17 @@ infrastructure. Both read the same `_PASTEUR_BLAST_ENABLED` module-level
 variable in `settings/base.py` (Python dict literals can't
 cross-reference each other's values directly).
 
+**`launch_pasteur_blast()` had its own Python 2->3
+`NamedTemporaryFile()` binary-mode bug** (`blast/tasks.py`), only
+surfaced once Pasteur BLAST activation above actually let a real
+submission reach it: `tmp_file.write(sequence)` wrote the (plain `str`)
+query sequence into a `NamedTemporaryFile()`, which defaults to binary
+mode - `TypeError: a bytes-like object is required, not 'str'`. Same bug
+class as `workflows.tests.ProcessFileToUploadTest`'s
+`process_file_to_upload()` fix. Fixed with
+`tempfile.NamedTemporaryFile(mode='w')`; regression test
+`blast.tests.LaunchPasteurBlastTest`.
+
 **BLAST analysis was briefly, temporarily disabled** (code-level, not
 via a CI/CD variable) right after real usage surfaced two open issues:
 `launch_ncbi_blast`'s NCBI client could hang indefinitely with no

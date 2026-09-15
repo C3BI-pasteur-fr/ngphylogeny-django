@@ -230,7 +230,12 @@ def launch_pasteur_blast(blastrunid, sequence, prog, db, evalue, coverage, maxse
                 b.message = "The given sequence has the wrong alphabet. Program %s expects %s sequence" % (
                     blast_type, blast_inputtype)
             elif blast_type is not None:
-                tmp_file = tempfile.NamedTemporaryFile()
+                # mode='w': sequence is a plain str (the pasted/uploaded
+                # FASTA text) - NamedTemporaryFile() defaults to binary
+                # mode, which raises "a bytes-like object is required, not
+                # 'str'" here. Same Python 2->3 bug class as CLAUDE.md's
+                # "Code paths only a real Galaxy run exercises" section.
+                tmp_file = tempfile.NamedTemporaryFile(mode='w')
                 tmp_file.write(sequence)
                 tmp_file.flush()
                 if biofile.is_fasta_one_seq(tmp_file.name):
