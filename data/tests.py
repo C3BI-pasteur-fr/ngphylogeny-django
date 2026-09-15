@@ -82,6 +82,23 @@ class MaintenanceModeTest(TestCase):
             self.assertEqual(response.status_code, 503, path)
             self.assertTemplateUsed(response, 'maintenance.html')
 
+    @override_settings(NGPHYLO_MAINTENANCE_MODE=True)
+    def test_status_endpoint_stays_up_during_maintenance(self):
+        """
+        Regression test: manifest.yaml's web Deployment points both its
+        readinessProbe and livenessProbe at /status. Before this
+        exemption, enabling maintenance mode made those probes see the
+        same 503 the middleware sends everywhere else, read that as "the
+        container is broken" rather than "intentionally in maintenance",
+        and endlessly restart it via failed liveness checks - the
+        Service ended up with zero ready endpoints and the site went
+        fully down, the opposite of the intended effect. Only caught by
+        actually enabling MAINTENANCE=true against a real deployment.
+        """
+        response = self.client.get('/status')
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateNotUsed(response, 'maintenance.html')
+
     @override_settings(NGPHYLO_MAINTENANCE_MODE=False)
     def test_maintenance_mode_off_routes_normally(self):
         response = self.client.get('/')
