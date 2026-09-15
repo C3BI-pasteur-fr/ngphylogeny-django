@@ -23,6 +23,16 @@ class MaintenanceModeMiddleware:
 
     def __call__(self, request):
         if settings.NGPHYLO_MAINTENANCE_MODE:
+            # Rendered explicitly, not left to Django's usual
+            # auto-render-a-TemplateResponse step - that step only
+            # applies to the innermost view call, not to whatever an
+            # outer middleware like this one returns without ever
+            # calling self.get_response(). Without this, .content stays
+            # unrendered (SimpleTemplateResponse raises
+            # ContentNotRenderedError on access rather than serving it
+            # empty) and .templates stays empty - caught by
+            # assertTemplateUsed in tests before ever reaching a real
+            # deployment with MAINTENANCE=true.
             return TemplateResponse(
-                request, 'maintenance.html', status=503)
+                request, 'maintenance.html', status=503).render()
         return self.get_response(request)
