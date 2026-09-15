@@ -1,5 +1,6 @@
 from __future__ import absolute_import
 
+from django.conf import settings
 from django.db.models import Q
 from django.core.mail import send_mail
 from django.urls import reverse
@@ -19,6 +20,7 @@ import time
 import tempfile
 
 from celery import shared_task
+from celery.exceptions import SoftTimeLimitExceeded
 from celery.utils.log import get_task_logger
 
 from datetime import timedelta, datetime
@@ -38,7 +40,29 @@ LOCK_EXPIRE = 60 * 5 # Lock expires in 5 minutes
 
 ## It should be alone on a celery queue with only 1 cpu
 ## Otherwise, may run too many jobs on ncbi server
-@shared_task
+#
+# time_limit/soft_time_limit: NCBIWWW.qblast() below polls NCBI in a bare
+# `while True:` loop with no timeout or retry cap of its own (checked
+# directly against biopython 1.70's actual source, this project's pinned
+# version - see CLAUDE.md's "Known dependency ceilings") - it relies
+# entirely on NCBI eventually sending a recognizable "READY" (or
+# no-Status) response. If NCBI is slow, the query gets stuck server-side,
+# or a response comes back in a shape this old biopython version doesn't
+# recognize as done, this call - and therefore this task - hangs
+# indefinitely, with nothing in this codebase to ever notice or recover.
+# Since this queue is deliberately meant to run one task at a time (see
+# above), one stuck run blocks every subsequent NCBI BLAST submission
+# behind it too, forever, until someone manually restarts the
+# celery-worker process. soft_time_limit raises SoftTimeLimitExceeded
+# inside the task (caught below, so the run gets marked ERROR with a
+# clear message and the worker moves on to the next queued task);
+# time_limit is Celery's own hard SIGKILL backstop shortly after, in case
+# the soft one doesn't get a chance to run (e.g. blocked in a C
+# extension). 10 minutes is a guess at "generous enough for a real,
+# slow-but-legitimate NCBI search, bounded enough to actually recover" -
+# adjust based on real observed run times if this turns out to be too
+# tight or too loose.
+@shared_task(soft_time_limit=600, time_limit=660)
 def launch_ncbi_blast(blastrunid, sequence, prog, db, evalue, coverage, maxseqs):
     """
     Celery task that will launch a blast on the public blast server
@@ -141,7 +165,7 @@ def launch_ncbi_blast(blastrunid, sequence, prog, db, evalue, coverage, maxseqs)
                 send_mail(
                     'NGPhylogeny.fr BLAST results',
                     message,
-                    'ngphylogeny@pasteur.fr',
+                    settings.NGPHYLO_REPORT_FROM_EMAIL,
                     [b.email],
                     fail_silently=False,
                 )
@@ -150,6 +174,19 @@ def launch_ncbi_blast(blastrunid, sequence, prog, db, evalue, coverage, maxseqs)
             except Exception as e:
                 logging.warning(
                     "Unknown Problem while sending e-mail: %s" % (e))
+    except SoftTimeLimitExceeded:
+        # See this task's own soft_time_limit comment above - a clear,
+        # specific message here beats the generic except below's bare
+        # str(e) (which for this exception is just an empty
+        # "SoftTimeLimitExceeded()").
+        logging.warning(
+            "NCBI BLAST run %s exceeded the time limit and was aborted" %
+            (blastrunid))
+        b.status = BlastRun.ERROR
+        b.message = ("NCBI took too long to respond and this search was "
+                      "aborted. NCBI's public server can be slow or "
+                      "congested - please try again, or try a smaller/"
+                      "more specific query.")
     except Exception as e:
         logging.exception(str(e))
         b.status = BlastRun.ERROR
@@ -358,7 +395,7 @@ def checkblastruns():
                     send_mail(
                         'NGPhylogeny.fr BLAST results',
                         message,
-                        'ngphylogeny@pasteur.fr',
+                        settings.NGPHYLO_REPORT_FROM_EMAIL,
                         [b.email],
                         fail_silently=False,
                     )
