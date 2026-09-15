@@ -6,7 +6,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from galaxy.models import GalaxyUser, Server
-from tools.models import Tool, ToolFlag
+from tools.models import Citation, Tool, ToolFlag
 
 
 class ToolCanRunOnDataTest(TestCase):
@@ -171,6 +171,58 @@ class ImportToolsCitationsTest(TestCase):
 
         self.assertEqual(Tool.objects.count(), 1)
         self.assertEqual(self.tool.citation_set.count(), 2)
+
+
+class CitationLatexEscapeTest(TestCase):
+    """
+    Regression test: bibtexparser extracts a BibTeX field's raw text with
+    no LaTeX interpretation at all. The Newick Utilities tool's real
+    citation uses $\\less$/$\\greater$ - a real, if unusual, LaTeX-escaped
+    way to wrap a small-caps tag some bibliography tools use to protect a
+    word's capitalization from BibTeX's automatic title-casing ("Unix" as
+    U$\\less$scp$\\greater$nix$\\less$/scp$\\greater$, meaning
+    U<scp>nix</scp>) - rendered completely unresolved and literal on the
+    deployed history/citations page, only caught by a user actually
+    viewing it live.
+    """
+
+    def setUp(self):
+        with patch('galaxy.models.requests.get',
+                   return_value=Mock(status_code=200,
+                                      json=lambda: {'version_major': '25.1'})):
+            server = Server.objects.create(
+                url='http://fake-galaxy.example.org', current=True)
+        tool = Tool.objects.create(
+            galaxy_server=server,
+            id_galaxy='toolshed.example.org/repos/x/y/newick_utils/1.0',
+            name='Newick Utilities', description='A tool', version='1.0')
+        self.citation = Citation.objects.create(
+            tool=tool,
+            reference=(
+                '@article{junier2010,'
+                'author={Thomas Junier and Evgeny M. Zdobnov},'
+                'title={The Newick utilities: high-throughput '
+                'phylogenetic tree processing in the '
+                'U$\\less$scp$\\greater$nix$\\less$/scp$\\greater$ shell},'
+                'journal={Bioinformatics},'
+                'year={2010},'
+                'volume={26},'
+                'pages={1669--1670},'
+                'doi={10.1093/bioinformatics/btq243}'
+                '}'
+            ))
+
+    def test_format_resolves_latex_escaped_tags(self):
+        [html] = self.citation.format()
+        self.assertIn('Unix shell', html)
+        self.assertNotIn('$\\less$', html)
+        self.assertNotIn('<scp>', html)
+
+    def test_txt_resolves_latex_escaped_tags(self):
+        text = self.citation.txt()
+        self.assertIn('Unix shell', text)
+        self.assertNotIn('$\\less$', text)
+        self.assertNotIn('<scp>', text)
 
 
 class GetToolNameViewTest(TestCase):

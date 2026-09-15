@@ -405,14 +405,35 @@ class Citation(models.Model):
     reference = models.TextField(null=True, blank=True)
     tool = models.ForeignKey(Tool, on_delete=models.CASCADE)
 
+    @staticmethod
+    def _clean_bibtex_text(text):
+        """
+        bibtexparser extracts a BibTeX field's raw text with no LaTeX
+        interpretation at all. Some citations (e.g. the Newick Utilities
+        one) use $\\less$/$\\greater$ - a real, if unusual, LaTeX-escaped
+        way to wrap a small-caps tag some bibliography tools use to
+        protect a word's capitalization from BibTeX's automatic
+        title-casing (e.g. "Unix" as U$\\less$scp$\\greater$nix$\\less$/scp$\\greater$,
+        meaning U<scp>nix</scp>) - shown completely unresolved and
+        literal on the rendered page instead. Resolve the escapes to
+        real characters, then strip the <scp>/</scp> tags themselves
+        (the only tag this pattern is ever used for here) rather than
+        leave literal tag markup in txt()'s plain-text output or rely on
+        format()'s HTML output silently ignoring an unrecognized tag.
+        """
+        if not text:
+            return text
+        text = text.replace('$\\less$', '<').replace('$\\greater$', '>')
+        return text.replace('<scp>', '').replace('</scp>', '')
+
     def format(self):
         bib_database = bibtexparser.loads(self.reference)
         f = []
         for k, v in bib_database.entries_dict.items():
-            journal = v.get('journal','')
-            title = v.get('title','')
+            journal = self._clean_bibtex_text(v.get('journal',''))
+            title = self._clean_bibtex_text(v.get('title',''))
             year = v.get('year','')
-            authors = v.get('author','')
+            authors = self._clean_bibtex_text(v.get('author',''))
             doi = v.get('doi','')
             volume = v.get('volume','')
             pages = v.get('pages','')
@@ -433,10 +454,10 @@ class Citation(models.Model):
         bib_database = bibtexparser.loads(self.reference)
         f = ""
         for k, v in bib_database.entries_dict.items():
-            journal = v.get('journal','')
-            title = v.get('title','')
+            journal = self._clean_bibtex_text(v.get('journal',''))
+            title = self._clean_bibtex_text(v.get('title',''))
             year = v.get('year','')
-            authors = v.get('author','')
+            authors = self._clean_bibtex_text(v.get('author',''))
             doi = v.get('doi','')
             volume = v.get('volume','')
             pages = v.get('pages','')
