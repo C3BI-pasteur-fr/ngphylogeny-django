@@ -11,9 +11,10 @@ from galaxy.models import Server
 from workflows.models import Workflow
 from workspace.emails import build_job_completion_email, send_job_completion_email
 from workspace.models import WorkspaceHistory
-from workspace.reports import (build_report_context, build_report_web_context,
+from workspace.reports import (WEEKLY_TO_MONTHLY_SPAN_DAYS,
+                                build_report_context, build_report_web_context,
                                 gather_all_time, gather_last_7_days,
-                                gather_weekly_totals, render_report_html)
+                                gather_period_totals, render_report_html)
 from workspace.tasks import deleteoldgalaxyhistory, send_daily_report
 
 
@@ -183,16 +184,18 @@ class DailyReportTest(TestCase):
         self.assertEqual(by_workflow['BMGE'], 2)
         self.assertEqual(by_workflow['A La Carte'], 1)
 
-    def test_gather_weekly_totals_buckets_across_iso_weeks(self):
+    def test_gather_period_totals_buckets_across_iso_weeks(self):
         # Two entries on the same day land in the same week's bucket; a
         # third, 3 weeks earlier, leaves at least one fully-empty week in
-        # between that must still show up as a zero, not be skipped.
+        # between that must still show up as a zero, not be skipped. Well
+        # under WEEKLY_TO_MONTHLY_SPAN_DAYS, so this stays weekly.
         self._make_history('Tool', workflow_steps='MAFFT', days_ago=0)
         self._make_history('Tool', workflow_steps='BMGE', days_ago=0)
         self._make_history('Tool', workflow_steps='MAFFT', days_ago=21)
 
-        weekly_totals = gather_weekly_totals()
+        granularity, weekly_totals = gather_period_totals()
 
+        self.assertEqual(granularity, 'week')
         self.assertEqual(sum(n for _, n in weekly_totals), 3)
         self.assertIn(0, [n for _, n in weekly_totals])
         # oldest week first, and every consecutive pair is exactly one
@@ -200,6 +203,28 @@ class DailyReportTest(TestCase):
         self.assertLess(weekly_totals[0][0], weekly_totals[-1][0])
         for (d1, _), (d2, _) in zip(weekly_totals, weekly_totals[1:]):
             self.assertEqual((d2 - d1).days, 7)
+
+    def test_gather_period_totals_switches_to_monthly_for_long_spans(self):
+        # A history spanning years (see CLAUDE.md's "Restoring historical
+        # workspace_workspacehistory data") would otherwise produce
+        # hundreds of weekly bars, crushed illegible by .report-chart's
+        # max-width: 100%% once squeezed into a normal page/email width.
+        self._make_history('Tool', workflow_steps='MAFFT',
+                            days_ago=WEEKLY_TO_MONTHLY_SPAN_DAYS + 30)
+        self._make_history('Tool', workflow_steps='BMGE', days_ago=0)
+
+        granularity, monthly_totals = gather_period_totals()
+
+        self.assertEqual(granularity, 'month')
+        self.assertEqual(sum(n for _, n in monthly_totals), 2)
+        # oldest month first, one calendar month apart between entries -
+        # not a fixed 30/31-day step.
+        self.assertLess(monthly_totals[0][0], monthly_totals[-1][0])
+        for (d1, _), (d2, _) in zip(monthly_totals, monthly_totals[1:]):
+            expected_next = (d1.replace(year=d1.year + 1, month=1)
+                              if d1.month == 12
+                              else d1.replace(month=d1.month + 1))
+            self.assertEqual(d2, expected_next)
 
     def test_single_tool_runs_use_workflow_steps_not_a_workflow_fk(self):
         """
