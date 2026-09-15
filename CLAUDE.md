@@ -564,23 +564,22 @@ controlled Galaxy BLAST server exclusively once it's available, rather
 than also still offering NCBI's shared, rate-limited public
 infrastructure. Both read the same `_PASTEUR_BLAST_ENABLED` module-level
 variable in `settings/base.py` (Python dict literals can't
-cross-reference each other's values directly). Note this doesn't by
-itself bring BLAST analysis back - the whole page is currently disabled
-regardless of this setting (see below).
+cross-reference each other's values directly).
 
-**BLAST analysis is currently disabled**, code-level, not via a CI/CD
-variable: `BlastView.dispatch()` (`blast/views.py`) unconditionally
-serves `templates/blast/blast_disabled.html` (503) for both GET and
-POST, before any form processing, instead of the real submission form -
-both submission paths had open issues (`launch_ncbi_blast`'s NCBI client
-could hang indefinitely with no timeout, now bounded to 10 minutes via
-`soft_time_limit`/`time_limit` - see `blast/tasks.py` - and Pasteur BLAST
-had never been activated at all, see above). The "Blast Analysis" menu
-link is commented out in `templates/base.html`, not deleted. Existing
-runs (viewing/downloading/deleting results already submitted) are
-untouched - only this one entry point for *new* submissions is blocked.
-Re-enable by reverting `BlastView.dispatch()`'s override and
-uncommenting the menu link once both issues have been reviewed.
+**BLAST analysis was briefly, temporarily disabled** (code-level, not
+via a CI/CD variable) right after real usage surfaced two open issues:
+`launch_ncbi_blast`'s NCBI client could hang indefinitely with no
+timeout (`blast/tasks.py`, now bounded to 10 minutes via
+`soft_time_limit`/`time_limit`), and the Pasteur BLAST server option had
+never actually been activated at all (now env-var driven, see above).
+`BlastView.dispatch()` (`blast/views.py`) served
+`templates/blast/blast_disabled.html` (503) instead of the real form,
+and the "Blast Analysis" menu link was commented out in
+`templates/base.html`. Both are reverted now that the underlying issues
+are fixed - `templates/blast/blast_disabled.html` is left in the repo,
+unreferenced, in case a future incident needs the same quick disable
+again (`git log` for `blast/views.py`/`templates/base.html` has the
+exact diff to reapply).
 
 **`/status` is deliberately exempt from maintenance mode** - both
 `readinessProbe` and `livenessProbe` on the `web` Deployment point at it,
