@@ -17,12 +17,28 @@ class MaintenanceModeMiddleware:
     they'd ever reach this middleware, which is exactly what lets
     maintenance.html's own static assets (CSS, the maintenance image)
     keep loading while everything else is blocked.
+
+    /status is deliberately exempt: manifest.yaml's web Deployment points
+    both its readinessProbe and livenessProbe at it. Without this
+    exemption, enabling maintenance mode made the probes see the same 503
+    the middleware sends everywhere else, read that as "the container is
+    broken" (not "intentionally in maintenance"), and endlessly restart
+    it via failed liveness checks - the Service ends up with zero ready
+    endpoints and the site goes fully down (HAProxy's "no available
+    server") *because* of turning maintenance mode on, the opposite of
+    the intended effect. Only caught by actually enabling
+    MAINTENANCE=true against a real deployment, not by any test written
+    before that (which exercised the middleware/template, not the
+    Kubernetes probe interaction).
     """
+    EXEMPT_PATHS = {'/status'}
+
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
-        if settings.NGPHYLO_MAINTENANCE_MODE:
+        if (settings.NGPHYLO_MAINTENANCE_MODE
+                and request.path not in self.EXEMPT_PATHS):
             # Rendered explicitly, not left to Django's usual
             # auto-render-a-TemplateResponse step - that step only
             # applies to the innermost view call, not to whatever an

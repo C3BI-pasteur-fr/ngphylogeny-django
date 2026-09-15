@@ -550,6 +550,24 @@ every other CI/CD variable here - re-run/retry the deploy job to flip it
 either way, changing the GitLab variable alone doesn't touch an
 already-running pod.
 
+**`/status` is deliberately exempt from maintenance mode** - both
+`readinessProbe` and `livenessProbe` on the `web` Deployment point at it,
+not `/`. First real use of `MAINTENANCE=true` (2026-09-15, `deploy-dev`)
+took the site *fully* down rather than showing the maintenance page: the
+middleware's 503 on every path included whatever the probes hit, and
+Kubernetes reads a failing `httpGet` probe as "the container is broken",
+not "intentionally in maintenance" - repeated liveness failures
+restarted the pod endlessly, and the Service ended up with zero ready
+endpoints (the client-visible symptom was an infrastructure-level "no
+available server", not even an app-level error). Immediate recovery was
+`kubectl set env deployment/ngphylogeny-web -n <namespace>
+NGPHYLO_MAINTENANCE_MODE=False` (patches the running Deployment directly,
+faster than waiting on a pipeline run) plus flipping the `MAINTENANCE`
+CI/CD variable back so the next deploy didn't reintroduce it. If any
+future page/endpoint also needs to stay reachable during maintenance,
+add it to `MaintenanceModeMiddleware.EXEMPT_PATHS`, not just to whatever
+the probes happen to check.
+
 **Every container (`init` Job, `web`, `celery-worker`, `celery-beat`) sets
 `DJANGO_SETTINGS_MODULE` explicitly** to `NGPhylogeny_fr.settings.prod` in
 its own `env:` list (no anchor/YAML-reuse across them — anchors don't

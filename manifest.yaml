@@ -294,7 +294,14 @@ spec:
               memory: "1Gi"
           readinessProbe:
             httpGet:
-              path: /
+              # /status, not / - a plain static 200, exempted from
+              # MaintenanceModeMiddleware (see that file's docstring).
+              # Probing / meant enabling maintenance mode made the
+              # probes read the deliberate 503 as "container broken" and
+              # endlessly restart it via failed liveness checks, taking
+              # the site fully down instead of showing the maintenance
+              # page - the opposite of the intended effect.
+              path: /status
               port: 8000
             # Generous initial delay: a cold uwsgi worker's first request
             # (Django app loading, first DB connection) measured ~1-2s
@@ -306,7 +313,7 @@ spec:
             failureThreshold: 3
           livenessProbe:
             httpGet:
-              path: /
+              path: /status
               port: 8000
             initialDelaySeconds: 30
             periodSeconds: 10
