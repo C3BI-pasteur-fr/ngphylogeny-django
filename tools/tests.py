@@ -198,16 +198,31 @@ class CitationLatexArtifactsTest(TestCase):
     against bibtexparser 1.4.4).
     """
 
+    @staticmethod
+    def _fake_tool_json(id_galaxy, name, version):
+        return Mock(status_code=200, json=lambda: {
+            'id': id_galaxy, 'name': name, 'version': version,
+            'inputs': [], 'outputs': [],
+        })
+
     def setUp(self):
         with patch('galaxy.models.requests.get',
                    return_value=Mock(status_code=200,
                                       json=lambda: {'version_major': '25.1'})):
             server = Server.objects.create(
                 url='http://fake-galaxy.example.org', current=True)
-        newick_tool = Tool.objects.create(
-            galaxy_server=server,
-            id_galaxy='toolshed.example.org/repos/x/y/newick_utils/1.0',
-            name='Newick Utilities', description='A tool', version='1.0')
+        # Tool.save() -> clean() fetches tool_json for real (a live HTTP
+        # call, not mockable away by mocking galaxy.models alone - see
+        # ImportToolsCitationsTest above) - without this mock these
+        # Tool.objects.create() calls try to actually resolve
+        # fake-galaxy.example.org and fail in CI with no network access.
+        newick_id = 'toolshed.example.org/repos/x/y/newick_utils/1.0'
+        with patch('tools.models.requests.get',
+                   return_value=self._fake_tool_json(
+                       newick_id, 'Newick Utilities', '1.0')):
+            newick_tool = Tool.objects.create(
+                galaxy_server=server, id_galaxy=newick_id,
+                name='Newick Utilities', description='A tool', version='1.0')
         self.newick_citation = Citation.objects.create(
             tool=newick_tool,
             reference=(
@@ -223,10 +238,13 @@ class CitationLatexArtifactsTest(TestCase):
                 'doi={10.1093/bioinformatics/btq243}'
                 '}'
             ))
-        phyml_tool = Tool.objects.create(
-            galaxy_server=server,
-            id_galaxy='toolshed.example.org/repos/x/y/phyml/3.0',
-            name='PhyML', description='A tool', version='3.0')
+        phyml_id = 'toolshed.example.org/repos/x/y/phyml/3.0'
+        with patch('tools.models.requests.get',
+                   return_value=self._fake_tool_json(
+                       phyml_id, 'PhyML', '3.0')):
+            phyml_tool = Tool.objects.create(
+                galaxy_server=server, id_galaxy=phyml_id,
+                name='PhyML', description='A tool', version='3.0')
         self.phyml_citation = Citation.objects.create(
             tool=phyml_tool,
             reference=(
