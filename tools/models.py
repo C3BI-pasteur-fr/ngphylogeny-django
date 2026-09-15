@@ -1,6 +1,8 @@
 import ast
 import requests
 import bibtexparser
+from bibtexparser.bparser import BibTexParser
+from bibtexparser.customization import convert_to_unicode
 
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -406,34 +408,71 @@ class Citation(models.Model):
     tool = models.ForeignKey(Tool, on_delete=models.CASCADE)
 
     @staticmethod
-    def _clean_bibtex_text(text):
+    def _bibtex_parser():
         """
-        bibtexparser extracts a BibTeX field's raw text with no LaTeX
-        interpretation at all. Some citations (e.g. the Newick Utilities
-        one) use $\\less$/$\\greater$ - a real, if unusual, LaTeX-escaped
-        way to wrap a small-caps tag some bibliography tools use to
-        protect a word's capitalization from BibTeX's automatic
-        title-casing (e.g. "Unix" as U$\\less$scp$\\greater$nix$\\less$/scp$\\greater$,
-        meaning U<scp>nix</scp>) - shown completely unresolved and
-        literal on the rendered page instead. Resolve the escapes to
-        real characters, then strip the <scp>/</scp> tags themselves
-        (the only tag this pattern is ever used for here) rather than
-        leave literal tag markup in txt()'s plain-text output or rely on
-        format()'s HTML output silently ignoring an unrecognized tag.
+        bibtexparser.loads() with no parser at all extracts a field's raw
+        text with zero LaTeX interpretation - accented author names
+        (Guindon et al.'s PhyML citation: "St{\\'{e}}phane"/
+        "Jean-Fran{\\c{c}}ois") and brace-protected capitalization
+        ("{PhyML}") both showed up completely unresolved and literal on
+        the rendered page. convert_to_unicode (via bibtexparser's own
+        latex_to_unicode) converts the whole standard set of LaTeX accent
+        commands to real Unicode and strips any braces left over
+        afterward - covers this class of artifact generally, rather than
+        hand-rolling substitutions for every possible accented letter.
+        """
+        parser = BibTexParser()
+        parser.customization = convert_to_unicode
+        return parser
+
+    @staticmethod
+    def _resolve_latex_escapes(reference):
+        """
+        Applied to the RAW BibTeX source text before parsing, not to
+        already-parsed field values - and that ordering matters.
+        convert_to_unicode (see _bibtex_parser()) only knows standard
+        LaTeX commands, not $\\less$/$\\greater$ (a real but non-standard
+        LaTeX-escaped way some bibliography tools wrap a small-caps tag
+        to protect a word's capitalization from BibTeX's automatic
+        title-casing - the Newick Utilities citation: "Unix" as
+        U$\\less$scp$\\greater$nix$\\less$/scp$\\greater$, meaning
+        U<scp>nix</scp>). Worse, run on the *parsed* field value,
+        convert_to_unicode's own LaTeX interpretation reads \\l (inside
+        \\less) as the real, standard LaTeX command for "ł" and silently
+        mangles $\\less$ into $łess$ first - verified directly against
+        bibtexparser 1.4.4, not assumed - so by the time a post-parse
+        cleanup step would run, the pattern it's looking for is already
+        gone. Resolving these escapes on the raw text first avoids the
+        collision entirely: a bare "<"/">" character has no LaTeX meaning
+        for convert_to_unicode to misinterpret.
+        """
+        if not reference:
+            return reference
+        return reference.replace('$\\less$', '<').replace('$\\greater$', '>')
+
+    @staticmethod
+    def _strip_scp_tags(text):
+        """
+        The only thing _resolve_latex_escapes' </>-resolution is ever
+        used to wrap here is a <scp>...</scp> small-caps tag (see that
+        method's docstring). Strip the tags themselves, applied to
+        already-parsed field values, rather than leave literal tag markup
+        in txt()'s plain-text output or rely on format()'s HTML output
+        silently ignoring an unrecognized tag.
         """
         if not text:
             return text
-        text = text.replace('$\\less$', '<').replace('$\\greater$', '>')
         return text.replace('<scp>', '').replace('</scp>', '')
 
     def format(self):
-        bib_database = bibtexparser.loads(self.reference)
+        reference = self._resolve_latex_escapes(self.reference)
+        bib_database = bibtexparser.loads(reference, parser=self._bibtex_parser())
         f = []
         for k, v in bib_database.entries_dict.items():
-            journal = self._clean_bibtex_text(v.get('journal',''))
-            title = self._clean_bibtex_text(v.get('title',''))
+            journal = self._strip_scp_tags(v.get('journal',''))
+            title = self._strip_scp_tags(v.get('title',''))
             year = v.get('year','')
-            authors = self._clean_bibtex_text(v.get('author',''))
+            authors = self._strip_scp_tags(v.get('author',''))
             doi = v.get('doi','')
             volume = v.get('volume','')
             pages = v.get('pages','')
@@ -451,13 +490,14 @@ class Citation(models.Model):
         return f
 
     def txt(self):
-        bib_database = bibtexparser.loads(self.reference)
+        reference = self._resolve_latex_escapes(self.reference)
+        bib_database = bibtexparser.loads(reference, parser=self._bibtex_parser())
         f = ""
         for k, v in bib_database.entries_dict.items():
-            journal = self._clean_bibtex_text(v.get('journal',''))
-            title = self._clean_bibtex_text(v.get('title',''))
+            journal = self._strip_scp_tags(v.get('journal',''))
+            title = self._strip_scp_tags(v.get('title',''))
             year = v.get('year','')
-            authors = self._clean_bibtex_text(v.get('author',''))
+            authors = self._strip_scp_tags(v.get('author',''))
             doi = v.get('doi','')
             volume = v.get('volume','')
             pages = v.get('pages','')

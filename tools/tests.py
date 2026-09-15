@@ -173,17 +173,29 @@ class ImportToolsCitationsTest(TestCase):
         self.assertEqual(self.tool.citation_set.count(), 2)
 
 
-class CitationLatexEscapeTest(TestCase):
+class CitationLatexArtifactsTest(TestCase):
     """
     Regression test: bibtexparser extracts a BibTeX field's raw text with
-    no LaTeX interpretation at all. The Newick Utilities tool's real
-    citation uses $\\less$/$\\greater$ - a real, if unusual, LaTeX-escaped
-    way to wrap a small-caps tag some bibliography tools use to protect a
-    word's capitalization from BibTeX's automatic title-casing ("Unix" as
-    U$\\less$scp$\\greater$nix$\\less$/scp$\\greater$, meaning
-    U<scp>nix</scp>) - rendered completely unresolved and literal on the
-    deployed history/citations page, only caught by a user actually
-    viewing it live.
+    no LaTeX interpretation at all by default, so two real tool citations
+    both showed up with literal LaTeX artifacts on the deployed history/
+    citations page, only caught by a user actually viewing it live:
+
+    - The Newick Utilities citation uses $\\less$/$\\greater$ - a real, if
+      unusual, LaTeX-escaped way to wrap a small-caps tag some
+      bibliography tools use to protect a word's capitalization from
+      BibTeX's automatic title-casing ("Unix" as
+      U$\\less$scp$\\greater$nix$\\less$/scp$\\greater$, meaning
+      U<scp>nix</scp>).
+    - The PhyML citation (Guindon et al.) has accented author names in
+      standard LaTeX escape form ("St{\\'{e}}phane", "Jean-Fran{\\c{c}}ois")
+      and brace-protected capitalization ("{PhyML}").
+
+    Also a regression guard on ordering: resolving $\\less$/$\\greater$ has
+    to happen on the *raw* BibTeX text before parsing, not on already-
+    parsed field values - convert_to_unicode's own LaTeX interpretation
+    reads \\l (inside \\less) as the real LaTeX command for "ł" and mangles
+    $\\less$ into $łess$ first if given the chance (verified directly
+    against bibtexparser 1.4.4).
     """
 
     def setUp(self):
@@ -192,12 +204,12 @@ class CitationLatexEscapeTest(TestCase):
                                       json=lambda: {'version_major': '25.1'})):
             server = Server.objects.create(
                 url='http://fake-galaxy.example.org', current=True)
-        tool = Tool.objects.create(
+        newick_tool = Tool.objects.create(
             galaxy_server=server,
             id_galaxy='toolshed.example.org/repos/x/y/newick_utils/1.0',
             name='Newick Utilities', description='A tool', version='1.0')
-        self.citation = Citation.objects.create(
-            tool=tool,
+        self.newick_citation = Citation.objects.create(
+            tool=newick_tool,
             reference=(
                 '@article{junier2010,'
                 'author={Thomas Junier and Evgeny M. Zdobnov},'
@@ -211,18 +223,52 @@ class CitationLatexEscapeTest(TestCase):
                 'doi={10.1093/bioinformatics/btq243}'
                 '}'
             ))
+        phyml_tool = Tool.objects.create(
+            galaxy_server=server,
+            id_galaxy='toolshed.example.org/repos/x/y/phyml/3.0',
+            name='PhyML', description='A tool', version='3.0')
+        self.phyml_citation = Citation.objects.create(
+            tool=phyml_tool,
+            reference=(
+                '@article{guindon2010,'
+                'author={St{\\\'{e}}phane Guindon and '
+                'Jean-Fran{\\c{c}}ois Dufayard},'
+                'title={New Algorithms and Methods to Estimate '
+                'Maximum-Likelihood Phylogenies: Assessing the '
+                'Performance of {PhyML} 3.0},'
+                'journal={Systematic Biology},'
+                'year={2010},'
+                'volume={59},'
+                'pages={307--321}'
+                '}'
+            ))
 
-    def test_format_resolves_latex_escaped_tags(self):
-        [html] = self.citation.format()
+    def test_format_resolves_newick_scp_tags(self):
+        [html] = self.newick_citation.format()
         self.assertIn('Unix shell', html)
         self.assertNotIn('$\\less$', html)
         self.assertNotIn('<scp>', html)
 
-    def test_txt_resolves_latex_escaped_tags(self):
-        text = self.citation.txt()
+    def test_txt_resolves_newick_scp_tags(self):
+        text = self.newick_citation.txt()
         self.assertIn('Unix shell', text)
         self.assertNotIn('$\\less$', text)
         self.assertNotIn('<scp>', text)
+
+    def test_format_resolves_phyml_accents_and_braces(self):
+        [html] = self.phyml_citation.format()
+        self.assertIn('Stéphane Guindon', html)
+        self.assertIn('Jean-François Dufayard', html)
+        self.assertIn('Performance of PhyML 3.0', html)
+        self.assertNotIn('{PhyML}', html)
+        self.assertNotIn("{\\'{e}}", html)
+
+    def test_txt_resolves_phyml_accents_and_braces(self):
+        text = self.phyml_citation.txt()
+        self.assertIn('Stéphane Guindon', text)
+        self.assertIn('Jean-François Dufayard', text)
+        self.assertIn('Performance of PhyML 3.0', text)
+        self.assertNotIn('{PhyML}', text)
 
 
 class GetToolNameViewTest(TestCase):
