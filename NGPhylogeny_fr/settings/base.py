@@ -75,6 +75,9 @@ MIDDLEWARE = [
     # deployment has no separate nginx/CDN in front of it under prod
     # settings (DEBUG=False).
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    # Must stay right after WhiteNoiseMiddleware - see
+    # NGPhylogeny_fr/middleware.py's own docstring for why.
+    'NGPhylogeny_fr.middleware.MaintenanceModeMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -217,6 +220,14 @@ EMAIL_PORT = os.environ.get('NGPHYLO_EMAIL_PORT')
 EMAIL_HOST_USER = os.environ.get('NGPHYLO_EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.environ.get('NGPHYLO_EMAIL_HOST_PASSWORD')
 EMAIL_USE_TLS = (os.environ.get('NGPHYLO_EMAIL_USE_TLS')== 'True')
+
+# See NGPhylogeny_fr/middleware.py. Case-insensitive (unlike
+# EMAIL_USE_TLS's exact-'True' check above) since a maintenance toggle
+# being silently wrong because someone typed "true" instead of "True" in
+# a GitLab CI/CD variable has real consequences either way (site stuck up
+# during an actual outage, or stuck down after maintenance ends).
+NGPHYLO_MAINTENANCE_MODE = (
+    os.environ.get('NGPHYLO_MAINTENANCE_MODE', '').lower() == 'true')
 
 if EMAIL_PORT:
     # Truthy check, not "is not None": docker-compose.yml/

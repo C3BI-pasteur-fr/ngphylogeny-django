@@ -199,6 +199,14 @@ spec:
           ports:
             - containerPort: 8000
           env:
+            # Only web needs this - celery-worker/celery-beat don't serve
+            # HTTP at all, and the init Job should keep running
+            # migrations/setup regardless (see
+            # NGPhylogeny_fr/middleware.py). Left unset/empty (the
+            # default when the MAINTENANCE CI/CD variable isn't set),
+            # maintenance mode stays off.
+            - name: NGPHYLO_MAINTENANCE_MODE
+              value: "${MAINTENANCE}"
             - name: DJANGO_SETTINGS_MODULE
               # Explicit on every single container below, not left to
               # manage.py's own default (settings.local, DEBUG=True) -

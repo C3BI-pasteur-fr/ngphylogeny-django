@@ -3,7 +3,7 @@ from unittest.mock import Mock, patch
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.http import HttpResponse
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from galaxy.models import GalaxyUser, Server
 from utils import biofile
@@ -61,6 +61,32 @@ class StaticPagesSmokeTest(TestCase):
             self.assertEqual(
                 response.status_code, 200,
                 "GET %s returned %s" % (path, response.status_code))
+
+
+class MaintenanceModeTest(TestCase):
+    """
+    NGPhylogeny_fr.middleware.MaintenanceModeMiddleware: every request
+    should get templates/maintenance.html (503) instead of routing
+    normally whenever settings.NGPHYLO_MAINTENANCE_MODE is True, and
+    normal routing must be completely unaffected when it's False (the
+    default).
+    """
+
+    @override_settings(NGPHYLO_MAINTENANCE_MODE=True)
+    def test_maintenance_mode_on_serves_maintenance_page_for_any_path(self):
+        # Including a path that wouldn't otherwise resolve at all - the
+        # middleware runs before URL routing, so it overrides even what
+        # would normally be a 404, not just real pages.
+        for path in ['/', '/about', '/this-path-does-not-exist']:
+            response = self.client.get(path)
+            self.assertEqual(response.status_code, 503, path)
+            self.assertTemplateUsed(response, 'maintenance.html')
+
+    @override_settings(NGPHYLO_MAINTENANCE_MODE=False)
+    def test_maintenance_mode_off_routes_normally(self):
+        response = self.client.get('/')
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'home.html')
 
 
 class DisplayViewsAjaxDetectionTest(TestCase):

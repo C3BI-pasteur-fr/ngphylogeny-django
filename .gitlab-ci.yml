@@ -172,6 +172,13 @@ build:
 #     these. Left unset, importworkflows falls back to its previous
 #     name-based listing behavior instead. See CLAUDE.md's "Kubernetes
 #     deployment" section for the actual galaxy.pasteur.fr ids in use.
+#   - MAINTENANCE (plain, optional): "true" puts the site into maintenance
+#     mode (every request gets templates/maintenance.html, 503, instead
+#     of routing normally - see NGPhylogeny_fr/middleware.py). Left
+#     unset/anything else, maintenance mode stays off. Takes effect on
+#     the next deploy - re-run/retry the deploy job to flip it either way,
+#     changing the GitLab CI/CD variable alone doesn't affect an
+#     already-running pod.
 #   - Masked + protected values, envsubst'd into the two Secrets in
 #     manifest.yaml/manifest_datastores.yaml (stringData, never committed):
 #     POSTGRES_PASSWORD, DJANGO_SECRET_KEY (generate with

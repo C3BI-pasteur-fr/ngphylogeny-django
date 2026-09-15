@@ -534,6 +534,22 @@ behavior unchanged, which is what `docker-compose.yml`/
 `docker-compose.standalone.yml` still use (a different, freshly-created
 Galaxy instance on each of those has no such stable pre-known ids).
 
+**Maintenance mode**: the `web` Deployment's (only - not `init`/
+`celery-worker`/`celery-beat`) `NGPHYLO_MAINTENANCE_MODE` env var, driven
+by the `MAINTENANCE` GitLab CI/CD variable ("true" to enable, anything
+else/unset to leave it off), makes `NGPhylogeny_fr.middleware.
+MaintenanceModeMiddleware` serve `templates/maintenance.html` (503) for
+every request instead of routing normally - a previously-dead, hardcoded-
+stale-date template that used to be wired in via a commented-out catch-
+all URL pattern (`re_path(r'.*', ...)`, now removed) rather than a
+setting. The message is deliberately generic ("currently under
+maintenance... we'll be back shortly") rather than naming a specific
+reason/date, since it's meant to be reusable every time this gets flipped
+on, not rewritten per-incident. Takes effect on the next deploy, same as
+every other CI/CD variable here - re-run/retry the deploy job to flip it
+either way, changing the GitLab variable alone doesn't touch an
+already-running pod.
+
 **Every container (`init` Job, `web`, `celery-worker`, `celery-beat`) sets
 `DJANGO_SETTINGS_MODULE` explicitly** to `NGPhylogeny_fr.settings.prod` in
 its own `env:` list (no anchor/YAML-reuse across them — anchors don't

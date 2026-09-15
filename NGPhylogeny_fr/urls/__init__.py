@@ -41,5 +41,4 @@ urlpatterns = [
     re_path(r'^workspace/', include(workspace_urls)),
     re_path(r'^blast/',include(blast_urls)),
     re_path(r'^$', TemplateView.as_view(template_name="home.html"), name="home"),
-    # url(r'.*', TemplateView.as_view(template_name="maintenance.html"), name="home"),
 ]
