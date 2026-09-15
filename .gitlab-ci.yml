@@ -203,11 +203,11 @@ deploy-prod:
   <<: *deploy
   variables:
     NAMESPACE: "ngphylogenyfr-prod"
-    PUBLIC_URL: "ngphylogenyfr.pasteur.cloud"
-    INGRESS_CLASS: "external"
+    PUBLIC_URL: "ngphylogeny.pasteur.cloud"
+    INGRESS_CLASS: "internal"
   environment:
     name: k8sprod-02-ngphylogenyfr
-    url: https://ngphylogenyfr.pasteur.cloud
+    url: https://ngphylogeny.pasteur.cloud
   rules:
     # Manual, not automatic on every push - unlike dev, a production
     # rollout should be a deliberate action even once this pipeline is
