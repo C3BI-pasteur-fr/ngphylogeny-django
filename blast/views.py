@@ -7,7 +7,6 @@ from django.urls import reverse_lazy
 from django.http import HttpResponseRedirect
 from django.conf import settings
 from django.http import HttpResponse
-from django.shortcuts import render
 
 from .forms import BlastForm
 from .tasks import launch_ncbi_blast, launch_pasteur_blast, build_tree
@@ -59,20 +58,6 @@ class BlastView(FormView, TemplateView):
     success_url = 'blast_view'
     runid = ""
     model = BlastRun
-
-    def dispatch(self, request, *args, **kwargs):
-        # BLAST analysis temporarily disabled (both submission paths had
-        # open issues: launch_ncbi_blast could hang indefinitely with no
-        # timeout - see that task's own comment in blast/tasks.py - and
-        # the Pasteur BLAST server option has never actually been
-        # activated, settings.BLASTS['pasteur']['activated'] = False).
-        # Overriding dispatch(), not get()/post() individually, so this
-        # applies before any form processing either way. Existing blast
-        # runs (BlastRunView, blast_delete, etc.) are untouched - this
-        # only blocks *new* submissions via this entry point, matching
-        # what got asked for ("deactivate the page 'Blast Analysis'"),
-        # not the whole blast subsystem.
-        return render(request, 'blast/blast_disabled.html', status=503)
 
     def form_valid(self, form):
         # This method is called when valid form data has been POSTed.
