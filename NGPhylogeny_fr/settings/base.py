@@ -319,9 +319,30 @@ CELERY_BEAT_SCHEDULE = {
     },
 }
 
+# Mutually exclusive by design, not just independently toggleable: once
+# Pasteur's own Galaxy BLAST server is activated, prefer it exclusively
+# rather than also still offering NCBI's public server (the slower, less
+# controlled option - shared, rate-limited infrastructure outside this
+# app's control, only bounded to a hard 10-minute timeout this session,
+# see blast/tasks.py's launch_ncbi_blast). Computed once into a plain
+# variable, not cross-referenced between the two dict entries below -
+# Python dict literals can't self-reference like that.
+_PASTEUR_BLAST_ENABLED = os.environ.get(
+    'NGPHYLO_PASTEUR_BLAST_ENABLED', '').lower() == 'true'
+
 BLASTS = {
     'pasteur' : {
-        'activated' : False,
+        # Env-var driven (NGPHYLO_PASTEUR_BLAST_ENABLED, "true" to
+        # activate - anything else/unset leaves it off, matching this
+        # setting's long-standing hardcoded default), not a hardcoded
+        # literal - lets this be turned on per-deployment without a code
+        # change/redeploy of the setting itself, same pattern as
+        # NGPHYLO_MAINTENANCE_MODE. Case-insensitive for the same reason
+        # as that setting: a silently-wrong toggle here just means
+        # showing/hiding a server option, not a security issue either
+        # way, so being lenient about "true"/"True"/"TRUE" is worth more
+        # than being strict.
+        'activated' : _PASTEUR_BLAST_ENABLED,
         'name' : 'Institut Pasteur Galaxy Server',
         'progs': {
             'toolshed.pasteur.fr/repos/fmareuil/ncbi_blast_plus/ncbi_blastn_wrapper/2.6.0' : {
@@ -394,7 +415,9 @@ BLASTS = {
         },
     },
     'ncbi' : {
-        'activated' : True,
+        # See _PASTEUR_BLAST_ENABLED above - mutually exclusive with
+        # 'pasteur', not independently toggleable.
+        'activated' : not _PASTEUR_BLAST_ENABLED,
         'name' : 'Public NCBI Blast Server',
         'progs' : {
             'blastn' : {

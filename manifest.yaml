@@ -207,6 +207,11 @@ spec:
             # maintenance mode stays off.
             - name: NGPHYLO_MAINTENANCE_MODE
               value: "${MAINTENANCE}"
+            # Also set on celery-worker (launch_pasteur_blast/
+            # checkblastruns in blast/tasks.py read this too) - not on
+            # celery-beat/init, which never touch settings.BLASTS.
+            - name: NGPHYLO_PASTEUR_BLAST_ENABLED
+              value: "${PASTEUR_BLAST_ENABLED}"
             - name: DJANGO_SETTINGS_MODULE
               # Explicit on every single container below, not left to
               # manage.py's own default (settings.local, DEBUG=True) -
@@ -361,6 +366,11 @@ spec:
           args: ["-A", "NGPhylogeny_fr.celery:app", "worker", "-l", "INFO",
                   "-Q", "default,monitor,ncbi_blast", "--concurrency=2"]
           env:
+            # Needed here too, not just on web - launch_pasteur_blast/
+            # checkblastruns (blast/tasks.py) also read
+            # settings.BLASTS['pasteur']['activated'].
+            - name: NGPHYLO_PASTEUR_BLAST_ENABLED
+              value: "${PASTEUR_BLAST_ENABLED}"
             - name: DJANGO_SETTINGS_MODULE
               # Explicit on every single container below, not left to
               # manage.py's own default (settings.local, DEBUG=True) -
