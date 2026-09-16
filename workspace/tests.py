@@ -7,6 +7,7 @@ from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
+from blast.models import BlastRun
 from galaxy.models import Server
 from workflows.models import Workflow
 from workspace.emails import build_job_completion_email, send_job_completion_email
@@ -172,6 +173,27 @@ class DailyReportTest(TestCase):
         self.assertEqual(by_day_category[three_days_ago]['Tool'], 1)
         self.assertEqual(sum(sum(c.values()) for c in by_day_category.values()), 3)
 
+    def test_gather_last_7_days_includes_blast_runs_as_a_category(self):
+        """
+        BlastRun isn't a WorkspaceHistory row at all (blast is a
+        parallel, self-contained app - see CLAUDE.md) - gather_last_7_days()
+        merges its counts into the same by_day_category dict under a
+        synthetic 'blast' key so it shows up as just one more category,
+        same as OneClick/Advanced/A La Carte/Single Tool.
+        """
+        today_run = BlastRun.objects.create(query_id='', query_seq='')
+        old_run = BlastRun.objects.create(query_id='', query_seq='')
+        BlastRun.objects.filter(pk=old_run.pk).update(
+            date=timezone.now() - timedelta(days=10))
+
+        _, by_day_category, _ = gather_last_7_days()
+
+        today = timezone.localdate()
+        self.assertEqual(by_day_category[today]['blast'], 1)
+        # Outside the 7-day window - must not be counted here.
+        self.assertEqual(
+            sum(c.get('blast', 0) for c in by_day_category.values()), 1)
+
     def test_gather_all_time_includes_everything_regardless_of_age(self):
         self._make_history('Tool', workflow_steps='BMGE', days_ago=0)
         self._make_history('Tool', workflow_steps='BMGE', days_ago=400)
@@ -183,6 +205,21 @@ class DailyReportTest(TestCase):
         self.assertEqual(by_category['automaker'], 1)
         self.assertEqual(by_workflow['BMGE'], 2)
         self.assertEqual(by_workflow['A La Carte'], 1)
+
+    def test_gather_all_time_includes_blast_runs_regardless_of_deleted(self):
+        """
+        Same "usage report, not a what's-still-retained report" reasoning
+        already applied to WorkspaceHistory (see this module's docstring)
+        - a soft-deleted BlastRun (cleaned up by deleteoldblastruns()'s
+        14-day cutoff) still counts as a real, historical usage.
+        """
+        BlastRun.objects.create(query_id='', query_seq='')
+        deleted_run = BlastRun.objects.create(query_id='', query_seq='')
+        deleted_run.soft_delete()
+
+        by_category, _ = gather_all_time()
+
+        self.assertEqual(by_category['blast'], 2)
 
     def test_gather_period_totals_buckets_across_iso_weeks(self):
         # Two entries on the same day land in the same week's bucket; a

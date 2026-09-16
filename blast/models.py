@@ -5,11 +5,11 @@ import os
 
 from django.db import models
 from django.conf import settings
+from django.utils import timezone
 
 from Bio.Phylo.TreeConstruction import DistanceTreeConstructor, DistanceMatrix
 from Bio import Phylo
 
-from datetime import datetime
 import uuid
 import textwrap
 import logging
@@ -41,7 +41,14 @@ class BlastRun(models.Model):
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email = models.CharField(null=True, max_length=100)
-    date = models.DateTimeField(default=datetime.now, blank=True)
+    # timezone.now, not datetime.now: USE_TZ=True is on, and a naive
+    # datetime here throws "RuntimeWarning: DateTimeField BlastRun.date
+    # received a naive datetime while time zone support is active" on
+    # every save - same bug class already fixed for Workflow.date (see
+    # CLAUDE.md's "Workflow duplicates and the Celery cleanup jobs").
+    # default= is Python-side only, not part of the DB schema, so this
+    # needs no migration/manual ALTER TABLE on an already-deployed DB.
+    date = models.DateTimeField(default=timezone.now, blank=True)
     query_id = models.CharField(null=True, max_length=1000)
     query_seq = models.TextField(null=True)
     evalue = models.FloatField(default=0.00001)

@@ -31,6 +31,7 @@ from django.db.models.functions import TruncMonth, TruncWeek
 from django.template.loader import render_to_string
 from django.utils import timezone
 
+from blast.models import BlastRun
 from workspace.models import WorkspaceHistory
 
 # WorkspaceHistory.workflow_category as actually stored (see CLAUDE.md,
@@ -41,17 +42,28 @@ from workspace.models import WorkspaceHistory
 # side workflow copy) unconditionally sets category='duplicated' on the
 # copy it returns, and that's what wkadvanced.py's form_valid() then reads
 # back to decide the WorkspaceHistory's own workflow_category.
+#
+# 'blast' is not a real workflow_category value - there's no
+# WorkspaceHistory row for a BLAST search at all (blast is a parallel,
+# self-contained app - see CLAUDE.md's "App responsibilities" - with its
+# own BlastRun model/date/deleted fields, not a Workflow/WorkspaceHistory).
+# gather_last_7_days()/gather_all_time() merge BlastRun counts into the
+# same by_day_category/by_category dicts under this key so BLAST shows up
+# as just one more category in the existing charts/tables, without every
+# category-consuming function needing to know it's sourced differently.
 CATEGORY_LABELS = {
     'OneClick': 'OneClick',
     'duplicated': 'Advanced',
     'automaker': 'A La Carte',
     'Tool': 'Single Tool',
+    'blast': 'BLAST',
 }
 CATEGORY_COLORS = {
     'OneClick': '#4C72B0',
     'duplicated': '#DD8452',
     'automaker': '#55A868',
     'Tool': '#C44E52',
+    'blast': '#937860',
 }
 DEFAULT_COLOR = '#8172B2'
 
@@ -92,11 +104,31 @@ def _fig_to_png_bytes(fig):
     return buf.read()
 
 
+def _gather_blast_by_day(start):
+    """
+    {date: count} of BlastRun rows (both servers - NCBI and Pasteur -
+    lumped into one 'blast' category, same as how OneClick/Advanced/A La
+    Carte are each already a single category regardless of which tool
+    ran) with date__date >= start. Counts deleted=True rows too, same
+    "usage report, not a what's-still-retained report" reasoning as
+    WorkspaceHistory - see this module's docstring.
+    """
+    rows = (
+        BlastRun.objects
+        .filter(date__date__gte=start)
+        .values('date__date')
+        .annotate(count=Count('id'))
+    )
+    return {row['date__date']: row['count'] for row in rows}
+
+
 def gather_last_7_days():
     """
     Returns (days, by_day_category, by_day_oneclick_workflow):
     - days: the 7 dates from 6 days ago through today, oldest first.
-    - by_day_category: {date: {raw_category: count}}
+    - by_day_category: {date: {raw_category: count}} - includes a
+      synthetic 'blast' category merged in from BlastRun, not just real
+      WorkspaceHistory.workflow_category values (see CATEGORY_LABELS).
     - by_day_oneclick_workflow: {date: {workflow_name: count}}, OneClick
       submissions only.
     """
@@ -123,6 +155,10 @@ def gather_last_7_days():
         if cat == 'OneClick':
             by_day_oneclick_workflow[d][_workflow_label(row)] += row['count']
 
+    for d, count in _gather_blast_by_day(start).items():
+        if d in by_day_category:
+            by_day_category[d]['blast'] += count
+
     return days, by_day_category, by_day_oneclick_workflow
 
 
@@ -130,7 +166,11 @@ def gather_all_time():
     """
     Returns (by_category, by_workflow): {raw_category: count} and
     {workflow/tool name: count}, over every WorkspaceHistory row ever
-    created.
+    created, plus a synthetic 'blast' entry in by_category merged in from
+    every BlastRun row ever created (see CATEGORY_LABELS/
+    _gather_blast_by_day's docstring). by_workflow has no BLAST
+    breakdown - there's no per-workflow identity to a BLAST search the
+    way there is for a OneClick tool.
     """
     rows = (
         WorkspaceHistory.objects
@@ -142,6 +182,7 @@ def gather_all_time():
     for row in rows:
         by_category[row['workflow_category']] += row['count']
         by_workflow[_workflow_label(row)] += row['count']
+    by_category['blast'] += BlastRun.objects.count()
     return by_category, by_workflow
 
 

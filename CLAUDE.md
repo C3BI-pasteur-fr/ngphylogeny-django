@@ -367,6 +367,30 @@ Advanced-form path and an actual rerun. `reports.py`'s `CATEGORY_LABELS`
 relabels it for display (`'duplicated'` → `"Advanced"`) but doesn't change
 what's actually being counted.
 
+**"BLAST" is a 5th category, merged in from a different app/table
+entirely** — `blast.BlastRun` (see "App responsibilities") has no
+`WorkspaceHistory` row and no `workflow_category`, so it's not a real
+value of that field. `gather_last_7_days()`/`gather_all_time()` each
+separately query `BlastRun` (grouped by `date`/counted overall) and merge
+the result into the same `by_day_category`/`by_category` dicts under a
+synthetic `'blast'` key, alongside `CATEGORY_LABELS['blast'] = 'BLAST'`/
+`CATEGORY_COLORS['blast']`. Both BLAST servers (NCBI and Pasteur) are
+lumped into this one category, same as how OneClick/Advanced/A La Carte
+are each already a single category regardless of which specific tool
+ran. Every category-consuming function downstream (the daily/all-time
+charts, `category_columns`/`per_category`/`alltime_category_table` in
+the template) is already fully generic over whatever keys are in
+`CATEGORY_LABELS`, so this needed no template changes at all — only
+`reports.py`'s two `gather_*` functions and the label/color dicts. Counts
+`deleted=True` `BlastRun` rows too, same "usage report, not a
+what's-still-retained report" reasoning as `WorkspaceHistory` (see this
+section's first paragraph). Alongside this, `BlastRun.date`'s field
+default (`blast/models.py`) and `deleteoldblastruns()`'s cutoff
+(`blast/tasks.py`) were switched from naive `datetime.now()` to
+`django.utils.timezone.now()` — same bug class as `Workflow.date` above,
+just not yet fixed for the `blast` app specifically, and would have
+made the new day-bucketed BLAST query's day boundaries unreliable.
+
 **Restoring historical `workspace_workspacehistory` data** (e.g. into a
 fresh deployment like `ngphylogenyfr-dev`, so the report reflects real
 usage instead of just a handful of test submissions) only needs that one
