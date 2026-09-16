@@ -2,6 +2,7 @@ from __future__ import absolute_import
 
 from django.db.models import Q
 from django.core.cache import cache
+from django.utils import timezone
 
 from smtplib import SMTPException
 
@@ -20,7 +21,7 @@ from celery import shared_task
 from celery.exceptions import SoftTimeLimitExceeded
 from celery.utils.log import get_task_logger
 
-from datetime import timedelta, datetime
+from datetime import timedelta
 
 from galaxy.decorator import galaxy_connection
 from bioblend.galaxy.tools.inputs import inputs
@@ -297,7 +298,9 @@ def deleteoldblastruns():
     Every day at 2am, clears analyses older than 14 days
     """
     logger.info("Start old blast deletion task")
-    datecutoff = datetime.now() - timedelta(days=14)
+    # timezone.now, not datetime.now: USE_TZ=True is on - see BlastRun.date's
+    # own comment in blast/models.py for the same fix/reasoning.
+    datecutoff = timezone.now() - timedelta(days=14)
     for e in BlastRun.objects.filter(deleted=False).filter(date__lte=datecutoff):
         if e.history != "":
             deletegalaxyhistory(e.history)
