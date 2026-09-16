@@ -654,18 +654,24 @@ class HistoryStepChainTemplateTest(TestCase):
 class HistoryPartialRefreshTemplateTest(TestCase):
     """
     Regression test: the history detail page used to poll with a full
-    location.reload() every 10s. It now reloads just
-    workspace/include/history_contents_refreshable.html (step chain +
-    table) via jQuery's .load() (which - unlike a plain AJAX GET swapped
-    in via .html() - executes that fragment's own <script> tags, so its
-    tool-name resolution/step-chain building/tooltip init all re-run
-    exactly as on a real page load, with no separate client-side re-init
-    logic needed). Covers the two things that would silently break this:
-    the outer page actually wiring up window.historyRefreshTimer/the
-    #history-refreshable-region container the JS targets, and the
-    refreshed fragment's own "the run is finished" check knowing to stop
-    polling - re-evaluated fresh on every reload rather than only once at
-    the initial page load, unlike before.
+    location.reload() every 10s, then (still too slow-feeling) a plain
+    $('#history-refreshable-region').load(...) every 10s - .load() blanks
+    the region immediately, so the step chain/table visibly disappeared
+    and slowly rebuilt (several AJAX round trips for tool-name
+    resolution) on every tick. It now loads into a hidden
+    #history-refreshable-staging container instead (?staging=1) and lets
+    history_contents_refreshable.html's own script build the whole thing
+    out of sight, only swapping the finished result into
+    #history-refreshable-region once fully resolved. Covers: the outer
+    page wiring up window.historyRefreshTimer/the staging container the
+    JS targets; a non-staging render (the very first, direct {% include
+    %}) targeting the live region directly and never containing the swap
+    script (running it there would empty() the live region using the
+    otherwise-untouched, empty staging container - see the template's own
+    comments); a staging render targeting the staging container and
+    containing the swap; and the refreshed fragment's own "the run is
+    finished" check knowing to stop polling - re-evaluated fresh on every
+    reload rather than only once at the initial page load, unlike before.
     """
 
     def _obj(self, finished):
@@ -701,14 +707,43 @@ class HistoryPartialRefreshTemplateTest(TestCase):
              'csrf_token': 'faketoken'},
             request=request)
         self.assertIn('id="history-refreshable-region"', html)
+        self.assertIn('id="history-refreshable-staging"', html)
         self.assertIn('window.historyRefreshTimer', html)
         self.assertIn(
-            "$('#history-refreshable-region').load(", html)
+            "$('#history-refreshable-staging').load(", html)
         # function refresh() { location.reload(); } is what this
         # replaced - checked for the actual function body, not just the
         # bare phrase "location.reload()", since an explanatory comment
         # in the new code legitimately mentions it too.
         self.assertNotIn('function refresh() {\n\tlocation.reload();', html)
+
+    def test_non_staging_fragment_targets_the_live_region_with_no_swap_script(self):
+        request = self._request()
+        html = render_to_string(
+            'workspace/include/history_contents_refreshable.html',
+            {'object': self._obj(False), 'request': request,
+             'csrf_token': 'faketoken'},
+            request=request)
+        self.assertIn("var $root = $('#history-refreshable-region');", html)
+        self.assertNotIn(
+            '$.when(window.__historyStepChainReady, '
+            'window.__historyTableReady).done(function () {', html)
+
+    def test_staging_fragment_targets_the_staging_container_and_has_the_swap(self):
+        request = self._request()
+        html = render_to_string(
+            'workspace/include/history_contents_refreshable.html',
+            {'object': self._obj(False), 'request': request,
+             'csrf_token': 'faketoken', 'staging': True},
+            request=request)
+        self.assertIn(
+            "var $root = $('#history-refreshable-staging');", html)
+        self.assertIn(
+            '$.when(window.__historyStepChainReady, '
+            'window.__historyTableReady).done(function () {', html)
+        self.assertIn(
+            "$('#history-refreshable-region').empty()."
+            "append($root.contents());", html)
 
     def test_unfinished_fragment_does_not_stop_polling(self):
         request = self._request()

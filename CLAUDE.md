@@ -413,6 +413,48 @@ swap on the very first poll and never repopulated (that call never runs
 again). Everything that does need to re-run on every poll (step chain,
 table, the finished/polling check) moved into the fragment instead.
 
+**Background-build the refreshed fragment instead of reloading it
+straight into the visible region.** A plain `.load()` into
+`#history-refreshable-region` on every poll (the version above) still
+had a visible flaw: `.load()` blanks the target immediately, and the
+fragment's own tool-name resolution is several sequential/parallel AJAX
+round trips (`get_dataset_tool` per dataset, `get_tool_name` per tool
+group, for both the step chain and the table independently - see
+above) that can visibly take a moment, so the whole region flashed empty
+and slowly rebuilt on every single tick. Fixed by adding a second,
+permanently-hidden container, `#history-refreshable-staging`
+(`display:none`, sits right next to `#history-refreshable-region` in the
+outer shell), and having `refresh()` `.load()` into *that* instead, with
+a `?staging=1` query param (`HistoryContentRefreshView.get_context_data()`
+reads it into a `staging` context flag). The fragment template computes
+`var $root = ...#history-refreshable-staging or #history-refreshable-region...`
+right from that flag, and scopes every single selector inside it through
+`$root.find(...)` instead of a bare `$('#id')` - necessary because, for
+however long a staged build takes, `#workflow-step-chain`/`#myTable`/a
+dataset's own id exist twice in the live document at once (the old,
+still-visible copy, and the new one quietly being built) - `$root.find
+('#id')` stays correct even then: jQuery's `getElementById`-based fast
+path for id selectors only kicks in when the search context is the
+`document` itself, so scoping to a plain element context (`$root` here)
+falls through to a real, properly-scoped `querySelectorAll` search
+instead (checked directly in Sizzle's own source, not assumed). Once
+*both* the step chain and the table report fully resolved - via two new
+`$.Deferred()`s, `window.__historyStepChainReady`/`__historyTableReady`,
+only now resolved after the per-group/per-dataset tool-*name* calls
+finish too, not just the earlier tool-*id* wave the old code already
+waited on - a final `{% if staging %}`-only script moves the staged
+content over wholesale (`$('#history-refreshable-region').empty()
+.append($root.contents())`) and clears `window.historyRefreshInFlight`.
+That flag (plus a 30s watchdog `setTimeout` as a fallback, in case an
+AJAX failure ever left a deferred permanently unresolved) is what
+`refresh()` checks before starting the next tick, so an overlapping
+build can never start mid-swap. The very first render (direct `{%
+include %}`, no query param, `staging` unset/`False`) skips all of this
+by construction: `$root` resolves straight to `#history-refreshable-region`
+and the swap script isn't even in the rendered output, so there's no risk
+of it ever running against an untouched, empty `#history-refreshable-staging`
+and wiping the just-rendered live page.
+
 ### Daily workflow-usage report
 
 `workspace.tasks.send_daily_report` (`CELERY_BEAT_SCHEDULE`, 8am UTC) emails

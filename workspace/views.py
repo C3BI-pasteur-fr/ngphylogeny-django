@@ -163,8 +163,20 @@ class HistoryContentRefreshView(WorkspaceHistoryObjectMixin, DetailView):
     No @ensure_csrf_cookie here (unlike HistoryDetailView) - the initial
     full page load already guarantees the cookie exists by the time this
     is ever called from that page's own JS.
+
+    ?staging=1 tells the template it's being loaded into the hidden
+    #history-refreshable-staging container rather than rendered directly
+    into the live #history-refreshable-region - see the template's own
+    comments for why (builds the step chain/table out of sight, then
+    swaps the finished result in, instead of visibly blanking and
+    rebuilding the live page on every poll).
     """
     template_name = 'workspace/include/history_contents_refreshable.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['staging'] = self.request.GET.get('staging') == '1'
+        return context
 
 
 @connection_galaxy
