@@ -152,14 +152,19 @@ class HistoryDetailView(WorkspaceHistoryObjectMixin, DetailView):
 @method_decorator(connection_galaxy, name="dispatch")
 class HistoryContentRefreshView(WorkspaceHistoryObjectMixin, DetailView):
     """
-    Renders just the step-chain + dataset table (workspace/include/
-    history_contents_refreshable.html) - the part of the history detail
-    page that actually changes as a run progresses. Polled client-side
-    (jQuery's .load(), which - unlike a plain AJAX GET swapped in via
-    .html() - executes the <script> tags in the response, so this reuses
-    the exact same in-template JS the initial page load already runs,
-    no separate client-side re-init logic needed) instead of the full
-    page reload templates/workspace/history.html used to do every 10s.
+    Renders just the part of the history detail page that actually
+    changes as a run progresses (workspace/include/
+    history_contents_refreshable.html) - either the step-chain + dataset
+    table once there are 2+ datasets, or a "please wait" message before
+    that (that template's own top comment has the detail; this used to
+    be a second, entirely separate template/timer - history_wait.html,
+    now deleted - unified into this same one so both states share the
+    exact same shell/polling). Polled client-side (jQuery's .load(),
+    which - unlike a plain AJAX GET swapped in via .html() - executes
+    the <script> tags in the response, so this reuses the exact same
+    in-template JS the initial page load already runs, no separate
+    client-side re-init logic needed) instead of the full page reload
+    templates/workspace/history.html used to do every 10s.
     No @ensure_csrf_cookie here (unlike HistoryDetailView) - the initial
     full page load already guarantees the cookie exists by the time this
     is ever called from that page's own JS.

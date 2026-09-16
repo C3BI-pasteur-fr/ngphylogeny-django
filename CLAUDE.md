@@ -455,6 +455,34 @@ and the swap script isn't even in the rendered output, so there's no risk
 of it ever running against an untouched, empty `#history-refreshable-staging`
 and wiping the just-rendered live page.
 
+**The "please wait, analysis initializing" state was unified into the
+same fragment/shell instead of staying a second, separate template.**
+`templates/workspace/include/history_wait.html` used to be shown by
+`workspace/history.html` in place of `history_contents_provenance_ajax.html`
+whenever a history had fewer than 2 datasets yet (a run just starting) -
+its own copy of the name/email inputs (differently styled, plus a Url
+field the real view no longer has at all - see the panel-restyle work
+above), a full `location.reload()` every 10s (none of the staged-
+background-refresh work above applied to it), and its own copy of the
+"This page is will be refreshed in N sec." banner. All of that drifting
+out of sync with the real view was the actual bug being fixed here, not
+just the individual symptoms - so rather than patch `history_wait.html`
+to separately re-implement the same panel styling/staged-refresh a
+second time, it's deleted outright and that state is now just a branch
+inside `history_contents_refreshable.html` itself: `{% if
+object.history_content and object.history_content|dictsortreversed:
+"hid"|length > 1 %}` picks between the step-chain/table markup (unchanged)
+and a plain "please wait" message + spinner, with `history.html` now
+unconditionally including `history_contents_provenance_ajax.html`
+(previously also `{% if %}`-gated on the same dataset-count check).
+Both `__historyStepChainReady`/`__historyTableReady` resolve immediately
+in the wait branch (nothing async happens there) so a staging swap never
+waits on them. The info-refresh banner itself - in both the old
+`history_wait.html` and the real view - is gone entirely, not just moved:
+it described the old full-page-reload behavior and was never updated for
+the background-staged refresh, which doesn't visibly reload anything for
+a banner to announce.
+
 ### Daily workflow-usage report
 
 `workspace.tasks.send_daily_report` (`CELERY_BEAT_SCHEDULE`, 8am UTC) emails

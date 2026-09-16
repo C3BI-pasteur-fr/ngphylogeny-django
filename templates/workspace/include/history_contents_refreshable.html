@@ -1,17 +1,28 @@
 {% load static %}
 {% comment %}
 The part of the history detail page that actually changes as a run
-progresses (the step chain + the dataset table) - reloaded every 10s via
-jQuery's .load() (workspace.views.HistoryContentRefreshView, see
-history_contents_provenance_ajax.html's own refresh()/countdown script)
-instead of a full page reload. .load() executes the <script> tags below
-on every reload, same as a real page load would, so this fragment is
-fully self-contained: nothing outside it needs to re-run anything for
-this content to work correctly, whether this is the very first render
+progresses - reloaded every 10s via jQuery's .load()
+(workspace.views.HistoryContentRefreshView, see
+history_contents_provenance_ajax.html's own refresh() script) instead of
+a full page reload. .load() executes the <script> tags below on every
+reload, same as a real page load would, so this fragment is fully
+self-contained: nothing outside it needs to re-run anything for this
+content to work correctly, whether this is the very first render
 (included directly into #history-refreshable-region by
 history_contents_provenance_ajax.html, staging=False) or a later polled
 one (loaded into the hidden #history-refreshable-staging container,
 staging=True via ?staging=1 - see HistoryContentRefreshView).
+
+Two states, chosen the same way history.html used to choose between two
+entirely separate templates (history_contents_provenance_ajax.html vs.
+the now-deleted history_wait.html): fewer than 2 datasets yet (a run
+just starting - Galaxy hasn't queued the rest of the workflow's steps
+yet, see CLAUDE.md's step-chain section for why 2+ datasets is when a
+real chain exists at all) shows a "please wait" message instead of the
+step chain/table. Unifying both states into this one fragment means the
+"please wait" state gets the exact same background-staged polling as the
+real one for free, rather than needing its own separate full-page-reload
+timer - previously the entire reason the two behaved differently.
 
 Building the step chain/table involves several sequential/parallel AJAX
 round trips (tool-name resolution, per dataset and per tool group) and
@@ -40,10 +51,12 @@ region stays exactly as it was, untouched, for the whole build.
     // Resolved once this render's own async work (tool-name resolution
     // for both the step chain and the table) is completely done - only
     // consulted by the staging-swap script at the very bottom, and only
-    // when staging (see above).
+    // when staging (see above). Resolved immediately, with nothing to
+    // wait for, in the "please wait" state below.
     window.__historyStepChainReady = $.Deferred();
     window.__historyTableReady = $.Deferred();
 </script>
+{% if object.history_content and object.history_content|dictsortreversed:"hid"|length > 1 %}
 <script>
     // Graphical step-by-step view of the run, above the detailed table -
     // one box per tool step (consecutive datasets from the same tool
@@ -199,6 +212,15 @@ region stays exactly as it was, untouched, for the whole build.
 	});
     });
 </script>
+{% else %}
+<script>
+    // "Please wait" state (see this file's top comment) - nothing async
+    // to build, so both deferreds resolve immediately and a staging swap
+    // never has to wait on this branch.
+    window.__historyStepChainReady.resolve();
+    window.__historyTableReady.resolve();
+</script>
+{% endif %}
 
 {% if object.finished %}
 <script>
@@ -213,7 +235,6 @@ region stays exactly as it was, untouched, for the whole build.
     if (window.historyRefreshTimer) {
 	clearInterval(window.historyRefreshTimer);
     }
-    $('#info-refresh').hide();
 </script>
 {% endif %}
 
@@ -238,6 +259,7 @@ region stays exactly as it was, untouched, for the whole build.
 </script>
 {% endif %}
 
+{% if object.history_content and object.history_content|dictsortreversed:"hid"|length > 1 %}
 <div class="row">
   <div class="col-md-12">
     <div id="workflow-step-chain" class="workflow-step-chain"></div>
@@ -368,3 +390,11 @@ region stays exactly as it was, untouched, for the whole build.
     </table>
   </div>
 </div>
+{% else %}
+<div class="row">
+  <div class="col-md-12 text-center">
+    <h4>Analysis is being initialized on the Galaxy server, please wait a few seconds</h4>
+    <span class="glyphicon glyphicon-refresh spin" style="font-size:24px"></span>
+  </div>
+</div>
+{% endif %}
