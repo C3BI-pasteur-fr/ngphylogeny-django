@@ -663,6 +663,33 @@ this would just sit until `deleteoldblastruns()`'s 14-day cutoff.
 Regression test: `blast.tests.LaunchPasteurBlastTest
 .test_timeout_marks_error_and_cleans_up_galaxy_history`.
 
+**Deleting a BLAST run (`DeleteBlastRunView`) crashed with
+`TemplateDoesNotExist: blast/blastrun_confirm_delete.html`** - a real
+Django 4.x breaking change, not something introduced by this project's
+own rewrite. `BaseDeleteView.post()` was rewritten to go through
+`FormMixin` (`get_form()`/`form_valid()`/`form_invalid()`) and no longer
+calls `self.delete()` at all (the class docstring's own
+`DeleteViewCustomDeleteWarning`, visible in the worker/web log right
+before the crash, says exactly this). The view's `get()` used to forward
+to `self.post()` to skip `DeleteView`'s confirmation page (this view
+never had one) - but `get_form_kwargs()` only binds
+`request.POST`/`request.FILES` onto the form when `self.request.method`
+is actually `'POST'`, which it still isn't when `post()` is called by
+hand from inside a GET request. The resulting unbound form is always
+invalid, so it fell through to `form_invalid()`'s default: render the
+confirmation template - which was never created because this view never
+wanted one. **A real POST request had a second, more severe, silent bug
+for the same reason**: `BaseDeleteView.form_valid()` calls
+`self.object.delete()` directly - Django's real hard delete - so the
+custom `delete()` override (meant to soft-delete via
+`BlastRun.soft_delete()`) was already dead code on the POST path too,
+just without a visible crash. Fixed by dropping the `delete()` override
+entirely and handling both `get()`/`post()` directly with the same
+soft-delete-and-redirect logic, bypassing `FormMixin`'s form machinery
+altogether - this view never validated an actual form. Regression tests:
+`blast.tests.DeleteBlastRunViewTest` (both confirmed to fail - one by
+crashing, one by hard-deleting the row - against the pre-fix code).
+
 **BLAST analysis was briefly, temporarily disabled** (code-level, not
 via a CI/CD variable) right after real usage surfaced two open issues:
 `launch_ncbi_blast`'s NCBI client could hang indefinitely with no
