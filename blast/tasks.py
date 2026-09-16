@@ -323,14 +323,38 @@ def checkblastruns():
     try:
         galaxycon = galaxy_connection()
         galaxycon.nocache = True
-        
-        for b in BlastRun.objects.filter(deleted=False, server=BlastRun.PASTEUR).filter(Q(status=BlastRun.PENDING) | Q(status=BlastRun.RUNNING)):
+    except Exception as e:
+        logger.info("Error while connecting to galaxy: %s" % (e))
+        logging.exception("message")
+        release_lock()
+        return
+
+    # Excludes history_fileid='': launch_pasteur_blast() saves the run as
+    # PENDING right after creating its Galaxy history, but only sets
+    # history_fileid afterwards, once the (network-bound) file upload +
+    # tool run calls complete - a real race with this task's own 1-minute
+    # schedule. Without this exclude, show_dataset(b.history, '') turns
+    # into a GET on Galaxy's history *contents list* endpoint (trailing
+    # empty dataset id) instead of a single dataset, which returns a
+    # list, not a dict - crashing with "'list' object has no attribute
+    # 'get'". That row is picked up again on the next pass once
+    # history_fileid is set.
+    #
+    # Each run is also processed in its own try/except: previously the
+    # entire loop shared one try/except, so a single run's failure (this
+    # race included) silently aborted checking of every other
+    # pending/running run in the same pass too.
+    for b in BlastRun.objects.filter(
+            deleted=False, server=BlastRun.PASTEUR
+        ).exclude(history_fileid='').filter(
+            Q(status=BlastRun.PENDING) | Q(status=BlastRun.RUNNING)):
+        try:
             # State of the output file we want (blast XML)
             dataset=galaxycon.histories.show_dataset(b.history,b.history_fileid)
             state=dataset.get('state')
             infos=dataset.get('misc_info')
             b.message=infos
-    
+
             if state == 'ok':
                 b.status=BlastRun.FINISHED
                 blast_type = BlastRun.blast_type(BlastRun.PASTEUR, b.blastprog)
@@ -343,7 +367,7 @@ def checkblastruns():
                     frame=majorityQueryFrame(tmp_file.name)
                     b.query_seq = biofile.translate(str(b.query_seq), frame)
                     b.save()
-                
+
                 result_handle = open(tmp_file.name, "r")
                 blast_records = NCBIXML.parse(result_handle)
                 ms = PseudoMSA(b.query_id, b.query_seq, query_seq_bk, frame, blast_type)
@@ -384,7 +408,7 @@ def checkblastruns():
             else:
                 b.status=BlastRun.ERROR
             b.save()
-    
+
             if b.email is not None and re.match(r"[^@]+@[^@]+\.[^@]+", b.email) and (b.status == BlastRun.ERROR or b.status == BlastRun.FINISHED):
                 try:
                     message = "Dear NGPhylogeny user, \n\n"
@@ -409,12 +433,13 @@ def checkblastruns():
                 except Exception as e:
                     logging.warning(
                         "Unknown Problem while sending e-mail: %s" % (e))
-    except Exception as e:
-        b.status=BlastRun.ERROR
-        b.message=str(e)
-        b.save()
-        logger.info("Error while checking blast run: %s" % (e))
-        logging.exception("message")
+        except Exception as e:
+            logging.warning(
+                "Problem while checking blast run %s: %s" % (b.id, e))
+            logging.exception("message")
+            b.status=BlastRun.ERROR
+            b.message=str(e)
+            b.save()
 
     release_lock()
     logger.info("Pasteur blast runs checked")

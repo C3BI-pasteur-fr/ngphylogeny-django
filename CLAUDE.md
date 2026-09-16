@@ -577,6 +577,23 @@ class as `workflows.tests.ProcessFileToUploadTest`'s
 `tempfile.NamedTemporaryFile(mode='w')`; regression test
 `blast.tests.LaunchPasteurBlastTest`.
 
+**`checkblastruns()` had a real race with `launch_pasteur_blast()`,
+only surfaced once a real Pasteur submission actually raced its own
+1-minute Celery-beat check**: `launch_pasteur_blast()` saves the run as
+`PENDING` right after creating its Galaxy history, then only sets
+`history_fileid` afterwards, once the (network-bound) file upload + tool
+run calls finish. If `checkblastruns()` polls in that window, it calls
+`galaxycon.histories.show_dataset(b.history, '')` - the empty dataset id
+turns the URL into Galaxy's history *contents list* endpoint instead of a
+single dataset, returning a `list`, not a `dict`: `AttributeError: 'list'
+object has no attribute 'get'`. Worse, the whole per-run loop used to
+share one `try/except`, so this (or any other single run's failure)
+silently aborted checking of every other pending/running Pasteur run in
+that same pass too. Fixed by excluding `history_fileid=''` from the
+polled queryset (that run is picked up again once it's set) and giving
+each run its own `try/except` so one failure can't starve the rest;
+regression tests `blast.tests.CheckBlastRunsTest`.
+
 **BLAST analysis was briefly, temporarily disabled** (code-level, not
 via a CI/CD variable) right after real usage surfaced two open issues:
 `launch_ncbi_blast`'s NCBI client could hang indefinitely with no
