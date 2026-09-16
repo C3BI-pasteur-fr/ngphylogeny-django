@@ -186,6 +186,21 @@ def gather_all_time():
     return by_category, by_workflow
 
 
+def gather_blast_query_lengths():
+    """
+    Returns a list of every known BlastRun.query_length (all-time, both
+    servers, deleted=True included - same reasoning as gather_all_time()).
+    query_length is only set from BlastRun.date onward it was added
+    (blast/tasks.py's launch_ncbi_blast/launch_pasteur_blast, and
+    deleteoldblastruns() derives it retroactively from query_seq before
+    clearing that field) - excludes NULL rather than treating them as 0,
+    since "unknown" and "empty query" aren't the same thing.
+    """
+    return list(
+        BlastRun.objects.exclude(query_length__isnull=True)
+        .values_list('query_length', flat=True))
+
+
 # Above this total history span, gather_period_totals() switches from
 # weekly to monthly buckets - see that function's docstring.
 WEEKLY_TO_MONTHLY_SPAN_DAYS = 731  # ~2 years
@@ -321,6 +336,17 @@ def render_alltime_workflow_bar(by_workflow, top_n=15):
     return _fig_to_png_bytes(fig)
 
 
+def render_blast_query_length_histogram(lengths, bins=30):
+    if not lengths:
+        return None
+    fig, ax = plt.subplots(figsize=(8, 4))
+    ax.hist(lengths, bins=min(bins, len(set(lengths))), color='#937860')
+    ax.set_xlabel('Query length (bp/aa)')
+    ax.set_ylabel('BLAST searches')
+    ax.set_title('All-time BLAST query lengths (n=%d)' % len(lengths))
+    return _fig_to_png_bytes(fig)
+
+
 def render_period_chart(granularity, totals):
     if not totals:
         return None
@@ -348,6 +374,7 @@ CID_DAILY_ONECLICK = 'chart_daily_oneclick'
 CID_WEEKLY = 'chart_weekly'
 CID_ALLTIME_CATEGORY = 'chart_alltime_category'
 CID_ALLTIME_WORKFLOW = 'chart_alltime_workflow'
+CID_BLAST_LENGTH_HISTOGRAM = 'chart_blast_length_histogram'
 
 
 def build_report_context():
@@ -359,6 +386,7 @@ def build_report_context():
     """
     days, by_day_category, by_day_oneclick_workflow = gather_last_7_days()
     by_category, by_workflow = gather_all_time()
+    blast_query_lengths = gather_blast_query_lengths()
 
     all_categories = sorted(
         {c for day in by_day_category.values() for c in day} |
@@ -386,6 +414,8 @@ def build_report_context():
         CID_WEEKLY: render_period_chart(*gather_period_totals()),
         CID_ALLTIME_CATEGORY: render_alltime_category_pie(by_category),
         CID_ALLTIME_WORKFLOW: render_alltime_workflow_bar(by_workflow),
+        CID_BLAST_LENGTH_HISTOGRAM: render_blast_query_length_histogram(
+            blast_query_lengths),
     }
     images = {cid: data for cid, data in chart_bytes.items() if data is not None}
 
@@ -410,13 +440,17 @@ def build_report_context():
             by_workflow.items(), key=lambda x: -x[1]),
         'alltime_workflow_chart': (
             CID_ALLTIME_WORKFLOW if CID_ALLTIME_WORKFLOW in images else None),
+        'blast_length_count': len(blast_query_lengths),
+        'blast_length_chart': (
+            CID_BLAST_LENGTH_HISTOGRAM
+            if CID_BLAST_LENGTH_HISTOGRAM in images else None),
     }
     return context, images
 
 
 CHART_CONTEXT_KEYS = [
     'daily_category_chart', 'daily_oneclick_chart', 'weekly_chart',
-    'alltime_category_chart', 'alltime_workflow_chart',
+    'alltime_category_chart', 'alltime_workflow_chart', 'blast_length_chart',
 ]
 
 

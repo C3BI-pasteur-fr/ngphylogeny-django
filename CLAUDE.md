@@ -391,6 +391,24 @@ default (`blast/models.py`) and `deleteoldblastruns()`'s cutoff
 just not yet fixed for the `blast` app specifically, and would have
 made the new day-bucketed BLAST query's day boundaries unreliable.
 
+**All-time BLAST query-length histogram** — a 6th chart, in the "Since
+the beginning" card, unrelated to the category breakdown above (it's
+not bucketed by day or category at all). `gather_blast_query_lengths()`
+returns every non-`NULL` `BlastRun.query_length` (all-time, `deleted=True`
+included, same reasoning throughout this section);
+`render_blast_query_length_histogram()` renders it via `ax.hist(...)`,
+capped at one bin per distinct value so a handful of searches doesn't
+get smeared across 30 mostly-empty bins. Rows with `query_length` still
+`NULL` are excluded from the histogram entirely (not counted as
+zero-length) - see `BlastRun.query_length`'s own note above for why a
+row can still be `NULL`. `CID_BLAST_LENGTH_HISTOGRAM`/
+`blast_length_chart`/`blast_length_count` follow the exact same
+cid-name/context-key/images-dict wiring as every other chart in this
+module - the shared `CHART_CONTEXT_KEYS` swap (cid: for email,
+data: URI for the web page) and `send_daily_report()`'s generic
+`for cid, png_bytes in images.items()` attachment loop needed no changes
+at all to pick this one up.
+
 **Restoring historical `workspace_workspacehistory` data** (e.g. into a
 fresh deployment like `ngphylogenyfr-dev`, so the report reflects real
 usage instead of just a handful of test submissions) only needs that one

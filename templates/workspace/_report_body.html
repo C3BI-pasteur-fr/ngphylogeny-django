@@ -75,4 +75,11 @@ already in context.
     <tr><td>{{ label }}</td><td class="report-num">{{ count }}</td></tr>
     {% endfor %}
   </table>
+
+  <h3>BLAST query lengths ({{ blast_length_count }} search{{ blast_length_count|pluralize }} with a known length)</h3>
+  {% if blast_length_chart %}
+    <img class="report-chart" src="{{ blast_length_chart }}" alt="All-time BLAST query length histogram">
+  {% else %}
+    <p class="report-empty">No BLAST searches with a known query length yet.</p>
+  {% endif %}
 </div>

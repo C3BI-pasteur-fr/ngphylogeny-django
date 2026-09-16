@@ -221,6 +221,28 @@ class DailyReportTest(TestCase):
 
         self.assertEqual(by_category['blast'], 2)
 
+    def test_blast_query_length_histogram_renders_when_data_present(self):
+        """
+        BlastRun.query_length (blast/models.py) is set at submission time
+        and re-derived at cleanup time if it was ever missed (see
+        blast/tasks.py) - build_report_context() renders it as an
+        all-time histogram, separate from the day/category breakdowns
+        above since it isn't bucketed by day or category at all. Rows
+        with query_length still NULL (not yet set/re-derived) are
+        excluded rather than counted as a zero-length search.
+        """
+        BlastRun.objects.create(query_id='', query_seq='', query_length=120)
+        BlastRun.objects.create(query_id='', query_seq='', query_length=350)
+        BlastRun.objects.create(query_id='', query_seq='', query_length=None)
+
+        context, images = build_report_context()
+
+        self.assertEqual(context['blast_length_count'], 2)
+        cid = context['blast_length_chart']
+        self.assertIsNotNone(cid)
+        self.assertIn(cid, images)
+        self.assertTrue(images[cid].startswith(b'\x89PNG\r\n\x1a\n'))
+
     def test_gather_period_totals_buckets_across_iso_weeks(self):
         # Two entries on the same day land in the same week's bucket; a
         # third, 3 weeks earlier, leaves at least one fully-empty week in
@@ -317,6 +339,8 @@ class DailyReportTest(TestCase):
         self.assertIsNone(context['alltime_category_chart'])
         self.assertIsNone(context['alltime_workflow_chart'])
         self.assertIsNone(context['weekly_chart'])
+        self.assertIsNone(context['blast_length_chart'])
+        self.assertEqual(context['blast_length_count'], 0)
         self.assertEqual(images, {})
         # Must still render without error - the template has to handle
         # every chart being None gracefully.
