@@ -36,6 +36,19 @@ logger = get_task_logger(__name__)
 
 LOCK_EXPIRE = 60 * 5 # Lock expires in 5 minutes
 
+# checkblastruns() gives up on a Pasteur run still pending/running past
+# this age. There's no timeout at all on the actual Galaxy-side blast
+# computation otherwise (unlike launch_ncbi_blast/launch_pasteur_blast's
+# own soft_time_limit/time_limit, which only cover *submitting* the
+# job) - a real search against a big database (e.g. blastn vs nt) can
+# legitimately take a while, but a run that's still "running" after
+# this long is more likely stuck on Galaxy's/the cluster's side than
+# genuinely still computing. 3 hours is a guess at "generous enough for
+# a real, slow-but-legitimate search, bounded enough to actually
+# recover" - adjust based on real observed run times if this turns out
+# to be too tight or too loose.
+PASTEUR_RUN_STALE_AFTER = timedelta(hours=3)
+
 
 ## It should be alone on a celery queue with only 1 cpu
 ## Otherwise, may run too many jobs on ncbi server
@@ -356,6 +369,25 @@ def checkblastruns():
         ).exclude(history_fileid='').filter(
             Q(status=BlastRun.PENDING) | Q(status=BlastRun.RUNNING)):
         try:
+            if timezone.now() - b.date > PASTEUR_RUN_STALE_AFTER:
+                logging.warning(
+                    "Pasteur BLAST run %s has been pending/running for "
+                    "over %s - giving up on it" % (b.id, PASTEUR_RUN_STALE_AFTER))
+                # Queued separately (not called directly), same reasoning
+                # as launch_pasteur_blast's own SoftTimeLimitExceeded
+                # cleanup: don't add another blocking Galaxy call to a
+                # run we've already decided to abandon.
+                if b.history:
+                    deletegalaxyhistory.delay(b.history)
+                b.status = BlastRun.ERROR
+                b.message = (
+                    "This search has been running on the Pasteur Galaxy "
+                    "server for longer than expected and was aborted. "
+                    "Please try again, possibly with a smaller/more "
+                    "specific query.")
+                b.save()
+                continue
+
             # State of the output file we want (blast XML)
             dataset=galaxycon.histories.show_dataset(b.history,b.history_fileid)
             state=dataset.get('state')

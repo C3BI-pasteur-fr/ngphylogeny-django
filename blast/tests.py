@@ -2,16 +2,18 @@
 from __future__ import unicode_literals
 
 import copy
+from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
 from celery.exceptions import SoftTimeLimitExceeded
 from django.conf import settings
 from django.core import mail
 from django.test import TestCase, override_settings
+from django.utils import timezone
 
 from .emails import build_blast_completion_email, send_blast_completion_email
 from .models import BlastRun
-from .tasks import launch_pasteur_blast, checkblastruns
+from .tasks import PASTEUR_RUN_STALE_AFTER, launch_pasteur_blast, checkblastruns
 
 
 class BlastViewTest(TestCase):
@@ -224,6 +226,42 @@ class CheckBlastRunsTest(TestCase):
         self.assertEqual(broken_run.status, BlastRun.ERROR)
         healthy_run.refresh_from_db()
         self.assertEqual(healthy_run.status, BlastRun.RUNNING)
+
+    @patch('blast.tasks.deletegalaxyhistory')
+    @patch('blast.tasks.galaxy_connection')
+    def test_gives_up_on_runs_stuck_past_the_staleness_cutoff(
+            self, mock_galaxy_connection, mock_deletegalaxyhistory):
+        """
+        Regression test: unlike launch_ncbi_blast/launch_pasteur_blast's
+        own soft_time_limit/time_limit (which only cover *submitting* the
+        job), there used to be no timeout at all on the actual Galaxy-side
+        blast computation that checkblastruns() polls - a run genuinely
+        stuck "running" on Galaxy's/the cluster's side (not just a slow
+        legitimate search) would poll forever, showing as permanently
+        "Running" with no way to ever notice or recover.
+        """
+        stale_run = self._pasteur_run(
+            history_fileid='stalefileid', status=BlastRun.RUNNING)
+        BlastRun.objects.filter(pk=stale_run.pk).update(
+            date=timezone.now() - PASTEUR_RUN_STALE_AFTER - timedelta(minutes=1))
+        fresh_run = self._pasteur_run(
+            history_fileid='freshfileid', status=BlastRun.RUNNING)
+
+        galaxycon = MagicMock()
+        galaxycon.histories.show_dataset.return_value = {
+            'state': 'running', 'misc_info': ''}
+        mock_galaxy_connection.return_value = galaxycon
+
+        checkblastruns()
+
+        stale_run.refresh_from_db()
+        self.assertEqual(stale_run.status, BlastRun.ERROR)
+        self.assertIn('longer than expected', stale_run.message)
+        mock_deletegalaxyhistory.delay.assert_called_once_with('fakehistory')
+        galaxycon.histories.show_dataset.assert_called_once_with(
+            'fakehistory', 'freshfileid')
+        fresh_run.refresh_from_db()
+        self.assertEqual(fresh_run.status, BlastRun.RUNNING)
 
 
 class BlastCompletionEmailTest(TestCase):
