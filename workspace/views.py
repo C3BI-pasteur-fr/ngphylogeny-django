@@ -1,6 +1,7 @@
 from __future__ import unicode_literals
 import json
 
+import requests
 from django.contrib.admin.views.decorators import staff_member_required
 from django.http import HttpResponse
 from django.urls import reverse_lazy
@@ -195,12 +196,38 @@ def get_dataset_toolprovenance(request, history_id, ):
 
         data_id = request.POST.get('dataset_id')
         if data_id:
-            dataset_provenance = gi.histories.show_dataset_provenance(
-                history_id,
-                data_id,
-                follow=False)
-            context.update({'tool_id': dataset_provenance.get("tool_id"),
-                            'dataset_id': data_id})
+            try:
+                dataset_provenance = gi.histories.show_dataset_provenance(
+                    history_id,
+                    data_id,
+                    follow=False)
+                context.update({'tool_id': dataset_provenance.get("tool_id"),
+                                'dataset_id': data_id})
+            except (ConnectionError, requests.exceptions.RequestException):
+                # Galaxy (or a proxy in front of it) can be transiently
+                # unreachable/return a 502 - this endpoint is now polled
+                # frequently (once per dataset, every 10s - see the
+                # history detail page's step chain/table), so a single
+                # hiccup shouldn't turn into an unhandled Django 500 (and
+                # an admin error email under DEBUG=False) on every failed
+                # poll. Both exception types matter here, not just
+                # bioblend's own ConnectionError: bioblend's own retry
+                # logic (bioblend.galaxy.client.Client._get) only catches
+                # requests.exceptions.ConnectionError itself (converting
+                # it to this one) - a plain read timeout
+                # (requests.exceptions.ReadTimeout, the likely shape of a
+                # slow/overloaded rather than fully unreachable Galaxy,
+                # and specifically what GalaxyUser.get_galaxy_instance's
+                # new timeout=30 is meant to turn a stuck request into)
+                # isn't a ConnectionError subclass and would otherwise
+                # propagate straight through uncaught. The client already
+                # treats a failed request the same as any other rejected
+                # promise - see history_contents_refreshable.html's own
+                # .then(success, fail) handling - a non-2xx status is
+                # enough for that.
+                return HttpResponse(
+                    json.dumps({'dataset_id': data_id}),
+                    content_type='application/json', status=502)
     return HttpResponse(json.dumps(context), content_type='application/json')
 
 
@@ -217,10 +244,23 @@ def get_dataset_citations(request, history_id):
         w = WorkspaceHistory.objects.get(history=history_id)
         w.history_content = json.loads(w.history_content_json)
         for file in w.history_content:
-            dataset_provenance = gi.histories.show_dataset_provenance(
-                history_id,
-                file.get('id'),
-                follow=False)
+            try:
+                dataset_provenance = gi.histories.show_dataset_provenance(
+                    history_id,
+                    file.get('id'),
+                    follow=False)
+            except (ConnectionError, requests.exceptions.RequestException):
+                # Same transient-Galaxy-failure reasoning as
+                # get_dataset_toolprovenance above (including why both
+                # exception types are caught, not just bioblend's own
+                # ConnectionError) - this makes one bioblend call per
+                # dataset in the history, so it's even more likely than
+                # that one to hit a flaky/overloaded Galaxy on a big
+                # history. Skip just this dataset's provenance rather
+                # than failing the whole citations fetch (and crashing
+                # this now-every-10s-polled endpoint) over one bad
+                # dataset.
+                continue
             tools.append(dataset_provenance.get('tool_id'))
         tools = list(set(tools))
         for tid in tools:

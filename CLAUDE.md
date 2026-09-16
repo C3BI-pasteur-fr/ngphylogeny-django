@@ -493,6 +493,89 @@ it described the old full-page-reload behavior and was never updated for
 the background-staged refresh, which doesn't visibly reload anything for
 a banner to announce.
 
+**This feature's 10s-polling frequency against Galaxy caused a real
+production incident: the pod itself got killed and restarted (observed:
+5 restarts, exit code 137/SIGKILL), not just one endpoint erroring.**
+First surfaced as a `bioblend.ConnectionError` (a `galaxy.pasteur.fr`
+502, "Proxy Error... Error reading from remote server") logged as an
+unhandled Django 500 from `workspace.views.get_dataset_toolprovenance` -
+but an unhandled exception in one Django view can't crash/restart a pod
+by itself (Django's exception middleware catches it, logs a 500, keeps
+serving other requests) - so that traceback was a symptom of the same
+underlying Galaxy outage, not the actual crash mechanism. The real
+mechanism: `GalaxyUser.get_galaxy_instance` (`galaxy/models.py`)
+constructed its bioblend `GalaxyInstance` with bioblend's own default,
+`timeout=None` (wait forever) - and the k8s deployment's `web` container
+runs uwsgi with only `--processes 4 --threads 2` (manifest.yaml, 8
+request-handling slots total) plus a 120s `--harakiri`. The step chain/
+table polls Galaxy-backed AJAX endpoints (`get_dataset_toolprovenance`
+once per dataset, `get_tool_name` once per tool group, from *both* the
+step chain and table scripts independently - see above) every 10s, for
+every open history page - at that call volume, once `galaxy.pasteur.fr`
+started degrading, enough of those 8 slots ended up stuck waiting
+(indefinitely, since nothing bounded them) on a slow/unresponsive Galaxy
+that new requests - *including the liveness probe's own plain GET
+/status* - couldn't get a free slot in time. `failureThreshold: 3` failed
+probes later (manifest.yaml, `periodSeconds: 10`, default 1s probe
+timeout), Kubernetes decided the container was unhealthy and killed it -
+which just repeated on restart, since the same polling resumed against a
+Galaxy that hadn't actually recovered yet.
+
+Fixed with two changes together, since neither alone is sufficient:
+- **`GalaxyUser.GALAXY_REQUEST_TIMEOUT = 30`**, set as a plain attribute
+  on the constructed `GalaxyInstance` after the fact (bioblend's own
+  `GalaxyInstance.__init__`, unlike the lower-level `GalaxyClient` it
+  wraps, doesn't actually accept/forward a `timeout` kwarg at all in the
+  installed version - verified directly, not assumed - so it has to be
+  set as `gi.timeout = ...` post-construction; `make_get_request`/
+  `make_post_request` just read `self.timeout` off the instance on every
+  call, so this takes effect immediately). Bounds how long any single
+  Galaxy call can occupy one of the 8 worker slots, well under uwsgi's
+  own 120s harakiri, so a stalled/degraded Galaxy frees workers back up
+  quickly instead of the pool draining to zero.
+- **The three endpoints' exception handling was broadened from just
+  `except ConnectionError` to `except (ConnectionError,
+  requests.exceptions.RequestException)`.** Verified directly (not
+  assumed) that this distinction matters: bioblend's own retry loop
+  (`bioblend.galaxy.client.Client._get`) only catches
+  `requests.exceptions.ConnectionError` itself (converting it to
+  bioblend's own `ConnectionError` after `max_get_attempts` - 1 by
+  default, matching the observed traceback's "0 attempts left") - a
+  plain `requests.exceptions.ReadTimeout` (the likely shape of a slow/
+  overloaded-but-still-connected Galaxy, and exactly what the new
+  `timeout=30` above is meant to turn a stuck call into) is a
+  `requests.exceptions.Timeout` subclass, *not* a `ConnectionError`
+  subclass, and would otherwise propagate straight through both
+  bioblend's retry logic and a narrower `except ConnectionError` alike.
+  All three (`get_dataset_toolprovenance`/`get_dataset_citations`,
+  `get_tool_name`) return a clean non-2xx JSON response on either
+  exception type instead of an unhandled Django 500 - not itself what
+  prevented the pod restarts (see above), but still worth fixing on its
+  own merits: `get_dataset_citations` loops calling
+  `show_dataset_provenance` once per dataset in the *whole* history
+  within a single request, so it's even more exposed than the other two,
+  and now `continue`s past just the one bad dataset instead of failing
+  the whole citations fetch. The client side already degrades gracefully
+  from a failed request without any changes needed: the step-chain/
+  table's own `$.when.apply($, deferreds).then(success, fail)`/
+  `.always()` handling (see above) already resolves
+  `__historyStepChainReady`/`__historyTableReady` either way, so a poll
+  that hits this just leaves that one box/cell with its placeholder text.
+
+`galaxy.tests.GalaxyUserGetGalaxyInstanceTest` covers the timeout fix
+directly (a plain model property, no `connection_galaxy` decorator
+involved) - the existing `Server.save()`-makes-a-real-HTTP-call-on-create
+wrinkle (see "Restoring historical..."/elsewhere) has an established
+mocking pattern already (`patch('galaxy.models.requests.get', ...)`),
+used here too. No regression test for the broadened exception handling
+itself, though - reaching that specific path means driving a
+*decorated* (`galaxy.decorator.connection_galaxy`) view through Django's
+test client with a mocked bioblend call on top of that same Server
+fixture, which is a bigger lift than this fix's own size warranted here
+- verified instead by inspection (including live-checking bioblend's
+actual exception hierarchy/retry behavior in a real Python shell, not
+guessed) and the existing suite/flake8 staying green.
+
 ### Daily workflow-usage report
 
 `workspace.tasks.send_daily_report` (`CELERY_BEAT_SCHEDULE`, 8am UTC) emails

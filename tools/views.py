@@ -4,6 +4,7 @@ import ast
 import json
 import tempfile
 
+import requests
 from bioblend.galaxy.tools.inputs import inputs
 from django.urls import reverse_lazy
 from django.forms import ValidationError
@@ -251,13 +252,28 @@ def get_tool_name(request):
         toolid = request.POST.get('tool_id')
 
         if toolid:
-            # get_tools(tool_id=...) was removed from bioblend (its
-            # signature still accepts the kwarg, but the implementation
-            # now just raises ValueError telling you to use this
-            # instead) - show_tool() is the direct replacement and
-            # returns a single dict, not a list.
-            tool = gi.tools.show_tool(tool_id=toolid)
-            context.update({'tool_id': toolid, 'name': tool.get('name')})
+            try:
+                # get_tools(tool_id=...) was removed from bioblend (its
+                # signature still accepts the kwarg, but the
+                # implementation now just raises ValueError telling you
+                # to use this instead) - show_tool() is the direct
+                # replacement and returns a single dict, not a list.
+                tool = gi.tools.show_tool(tool_id=toolid)
+                context.update({'tool_id': toolid, 'name': tool.get('name')})
+            except (ConnectionError, requests.exceptions.RequestException):
+                # Same transient-Galaxy-failure reasoning as
+                # workspace.views.get_dataset_toolprovenance (including
+                # why both exception types are caught, not just
+                # bioblend's own ConnectionError) - this endpoint is now
+                # polled frequently too (once per tool group, every 10s -
+                # see the history detail page's step chain/table), so a
+                # single hiccup shouldn't turn into an unhandled Django
+                # 500 on every failed poll. The caller
+                # already keeps its placeholder text if no 'name' comes
+                # back (see history_contents_refreshable.html).
+                return HttpResponse(
+                    json.dumps({'tool_id': toolid}),
+                    content_type='application/json', status=502)
 
     return HttpResponse(json.dumps(context), content_type='application/json')
 
