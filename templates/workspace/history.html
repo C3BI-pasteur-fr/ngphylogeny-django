@@ -15,15 +15,11 @@
 {% block content %}
 <div class="row">
   <div class="col-md-12">
-    {% if object.history_content %}
-      {% if object.history_content|dictsortreversed:"hid"|length > 1 %}
-        {% include "workspace/include/history_contents_provenance_ajax.html" %}
-      {% else %}
-        {% include "workspace/include/history_wait.html" %}
-      {% endif %}
-    {% else %}
-        {% include "workspace/include/history_wait.html" %}    
-    {% endif %}
+    {# history_contents_provenance_ajax.html itself decides, via its own
+       included history_contents_refreshable.html, whether there's a
+       real step chain/table to show yet or the run is still just
+       getting started - see that template's own top comment. #}
+    {% include "workspace/include/history_contents_provenance_ajax.html" %}
   </div>
 </div>
 {% endblock %}

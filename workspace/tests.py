@@ -678,9 +678,9 @@ class HistoryPartialRefreshTemplateTest(TestCase):
         class FakeObj:
             pass
         obj = FakeObj()
-        # history.html only includes history_contents_provenance_ajax.html
-        # (and, transitively, the refreshable fragment) once there's more
-        # than one dataset - otherwise it shows history_wait.html instead.
+        # 2+ datasets - the "please wait" state (see
+        # HistoryUnifiedWaitStateTest below) is what history_contents_
+        # refreshable.html shows for fewer than that.
         obj.history_content = [
             {'id': 'd1', 'hid': 1, 'name': 'input.fasta', 'state': 'ok',
              'visible': True, 'extension': 'fasta'},
@@ -762,4 +762,106 @@ class HistoryPartialRefreshTemplateTest(TestCase):
              'csrf_token': 'faketoken'},
             request=request)
         self.assertIn('clearInterval(window.historyRefreshTimer)', html)
-        self.assertIn("$('#info-refresh').hide();", html)
+
+    def test_info_refresh_banner_is_gone(self):
+        """
+        The "This page is will be refreshed in N sec." banner + countdown
+        (#info-refresh) were removed outright - they described the old
+        full-page-reload behavior and were never updated for the
+        background-staged refresh above, which doesn't visibly reload
+        anything for the banner to announce.
+        """
+        request = self._request()
+        html = render_to_string(
+            'workspace/history.html',
+            {'object': self._obj(False), 'request': request,
+             'csrf_token': 'faketoken'},
+            request=request)
+        self.assertNotIn('info-refresh', html)
+        self.assertNotIn('countdown_span', html)
+
+
+class HistoryUnifiedWaitStateTest(TestCase):
+    """
+    Regression test: workspace/include/history_wait.html used to be a
+    completely separate template (full-page location.reload() every 10s,
+    its own differently-styled name/email inputs, a Url field, its own
+    copy of the info-refresh banner) shown instead of
+    history_contents_provenance_ajax.html whenever a history had fewer
+    than 2 datasets yet (a run just starting). Deleted - that state is
+    now just a branch inside history_contents_refreshable.html (see its
+    own top comment), so it automatically gets the exact same shell
+    (styled name/email panel, no Url field, no info-refresh banner) and
+    the exact same background-staged 10s polling as the real step-chain/
+    table view, with nothing bespoke left to drift out of sync again.
+    """
+
+    def _obj(self, history_content):
+        class FakeObj:
+            pass
+        obj = FakeObj()
+        obj.history_content = history_content
+        obj.history_info = {'id': 'fakehist123', 'name': 'Test run'}
+        obj.finished = False
+        obj.name = 'Test run'
+        obj.email = ''
+        obj.workflow = None
+        return obj
+
+    def _request(self):
+        request = RequestFactory().get('/workspace/history/fakehist123')
+        request.session = {}
+        return request
+
+    def test_no_datasets_yet_shows_the_wait_message_via_the_same_shell(self):
+        request = self._request()
+        html = render_to_string(
+            'workspace/history.html',
+            {'object': self._obj([]), 'request': request,
+             'csrf_token': 'faketoken'},
+            request=request)
+        self.assertIn(
+            'Analysis is being initialized on the Galaxy server', html)
+        # Same shell as the ready state: styled panel, no Url field, no
+        # info-refresh banner, same background-staged polling wired up.
+        self.assertIn('history-meta-panel', html)
+        self.assertIn('id="history-refreshable-region"', html)
+        self.assertIn('id="history-refreshable-staging"', html)
+        self.assertIn('window.historyRefreshTimer', html)
+        self.assertNotIn('info-refresh', html)
+        # The old Url field's own clipboard-copy button - a more precise
+        # marker than the bare word "Url", which also legitimately shows
+        # up in this file's own explanatory CSS comments.
+        self.assertNotIn('data-clipboard-text', html)
+
+    def test_exactly_one_dataset_still_shows_the_wait_message(self):
+        request = self._request()
+        html = render_to_string(
+            'workspace/history.html',
+            {'object': self._obj([
+                {'id': 'd1', 'hid': 1, 'name': 'input.fasta', 'state': 'ok',
+                 'visible': True, 'extension': 'fasta'},
+            ]), 'request': request, 'csrf_token': 'faketoken'},
+            request=request)
+        self.assertIn(
+            'Analysis is being initialized on the Galaxy server', html)
+        self.assertNotIn('id="workflow-step-chain"', html)
+
+    def test_wait_state_resolves_its_readiness_deferreds_immediately(self):
+        """
+        Nothing async happens in the wait state - the staging-swap script
+        (history_contents_refreshable.html) would otherwise wait forever
+        on deferreds that only the step-chain/table-building scripts
+        (skipped here) ever resolve.
+        """
+        request = self._request()
+        html = render_to_string(
+            'workspace/include/history_contents_refreshable.html',
+            {'object': self._obj([]), 'request': request,
+             'csrf_token': 'faketoken', 'staging': True},
+            request=request)
+        self.assertIn('window.__historyStepChainReady.resolve();', html)
+        self.assertIn('window.__historyTableReady.resolve();', html)
+        self.assertIn(
+            '$.when(window.__historyStepChainReady, '
+            'window.__historyTableReady).done(function () {', html)

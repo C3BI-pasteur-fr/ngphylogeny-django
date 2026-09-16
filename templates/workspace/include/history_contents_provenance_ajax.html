@@ -60,12 +60,6 @@
   .history-meta-panel .panel-body {
     padding: 20px 24px;
   }
-  .history-meta-field {
-    margin-bottom: 0;
-  }
-  .history-meta-field + .history-meta-field {
-    margin-top: 16px;
-  }
   .history-meta-label {
     display: block;
     font-size: 12px;
@@ -117,19 +111,7 @@
 	// own "the run is finished" check - re-evaluated on every reload of
 	// that fragment, including this first one - can clearInterval it.
 	window.historyRefreshTimer = setInterval(refresh, interval);
-	var elt = $('#countdown_span');
-	elt.html(interval / 1000);
-
-	function countdown() {
-	    elt.html(elt.html() - 1);
-	    if (elt.html() < 0) {
-		elt.html(interval / 1000);
-	    }
-	}
-
-	setInterval(countdown, 1000);
 	{% if object.finished %}
-	$('#info-refresh').hide();
 	clearInterval(window.historyRefreshTimer);
 	{% endif %}
 
@@ -199,10 +181,6 @@
 	    );
   }
 </script>
-<div id="info-refresh" class="alert alert-info alert-dismissable fade in">
-  <a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
-  <strong>Info !</strong> This page is will be refreshed in <span id="countdown_span">5</span> sec.
-</div>
 
 <div class="row">
   <div class="col-md-10">
