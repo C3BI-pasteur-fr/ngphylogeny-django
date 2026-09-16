@@ -114,17 +114,6 @@
 	{% if object.finished %}
 	clearInterval(window.historyRefreshTimer);
 	{% endif %}
-
-        var ajax = $.getJSON("{% url 'get_dataset_citations' object.history_info.id %}",
-			     function (data) {
- 			       var items = [];
-			     $.each(data, function(index, element) {
-			     $.each(element,function(i,citation){
-			     items.push("<li>"+citation+"</li>");
-			     });
-			     });
-			     $("#pub-container").html(items.join(""));
-			     });
     });
 </script>
 

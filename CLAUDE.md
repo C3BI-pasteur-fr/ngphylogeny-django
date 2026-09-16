@@ -405,13 +405,23 @@ fragment's own finished-check can `clearInterval()` it from inside
 `.load()`-injected script, on every reload, not just the first.
 
 Splitting out the fragment means anything whose *filling* script only
-ever runs once at the outer page's `$(document).ready` - here, the
-`#pub-container` citations list, fetched via its own `get_dataset_citations`
-AJAX call - has to stay in the outer shell, not move into the repeatedly-
-reloaded fragment, or its content gets wiped by the fragment's `.load()`
-swap on the very first poll and never repopulated (that call never runs
-again). Everything that does need to re-run on every poll (step chain,
-table, the finished/polling check) moved into the fragment instead.
+ever runs once at the outer page's `$(document).ready` - table state,
+the step chain - has to actually re-run on every poll, not just render
+once and sit there stale; everything that needs that moved into the
+fragment. The `#pub-container` citations list is the opposite split:
+the `<ul id="pub-container">` element itself stays in the outer shell
+(it isn't duplicated between the live/staging containers the way
+`#workflow-step-chain`/`#myTable` are, so nothing about the staging
+swap needs it to move), but its `get_dataset_citations` AJAX *call* was
+moved into the fragment anyway - it used to fire once, from the outer
+shell's own `$(document).ready`, which meant a page loaded during the
+"please wait" state (before any tool had actually run yet) never
+fetched citations again once the run produced some, even after
+switching to the real step-chain/table view. Now it's part of the
+fragment's own per-poll script (a plain, unscoped `$('#pub-container')`
+- safe regardless of staging, precisely because that element is never
+duplicated), so it picks up new citations on the very next poll instead
+of never.
 
 **Background-build the refreshed fragment instead of reloading it
 straight into the visible region.** A plain `.load()` into
