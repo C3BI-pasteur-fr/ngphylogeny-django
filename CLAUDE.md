@@ -341,6 +341,49 @@ gone if it runs second; if it runs first instead, it already marks the
 row `deleted=True` itself, so this task's own `deleted=False` filter
 skips it in turn.
 
+### Graphical step-chain on the history detail page
+
+`templates/workspace/include/history_contents_provenance_ajax.html`
+(included by `workspace/history.html`, the `HistoryDetailView` template)
+shows a horizontal chain of colored boxes above the existing dataset
+table - one box per tool step, green/blue/gray/red for
+finished/running/pending/error. Feasible cheaply because the data was
+already there: `object.history_content` (fetched fresh on every page
+load by `WorkspaceHistoryObjectMixin.get_object()`/
+`updateworkspacestatus`) already carries each Galaxy dataset's real-time
+`state`, and `WorkflowGalaxyFactory` chains tools by matching EDAM
+formats step-to-step, so these workflows are strictly linear (no
+branches) - a straight left-to-right chain is an accurate
+representation, not a simplification. Real Galaxy workflow invocations
+too (`gi.workflows.invoke_workflow()`, `workflows/views/generic.py`/
+`wkadvanced.py`), not tool-by-tool orchestration - which is what makes
+"pending" steps visible at all: Galaxy creates every step's output
+dataset (state `new`) up front on invocation, not just the one
+currently running, so a not-yet-reached step already exists in
+`history_content` before it starts.
+
+Built as an entirely separate JS pass from the table's own tool-name
+resolution (same `get_dataset_tool`/`get_tool_name` AJAX endpoints,
+called again independently rather than sharing the table's DOM/AJAX
+calls) - deliberately not refactored to share one round of calls,
+so this addition can't regress the existing (working, somewhat fragile)
+table-grouping JS. One real difference from the table: the table sorts
+newest-first (`dictsortreversed:"hid"`) to show recent activity at the
+top; the chain sorts oldest-first (`dictsort:"hid"`) since a
+left-to-right sequence of boxes reads naturally as progress through the
+pipeline. Colors reuse `templates/workspace/job_completion_email.html`'s
+existing `.status-ok`/`.status-error` palette for consistency.
+
+No test goes through `HistoryDetailView` itself - `galaxy.decorator.
+connection_galaxy` (the decorator gating that view) has no mocking
+pattern anywhere in this codebase to build a real request/response test
+on, and building one from scratch was out of scope for what's
+fundamentally a template/JS change. `workspace.tests.
+HistoryStepChainTemplateTest` instead renders `workspace/history.html`
+directly via `render_to_string()` with a fake object - same approach
+`DailyReportTest` already uses to test `render_report_html()` without
+going through its own view.
+
 ### Daily workflow-usage report
 
 `workspace.tasks.send_daily_report` (`CELERY_BEAT_SCHEDULE`, 8am UTC) emails

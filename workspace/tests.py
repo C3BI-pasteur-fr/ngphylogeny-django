@@ -4,7 +4,8 @@ from unittest.mock import Mock, patch
 from django.contrib.auth.models import User
 from django.core import mail
 from django.core.cache import cache
-from django.test import TestCase, override_settings
+from django.template.loader import render_to_string
+from django.test import RequestFactory, TestCase, override_settings
 from django.utils import timezone
 
 from blast.models import BlastRun
@@ -566,3 +567,84 @@ class JobCompletionEmailTest(TestCase):
         """
         msg = self._built()
         self.assertEqual(msg.from_email, 'authorized@pasteur.fr')
+
+
+class HistoryStepChainTemplateTest(TestCase):
+    """
+    templates/workspace/include/history_contents_provenance_ajax.html's
+    graphical step-chain (above the detailed dataset table) - one box
+    per tool step, colored by status. Rendered directly against the
+    template (not through HistoryDetailView) since Galaxy-connected
+    views (galaxy.decorator.connection_galaxy) have no existing
+    mocking pattern anywhere in this codebase to build a real
+    request/response test on - this covers what's actually new here
+    (the template logic/JS it emits), the same way
+    DailyReportTest.test_build_report_context_handles_no_data_at_all
+    above calls render_report_html() directly rather than through a
+    view.
+    """
+
+    def _render(self, history_content):
+        rf = RequestFactory()
+        request = rf.get('/workspace/history/fakehist123')
+        request.session = {}
+
+        class FakeObj:
+            pass
+        obj = FakeObj()
+        obj.history_content = history_content
+        obj.history_info = {'id': 'fakehist123', 'name': 'Test run'}
+        obj.finished = False
+        obj.name = 'Test run'
+        obj.email = ''
+        obj.workflow = None
+
+        return render_to_string('workspace/history.html',
+                                 {'object': obj, 'request': request,
+                                  'csrf_token': 'faketoken'},
+                                 request=request)
+
+    def test_step_chain_container_present_with_multiple_datasets(self):
+        html = self._render([
+            {'id': 'd1', 'hid': 1, 'name': 'input.fasta', 'state': 'ok',
+             'visible': True, 'extension': 'fasta'},
+            {'id': 'd2', 'hid': 2, 'name': 'MAFFT alignment', 'state': 'ok',
+             'visible': True, 'extension': 'fasta'},
+        ])
+        self.assertIn('id="workflow-step-chain"', html)
+        self.assertIn('var historySteps', html)
+
+    def test_history_steps_emitted_oldest_first_with_id_name_state(self):
+        """
+        The table below sorts newest-first (dictsortreversed) - the step
+        chain deliberately uses the opposite order (dictsort) since a
+        left-to-right chain of boxes reads naturally as progress through
+        the pipeline, from its first step to its most recent.
+        """
+        html = self._render([
+            {'id': 'd2', 'hid': 2, 'name': 'MAFFT alignment', 'state': 'ok',
+             'visible': True, 'extension': 'fasta'},
+            {'id': 'd1', 'hid': 1, 'name': 'input.fasta', 'state': 'ok',
+             'visible': True, 'extension': 'fasta'},
+        ])
+        start = html.index('var historySteps')
+        end = html.index('];', start)
+        snippet = html[start:end]
+        self.assertLess(
+            snippet.index('input.fasta'), snippet.index('MAFFT alignment'),
+            'expected the oldest dataset (hid 1) before the newest (hid 2)')
+
+    def test_history_steps_are_escaped(self):
+        """
+        Regression guard: dataset names come from Galaxy, not from a
+        trusted source - a name containing a quote or HTML must not
+        break out of the JS string literal.
+        """
+        html = self._render([
+            {'id': 'd1', 'hid': 1, 'name': 'weird"</script><b>name',
+             'state': 'ok', 'visible': True, 'extension': 'fasta'},
+            {'id': 'd2', 'hid': 2, 'name': 'second', 'state': 'ok',
+             'visible': True, 'extension': 'fasta'},
+        ])
+        self.assertNotIn('weird"</script>', html)
+        self.assertIn('</script>', html)  # the real closing tags survive
