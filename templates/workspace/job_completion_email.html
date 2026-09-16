@@ -1,3 +1,10 @@
+<!--
+  Shared branded HTML notification shell - reused as-is (not copied) by
+  blast.emails.build_blast_completion_email() so every NGPhylogeny.fr
+  completion email looks the same. success_message/error_message are the
+  only notification-specific text; everything else (layout, logos,
+  citation block, button) is common.
+-->
 <!DOCTYPE html>
 <html>
 <head>
@@ -34,11 +41,11 @@
     {% if error %}
       <span class="status status-error">Finished with errors</span>
       <p style="margin-top:18px;">Dear NGPhylogeny.fr user,</p>
-      <p>Your analysis has finished running, but one or more steps reported an error. You can inspect the details of each step from your results page.</p>
+      <p>{{ error_message }}</p>
     {% else %}
       <span class="status status-ok">Finished successfully</span>
       <p style="margin-top:18px;">Dear NGPhylogeny.fr user,</p>
-      <p>Your analysis has finished running successfully. Your results are ready to view.</p>
+      <p>{{ success_message }}</p>
     {% endif %}
 
     <div style="text-align:center;">

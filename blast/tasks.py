@@ -1,9 +1,6 @@
 from __future__ import absolute_import
 
-from django.conf import settings
 from django.db.models import Q
-from django.core.mail import send_mail
-from django.urls import reverse
 from django.core.cache import cache
 
 from smtplib import SMTPException
@@ -28,6 +25,7 @@ from datetime import timedelta, datetime
 from galaxy.decorator import galaxy_connection
 from bioblend.galaxy.tools.inputs import inputs
 
+from .emails import send_blast_completion_email
 from .models import BlastRun, BlastSubject
 from .msa import PseudoMSA
 
@@ -147,28 +145,10 @@ def launch_ncbi_blast(blastrunid, sequence, prog, db, evalue, coverage, maxseqs)
 
         if b.email is not None and re.match(r"[^@]+@[^@]+\.[^@]+", b.email):
             try:
-                citation = "Lemoine F, Correia D, Lefort V, Doppelt-Azeroual O, Mareuil F, Cohen-Boulakia S, Gascuel O\n" \
-                           "NGPhylogeny.fr: new generation phylogenetic services for non-specialists.\n" \
-                           "Nucleic Acids Research 2019 (https://doi.org/10.1093/nar/gkz303).\n"
-                message = "Dear NGPhylogeny user, \n\n"
-                if b.status != b.FINISHED:
-                    message = message + "Your NGPhylogeny BLAST job finished with errors.\n\n"
-                else:
-                    message = message + "Your NGPhylogeny BLAST job finished successfuly.\n"
-                please = 'Please visit http://%s%s to check results\n\n' % (
-                    "ngphylogeny.fr", reverse('blast_view', kwargs={'pk': b.id}))
-                message = message + please
-                message = message + "Thank you for using ngphylogeny.fr\n\n"
-                message = message + "NGPhylogeny.fr development team.\n\n"
-                message = message + citation
-                
-                send_mail(
-                    'NGPhylogeny.fr BLAST results',
-                    message,
-                    settings.NGPHYLO_REPORT_FROM_EMAIL,
-                    [b.email],
-                    fail_silently=False,
-                )
+                # Same branded HTML template as the workflow job-completion
+                # email (workspace.emails), not a hand-built plain-text
+                # message - see CLAUDE.md's "BLAST completion email" note.
+                send_blast_completion_email(b, b.email)
             except SMTPException as e:
                 logging.warning("Problem with smtp server : %s" % (e))
             except Exception as e:
@@ -411,23 +391,10 @@ def checkblastruns():
 
             if b.email is not None and re.match(r"[^@]+@[^@]+\.[^@]+", b.email) and (b.status == BlastRun.ERROR or b.status == BlastRun.FINISHED):
                 try:
-                    message = "Dear NGPhylogeny user, \n\n"
-                    if b.status != b.FINISHED:
-                        message = message + "Your NGPhylogeny BLAST job finished with errors.\n\n"
-                    else:
-                        message = message + "Your NGPhylogeny BLAST job finished successfuly.\n"
-                    please = 'Please visit http://%s%s to check results\n\n' % (
-                        "ngphylogeny.fr", reverse('blast_view', kwargs={'pk': b.id}))
-                    message = message + please
-                    message = message + "Thank you for using ngphylogeny.fr\n\n"
-                    message = message + "NGPhylogeny.fr development team.\n"
-                    send_mail(
-                        'NGPhylogeny.fr BLAST results',
-                        message,
-                        settings.NGPHYLO_REPORT_FROM_EMAIL,
-                        [b.email],
-                        fail_silently=False,
-                    )
+                    # Same branded HTML template as the workflow
+                    # job-completion email (workspace.emails) - see
+                    # CLAUDE.md's "BLAST completion email" note.
+                    send_blast_completion_email(b, b.email)
                 except SMTPException as e:
                     logging.warning("Problem with smtp server : %s" % (e))
                 except Exception as e:

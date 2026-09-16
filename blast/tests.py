@@ -5,8 +5,10 @@ import copy
 from unittest.mock import MagicMock, patch
 
 from django.conf import settings
+from django.core import mail
 from django.test import TestCase, override_settings
 
+from .emails import build_blast_completion_email, send_blast_completion_email
 from .models import BlastRun
 from .tasks import launch_pasteur_blast, checkblastruns
 
@@ -158,3 +160,66 @@ class CheckBlastRunsTest(TestCase):
         self.assertEqual(broken_run.status, BlastRun.ERROR)
         healthy_run.refresh_from_db()
         self.assertEqual(healthy_run.status, BlastRun.RUNNING)
+
+
+class BlastCompletionEmailTest(TestCase):
+    """
+    blast.emails.build_blast_completion_email() used to be a hand-built
+    plain-text send_mail() call in blast/tasks.py - this now reuses the
+    same branded HTML template/MIME wiring as the workflow job-completion
+    email (workspace.emails), so BLAST notifications look the same as
+    every other NGPhylogeny.fr email. Mirrors
+    workspace.tests.JobCompletionEmailTest's coverage of that shared
+    machinery.
+    """
+
+    def _run(self, status=BlastRun.FINISHED):
+        return BlastRun.objects.create(
+            query_id="", query_seq="", status=status)
+
+    @override_settings(NGPHYLO_REPORT_FROM_EMAIL='ngphylogeny@pasteur.fr')
+    def test_success_email_content_and_structure(self):
+        b = self._run(status=BlastRun.FINISHED)
+        msg = build_blast_completion_email(b, 'user@example.org')
+
+        self.assertEqual(msg.to, ['user@example.org'])
+        self.assertEqual(msg.from_email, 'ngphylogeny@pasteur.fr')
+        self.assertIn('finished', msg.subject)
+        self.assertNotIn('error', msg.subject.lower())
+
+        self.assertEqual(len(msg.alternatives), 1)
+        html_body, mimetype = msg.alternatives[0]
+        self.assertEqual(mimetype, 'text/html')
+        self.assertIn('Institut Pasteur', html_body)
+        self.assertIn('Finished successfully', html_body)
+        self.assertNotIn('Finished with errors', html_body)
+        self.assertIn(str(b.id), html_body)
+        self.assertIn('doi.org/10.1093/nar/gkz303', html_body)
+
+        # Same multipart/related + inline logo structure as the workflow
+        # job-completion email - see JobCompletionEmailTest's own version
+        # of this check for why it matters.
+        self.assertEqual(msg.mixed_subtype, 'related')
+        self.assertNotIn('data:image', html_body)
+        self.assertEqual(len(msg.attachments), 2)
+
+    def test_error_email_shows_error_status(self):
+        b = self._run(status=BlastRun.ERROR)
+        msg = build_blast_completion_email(b, 'user@example.org')
+        self.assertIn('error', msg.subject.lower())
+        html_body, _ = msg.alternatives[0]
+        self.assertIn('Finished with errors', html_body)
+        self.assertNotIn('Finished successfully', html_body)
+
+    @override_settings(NGPHYLO_HTTPS_HOST='ngphylogeny.fr')
+    def test_results_link_uses_https_when_configured(self):
+        b = self._run()
+        msg = build_blast_completion_email(b, 'user@example.org')
+        html_body, _ = msg.alternatives[0]
+        self.assertIn('https://ngphylogeny.fr/blast/%s' % b.id, html_body)
+
+    def test_send_blast_completion_email_actually_sends(self):
+        b = self._run()
+        send_blast_completion_email(b, 'someone@example.org')
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['someone@example.org'])
