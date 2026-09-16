@@ -345,7 +345,7 @@ BLASTS = {
         'activated' : _PASTEUR_BLAST_ENABLED,
         'name' : 'Institut Pasteur Galaxy Server',
         'progs': {
-            'toolshed.pasteur.fr/repos/fmareuil/ncbi_blast_plus/ncbi_blastn_wrapper/2.6.0' : {
+            'toolshed.g2.bx.psu.edu/repos/devteam/ncbi_blast_plus/ncbi_blastn_wrapper/2.14.1+galaxy2' : {
                 'name': 'blastn (nt query vs. nt db)',
                 'test_data' : 'DNA_Human.fa',
                 'dbs': {
@@ -360,7 +360,7 @@ BLASTS = {
                 'type' : 'blastn',
                 'input': 'nt',
             },
-            'toolshed.pasteur.fr/repos/fmareuil/ncbi_blast_plus/ncbi_blastp_wrapper/2.6.0' : {
+            'toolshed.g2.bx.psu.edu/repos/devteam/ncbi_blast_plus/ncbi_blastp_wrapper/2.14.1+galaxy2' : {
                 'name': 'blastp (aa query vs. aa db)',
                 'test_data' : 'AA_Human.fa',
                 'dbs': {
@@ -371,7 +371,7 @@ BLASTS = {
                 'type' : 'blastp',
                 'input': 'aa',
             },
-            'toolshed.pasteur.fr/repos/fmareuil/ncbi_blast_plus/ncbi_tblastn_wrapper/2.6.0' : {
+            'toolshed.g2.bx.psu.edu/repos/devteam/ncbi_blast_plus/ncbi_tblastn_wrapper/2.14.1+galaxy2' : {
                 'name': 'tblastn (aa query vs. nt db)',
                 'test_data' : 'AA_Human.fa',
                 'dbs' : {
@@ -386,7 +386,7 @@ BLASTS = {
                 'type' : 'tblastn',
                 'input': 'aa',
             },
-            'toolshed.pasteur.fr/repos/fmareuil/ncbi_blast_plus/ncbi_blastx_wrapper/2.6.0' : {
+            'toolshedtoolshed.g2.bx.psu.edu/repos/devteam/ncbi_blast_plus/ncbi_blastx_wrapper/2.14.1+galaxy2' : {
                 'name': 'blastx (nt query vs. aa db)',
                 'test_data' : 'DNA_Human.fa',
                 'dbs' : {
