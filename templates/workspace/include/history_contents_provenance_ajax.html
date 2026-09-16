@@ -90,15 +90,21 @@
     border-color: #446cb3;
     box-shadow: 0 0 0 2px rgba(68, 108, 179, 0.15);
   }
+  /* Side-by-side vs. stacked is handled by Bootstrap's own .row/.col-sm-6
+     below (not a custom width/display rule here) - a previous version of
+     this panel used a hand-rolled inline-block + width:calc() layout,
+     which broke on the real site (stacked, and the email field left
+     indented by its own now-orphaned margin-left) - almost certainly
+     some other stylesheet's rule winning over that custom one. Bootstrap
+     grid classes are already used everywhere else on this page/site, so
+     they're far less likely to collide with anything. Only the vertical
+     gap between the two stacked fields (mobile) is still custom here. */
+  .history-meta-field + .history-meta-field {
+    margin-top: 16px;
+  }
   @media (min-width: 768px) {
-    .history-meta-panel .history-meta-field {
-      display: inline-block;
-      width: calc(50% - 12px);
-      vertical-align: top;
-    }
-    .history-meta-panel .history-meta-field + .history-meta-field {
+    .history-meta-field + .history-meta-field {
       margin-top: 0;
-      margin-left: 24px;
     }
   }
 </style>
@@ -141,18 +147,39 @@
 </script>
 
 <script>
-    // Was a full location.reload() every 10s - reloads just the part
-    // that actually changes as the run progresses instead (step chain +
-    // table, workspace/include/history_contents_refreshable.html, via
-    // workspace.views.HistoryContentRefreshView). jQuery's .load() -
-    // unlike a plain $.get() swapped in via .html() - executes the
-    // <script> tags in the response, so that fragment's own JS
-    // (tool-name resolution, step-chain building, tooltip init, and the
-    // "stop polling once finished" check) re-runs exactly as it would
-    // on a real page load, with no separate re-init logic needed here.
+    // Was a full location.reload() every 10s, then (before this) a
+    // straight $('#history-refreshable-region').load(...) every 10s -
+    // that fixed the full-page flicker but traded it for a smaller one:
+    // .load() blanks the region immediately, so the step chain/table
+    // visibly disappeared and slowly rebuilt (several AJAX round trips
+    // for tool-name resolution - can take a while) on every single tick.
+    // Now loads into a hidden staging container instead
+    // (#history-refreshable-staging, ?staging=1) and lets
+    // history_contents_refreshable.html's own script build the whole
+    // thing out of sight; only once that script signals everything
+    // (including real tool names, not just placeholder text) is
+    // resolved does it swap the finished result into
+    // #history-refreshable-region itself - see that template for the
+    // actual swap. The visible content just stays as it was, unchanged,
+    // for the whole build.
     function refresh() {
-	$('#history-refreshable-region').load(
-	    "{% url 'history_content_refresh' object.history_info.id %}"
+	if (window.historyRefreshInFlight) {
+	    // A previous tick's staged build hasn't finished (and swapped
+	    // itself in) yet - skip this tick rather than starting an
+	    // overlapping one into the same staging container.
+	    return;
+	}
+	window.historyRefreshInFlight = true;
+	clearTimeout(window.historyRefreshWatchdog);
+	// Safety net: history_contents_refreshable.html's own swap script
+	// is what normally clears historyRefreshInFlight once staging
+	// finishes - if that never happens (e.g. a failed AJAX call
+	// slipping past its own fallbacks), don't wedge polling forever.
+	window.historyRefreshWatchdog = setTimeout(function () {
+	    window.historyRefreshInFlight = false;
+	}, 30000);
+	$('#history-refreshable-staging').load(
+	    "{% url 'history_content_refresh' object.history_info.id %}?staging=1"
 	);
     }
   function renameHistory(el){
@@ -181,23 +208,25 @@
   <div class="col-md-10">
     <div class="panel panel-default history-meta-panel">
       <div class="panel-body">
-        <div class="history-meta-field">
-          <label for="rename_history" class="history-meta-label">
-            <span class="glyphicon glyphicon-pencil"></span> Analysis name
-          </label>
-          <input id="rename_history" type="text" class="form-control"
-                 onblur="renameHistory(this);" value="{{ object.name }}"
-                 data-toggle="tooltip" data-placement="top"
-                 title="Rename your analysis">
-        </div>
-        <div class="history-meta-field">
-          <label for="change_email" class="history-meta-label">
-            <span class="glyphicon glyphicon-envelope"></span> Notification email
-          </label>
-          <input id="change_email" type="email" class="form-control"
-                 onblur="changeEmail(this);" value="{{ object.email }}"
-                 data-toggle="tooltip" data-placement="top"
-                 title="Get notified by email when this analysis finishes">
+        <div class="row">
+          <div class="col-sm-6 history-meta-field">
+            <label for="rename_history" class="history-meta-label">
+              <span class="glyphicon glyphicon-pencil"></span> Analysis name
+            </label>
+            <input id="rename_history" type="text" class="form-control"
+                   onblur="renameHistory(this);" value="{{ object.name }}"
+                   data-toggle="tooltip" data-placement="top"
+                   title="Rename your analysis">
+          </div>
+          <div class="col-sm-6 history-meta-field">
+            <label for="change_email" class="history-meta-label">
+              <span class="glyphicon glyphicon-envelope"></span> Notification email
+            </label>
+            <input id="change_email" type="email" class="form-control"
+                   onblur="changeEmail(this);" value="{{ object.email }}"
+                   data-toggle="tooltip" data-placement="top"
+                   title="Get notified by email when this analysis finishes">
+          </div>
         </div>
       </div>
     </div>
@@ -206,6 +235,7 @@
 <div id="history-refreshable-region">
   {% include "workspace/include/history_contents_refreshable.html" %}
 </div>
+<div id="history-refreshable-staging" style="display:none;"></div>
 <h4>References of tools to cite</h4>
 <a class="label label-success" href="{% url 'get_dataset_citations_bibtex' object.history_info.id %}" target="_blank">bibTeX</a> <a class="label label-info" href="{% url 'get_dataset_citations_txt' object.history_info.id %}" target="_blank">txt</a></h4>
 <article id="publications" class="list">

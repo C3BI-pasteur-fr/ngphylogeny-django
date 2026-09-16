@@ -8,9 +8,42 @@ instead of a full page reload. .load() executes the <script> tags below
 on every reload, same as a real page load would, so this fragment is
 fully self-contained: nothing outside it needs to re-run anything for
 this content to work correctly, whether this is the very first render
-(included directly by history_contents_provenance_ajax.html) or a later
-polled one.
+(included directly into #history-refreshable-region by
+history_contents_provenance_ajax.html, staging=False) or a later polled
+one (loaded into the hidden #history-refreshable-staging container,
+staging=True via ?staging=1 - see HistoryContentRefreshView).
+
+Building the step chain/table involves several sequential/parallel AJAX
+round trips (tool-name resolution, per dataset and per tool group) and
+can visibly take a moment - too slow to do straight into the live
+region every 10s without a flash of it disappearing and rebuilding.
+Instead: a staged render builds entirely inside the hidden staging
+container ($root, below) and only swaps itself into the live region
+(bottom of this file, staging-only) once everything - including real
+tool names, not just placeholder text - has actually resolved. The live
+region stays exactly as it was, untouched, for the whole build.
 {% endcomment %}
+<script>
+    // Scopes every selector below to wherever this particular render
+    // actually lives, so it can never be confused by the OTHER copy
+    // that may simultaneously exist elsewhere in the document (the live
+    // region while this one is still being staged, or vice versa) -
+    // #workflow-step-chain/#myTable/a dataset's own id are not unique
+    // across the two at that point. jQuery's scoped .find("#id") stays
+    // correct even then: the getElementById-based fast path it normally
+    // uses for id selectors only applies when the search context is the
+    // document itself, so scoping to a plain element context (as $root
+    // is here) falls through to a real, properly-scoped querySelectorAll
+    // search instead - verified in Sizzle's own source, not assumed.
+    var $root = {% if staging %}$('#history-refreshable-staging'){% else %}$('#history-refreshable-region'){% endif %};
+
+    // Resolved once this render's own async work (tool-name resolution
+    // for both the step chain and the table) is completely done - only
+    // consulted by the staging-swap script at the very bottom, and only
+    // when staging (see above).
+    window.__historyStepChainReady = $.Deferred();
+    window.__historyTableReady = $.Deferred();
+</script>
 <script>
     // Graphical step-by-step view of the run, above the detailed table -
     // one box per tool step (consecutive datasets from the same tool
@@ -28,9 +61,10 @@ polled one.
     ];
 
     $(function () {
-	$('[data-toggle="tooltip"]').tooltip();
+	$root.find('[data-toggle="tooltip"]').tooltip();
 
 	if (historySteps.length === 0) {
+	    window.__historyStepChainReady.resolve();
 	    return;
 	}
 
@@ -72,7 +106,8 @@ polled one.
 		return 'workflow-step-pending';
 	    }
 
-	    var $chain = $('#workflow-step-chain');
+	    var $chain = $root.find('#workflow-step-chain');
+	    var nameDeferreds = [];
 	    $.each(groups, function (index, group) {
 		if (index > 0) {
 		    $chain.append($('<div class="workflow-step-connector"></div>'));
@@ -84,16 +119,28 @@ polled one.
 
 		// Same tool-name lookup the table below already uses -
 		// starts as the raw dataset/tool_id name, upgraded to the
-		// friendly tool name once resolved.
-		$.post("{% url 'get_tool_name' %}", {
+		// friendly tool name once resolved. Tracked in
+		// nameDeferreds (not fire-and-forget) so a staging swap
+		// waits for the real name, not just the box's placeholder
+		// text.
+		nameDeferreds.push($.post("{% url 'get_tool_name' %}", {
 		    'tool_id': group.tool_id,
 		    'csrfmiddlewaretoken': '{{ csrf_token }}'
 		}, function (response) {
 		    if (response.name) {
 			$box.text(response.name);
 		    }
-		});
+		}));
 	    });
+
+	    $.when.apply($, nameDeferreds).always(function () {
+		window.__historyStepChainReady.resolve();
+	    });
+	}, function () {
+	    // A get_dataset_tool call failed - resolve anyway rather than
+	    // leaving a staging swap waiting on a deferred that can now
+	    // never fire.
+	    window.__historyStepChainReady.resolve();
 	});
     });
 </script>
@@ -102,7 +149,7 @@ polled one.
     $(function () {
 	var deferreds = [];
 	// Loop using .each
-	$("[data]").each(function (index, value) {
+	$root.find("[data]").each(function (index, value) {
 	    var ajax = $.post("{% url 'get_dataset_tool' object.history_info.id %}",
 			      {
 				  'dataset_id': $(this).attr('id'),
@@ -110,7 +157,7 @@ polled one.
 			      },
 			      function (response) {
 				  var result = response;
-				  $('#' + result.dataset_id).attr('data', result.tool_id)
+				  $root.find('#' + result.dataset_id).attr('data', result.tool_id)
 			      });
 	    // Push promise to 'deferreds' array
 	    deferreds.push(ajax);
@@ -121,8 +168,9 @@ polled one.
 	    var id_tool = '';
 	    var first_dataset = '';
 	    var cmpt = 1;
+	    var nameDeferreds = [];
 
-	    $("[data]").each(function (index, el) {
+	    $root.find("[data]").each(function (index, el) {
 		if (id_tool == $(el).attr('data')) {
 		    cmpt++;
 		    $(el).remove();
@@ -130,7 +178,7 @@ polled one.
 		    cmpt = 1;
 		    first_dataset = $(el).attr('id');
 		    id_tool = $(el).attr('data');
-		    $.post("{% url 'get_tool_name' %}",
+		    nameDeferreds.push($.post("{% url 'get_tool_name' %}",
 			   {
 			       'tool_id': $(this).attr('data'),
 			       'csrfmiddlewaretoken': '{{ csrf_token }}'
@@ -138,10 +186,16 @@ polled one.
 			   function (response) {
 			       var result = response;
 			       $(el).text(result.name);
-			   });
+			   }));
 		}
-		$('#' + first_dataset).attr('rowspan', cmpt);
+		$root.find('#' + first_dataset).attr('rowspan', cmpt);
 	    });
+
+	    $.when.apply($, nameDeferreds).always(function () {
+		window.__historyTableReady.resolve();
+	    });
+	}, function () {
+	    window.__historyTableReady.resolve();
 	});
     });
 </script>
@@ -149,14 +203,38 @@ polled one.
 {% if object.finished %}
 <script>
     // history_contents_provenance_ajax.html's own script keeps
-    // window.historyRefreshTimer and reloads this fragment via .load()
-    // every 10s (not a full page reload) - stop once a fresh render of
-    // this fragment (the very first one, or a later polled one) reports
-    // the run as done.
+    // window.historyRefreshTimer and reloads this fragment every 10s
+    // (not a full page reload) - stop once a fresh render of this
+    // fragment (the very first one, or a later staged one) reports the
+    // run as done. Runs immediately, independent of
+    // __historyStepChainReady/__historyTableReady below - whether to
+    // keep polling is already known from the server-side state, no need
+    // to wait for the chain/table to finish visually building first.
     if (window.historyRefreshTimer) {
 	clearInterval(window.historyRefreshTimer);
     }
     $('#info-refresh').hide();
+</script>
+{% endif %}
+
+{% if staging %}
+<script>
+    // Everything above just got built inside the hidden $root
+    // (#history-refreshable-staging) - swap it into the visible
+    // #history-refreshable-region only now that both the step chain and
+    // the table are fully resolved (real tool names included, not just
+    // placeholder text), so the live page never shows a half-built
+    // chain or a flash of placeholder text. Duplicate ids (shared with
+    // whatever's still live in #history-refreshable-region up to this
+    // point) stop mattering the instant this runs - .contents() just
+    // moves the already-finished nodes over wholesale.
+    $.when(window.__historyStepChainReady, window.__historyTableReady).done(function () {
+	$('#history-refreshable-region').empty().append($root.contents());
+	if (window.historyRefreshWatchdog) {
+	    clearTimeout(window.historyRefreshWatchdog);
+	}
+	window.historyRefreshInFlight = false;
+    });
 </script>
 {% endif %}
 
