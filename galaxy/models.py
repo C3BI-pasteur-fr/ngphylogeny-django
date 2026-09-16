@@ -59,13 +59,37 @@ class GalaxyUser(models.Model):
             GalaxyUser.objects.filter(galaxy_server=self.galaxy_server).update(anonymous=False)
         super(GalaxyUser, self).save(*args, **kwargs)
 
+    # bioblend's own default (timeout=None) waits forever - a request
+    # handler blocked on one Galaxy call ties up one of a fixed, small
+    # number of worker slots (uwsgi's own "--processes 4 --threads 2" in
+    # the k8s deployment - see manifest.yaml) until Galaxy answers or
+    # uwsgi's own 120s harakiri kills that worker outright. Bound well
+    # under that so a stalled/degraded Galaxy frees the worker back up
+    # quickly instead - real production incident: a galaxy.pasteur.fr
+    # 502 spell (workspace.views.get_dataset_toolprovenance et al., now
+    # polled every 10s per dataset by the history detail page's step
+    # chain/table - see CLAUDE.md) piled up requests on every open
+    # history page until enough worker slots were stuck that the
+    # liveness probe (a plain GET /status, no special exemption from
+    # needing a free worker) itself couldn't get served in time - 3
+    # missed probes and Kubernetes restarts the pod (observed: 5
+    # restarts, exit code 137/SIGKILL).
+    GALAXY_REQUEST_TIMEOUT = 30
+
     @cached_property
     def get_galaxy_instance(self):
         """
             :return bioblend Galaxy instance object
         """
         if self.api_key:
-            return GalaxyInstance(url=self.galaxy_server.url, key=self.api_key)
+            # bioblend.galaxy.GalaxyInstance.__init__ (unlike the lower-
+            # level GalaxyClient it wraps) doesn't actually accept/forward
+            # a timeout kwarg at all - has to be set as a plain attribute
+            # afterward instead (make_get_request/make_post_request just
+            # read self.timeout off the instance on each call).
+            gi = GalaxyInstance(url=self.galaxy_server.url, key=self.api_key)
+            gi.timeout = self.GALAXY_REQUEST_TIMEOUT
+            return gi
         else:
             raise ValueError("API key must be set")
 
