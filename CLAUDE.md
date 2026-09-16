@@ -707,6 +707,47 @@ block this pass on one more Galaxy call" reasoning as the submission
 timeout's own cleanup). Regression test:
 `blast.tests.CheckBlastRunsTest.test_gives_up_on_runs_stuck_past_the_staleness_cutoff`.
 
+**`deleteoldblastruns()` (the daily 2am, 14-day-cutoff cleanup) now
+queues `deletegalaxyhistory` instead of calling it directly** - same
+"don't block this batch on one Galaxy call" reasoning as the two
+timeouts above, previously not applied here even though this is the
+oldest of the three cleanup paths. It also **clears `query_seq`/`tree`**
+on every run it cleans up, to free space on rows old enough to be
+deleted anyway - confirmed safe for the daily report
+(`workspace/reports.py` only ever reads `BlastRun`'s `date`/`deleted`/
+`id`/`query_length`, never `query_seq`/`tree`). The redundant `e.save()`
+right after `e.soft_delete()` (which already calls `self.save()`
+internally) was also dropped. Regression tests:
+`blast.tests.DeleteOldBlastRunsTest`.
+
+**New field `BlastRun.query_length`** (`PositiveIntegerField(null=True,
+blank=True)`) exists specifically so the sequence length survives
+`deleteoldblastruns()` clearing `query_seq` - set at submission time
+(`launch_ncbi_blast`/`launch_pasteur_blast`, right alongside `query_seq`,
+before anything else - including the alphabet check - can short-circuit
+the run into `ERROR`) and re-derived defensively at cleanup time for any
+row where it's still `NULL` (predates the field, or some other path
+never set it), right before `query_seq` is cleared. A row already
+cleaned up *before* this field existed has no way to recover its length
+- `query_seq` is already gone by then - and stays `NULL` permanently;
+nothing to be done about that historical gap. `null=True` since existing
+rows aren't backfilled (migrations aren't data-migrated in this
+project). Needs a manual `ALTER TABLE` on any already-deployed Postgres,
+same "migrate alone won't apply this" reasoning as `history`/
+`history_fileid` above - verified against the real migration's own
+generated SQL (`manage.py sqlmigrate blast 0003`), not guessed (Django's
+`PositiveIntegerField` also emits a `CHECK` constraint):
+```sql
+ALTER TABLE blast_blastrun ADD COLUMN query_length integer NULL CHECK (query_length >= 0);
+UPDATE blast_blastrun SET query_length = LENGTH(query_seq)
+  WHERE query_length IS NULL AND query_seq IS NOT NULL AND query_seq <> '';
+```
+The `UPDATE` only recovers length for rows whose `query_seq` hasn't
+already been cleared by a previous cleanup run - same unavoidable gap as
+above for anything already cleaned up. Regression tests:
+`blast.tests.LaunchNcbiBlastTest`/`LaunchPasteurBlastTest`/
+`DeleteOldBlastRunsTest`.
+
 **`BlastRun.history`/`history_fileid` were `CharField(max_length=20)` -
 too narrow for this Galaxy server's real encoded ids.** Once the two
 bugs above were fixed, a real Pasteur submission ran for real on Galaxy

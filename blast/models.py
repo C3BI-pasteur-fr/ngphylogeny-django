@@ -51,6 +51,14 @@ class BlastRun(models.Model):
     date = models.DateTimeField(default=timezone.now, blank=True)
     query_id = models.CharField(null=True, max_length=1000)
     query_seq = models.TextField(null=True)
+    # Set at submission time (blast/tasks.py's launch_ncbi_blast/
+    # launch_pasteur_blast) and re-derived defensively at cleanup time
+    # (deleteoldblastruns(), right before query_seq is cleared to free
+    # space) so the sequence length survives even once the sequence
+    # itself doesn't - null=True since existing rows predate this field
+    # and are never backfilled (migrations aren't committed/data-
+    # migrated in this project - see CLAUDE.md).
+    query_length = models.PositiveIntegerField(null=True, blank=True)
     evalue = models.FloatField(default=0.00001)
     coverage = models.FloatField(default=0.8)
     maxseqs = models.PositiveIntegerField(default=10)

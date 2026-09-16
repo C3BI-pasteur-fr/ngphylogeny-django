@@ -87,6 +87,7 @@ def launch_ncbi_blast(blastrunid, sequence, prog, db, evalue, coverage, maxseqs)
         if len(records) == 1:
             b.query_id = biofile.cleanseqname(records[0].id)
             b.query_seq = records[0].seq
+            b.query_length = len(records[0].seq)
             b.evalue = evalue
             b.coverage = coverage
             b.database = db
@@ -213,6 +214,7 @@ def launch_pasteur_blast(blastrunid, sequence, prog, db, evalue, coverage, maxse
             b.history = history.get("id")
             b.query_id = biofile.cleanseqname(records[0].id)
             b.query_seq = records[0].seq
+            b.query_length = len(records[0].seq)
             b.evalue = evalue
             b.coverage = coverage
             b.database = db
@@ -316,8 +318,23 @@ def deleteoldblastruns():
     datecutoff = timezone.now() - timedelta(days=14)
     for e in BlastRun.objects.filter(deleted=False).filter(date__lte=datecutoff):
         if e.history != "":
-            deletegalaxyhistory(e.history)
+            # Queued, not called directly - same reasoning as the
+            # submission/staleness timeouts' own cleanup: don't let one
+            # slow/unresponsive Galaxy history-delete hold up the rest of
+            # this batch.
+            deletegalaxyhistory.delay(e.history)
         e.soft_delete()
+        # Re-derived here (not just trusted from submission time) so
+        # rows predating BlastRun.query_length, or from a launch path
+        # that somehow never set it, still keep this before it's lost
+        # for good.
+        if e.query_length is None:
+            e.query_length = len(e.query_seq or "")
+        # Frees space on rows old enough to be cleaned up anyway - safe
+        # for the daily report (workspace/reports.py), which only ever
+        # reads BlastRun's date/deleted/id, never query_seq/tree.
+        e.query_seq = ""
+        e.tree = ""
         e.save()
     logger.info("Old blast deletion task finished")
 
