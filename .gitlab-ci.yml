@@ -235,7 +235,14 @@ deploy-prod:
     # a pre-existing secret (unlike the wildcard-pasteur-tls one first
     # suggested, which turned out not to cover ngphylogeny.fr at all -
     # this one is a fresh name cert-manager creates/populates itself).
-    INGRESS_CLUSTER_ISSUER: "letsencrypt-prod"
+    # ClusterIssuer name confirmed as "letsencrypt" by the operator -
+    # the first deploy used "letsencrypt-prod" (a guess at the likely
+    # name, following a common naming convention), which doesn't exist
+    # on this cluster: cert-manager reported
+    # `clusterissuer.cert-manager.io "letsencrypt-prod" not found` and
+    # the CertificateRequest never got past that (no Order/Challenge
+    # were ever created).
+    INGRESS_CLUSTER_ISSUER: "letsencrypt"
     INGRESS_TLS_SECRET_NAME: "ngphylogeny-fr-tls"
   environment:
     name: k8sprod-02-ngphylogenyfr
