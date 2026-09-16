@@ -687,6 +687,26 @@ polled queryset (that run is picked up again once it's set) and giving
 each run its own `try/except` so one failure can't starve the rest;
 regression tests `blast.tests.CheckBlastRunsTest`.
 
+**`checkblastruns()` had no timeout at all on the actual Galaxy-side
+blast computation**, only surfaced by a real Pasteur run against `nt`
+that sat showing `Running` for over an hour with `message` empty and no
+way to tell a genuinely slow search apart from one stuck on Galaxy's/the
+cluster's side. This is a different phase than `launch_ncbi_blast`'s/
+`launch_pasteur_blast`'s own `soft_time_limit`/`time_limit` (both only
+bound *submitting* the job - the actual computation runs async on Galaxy
+afterwards, polled here). `PASTEUR_RUN_STALE_AFTER` (`blast/tasks.py`,
+currently 3 hours, same "generous enough for a real search, bounded
+enough to recover" guess as the submission timeouts) is checked against
+`BlastRun.date` at the top of each run's own per-run `try` (see the
+`checkblastruns()` race fix above for why each run already has one) -
+past the cutoff, `show_dataset` is skipped entirely (no point asking
+Galaxy about a run already being abandoned), the run is marked `ERROR`
+with a clear message, and its Galaxy history is queued for deletion
+(`deletegalaxyhistory.delay(...)`, not called directly - same "don't
+block this pass on one more Galaxy call" reasoning as the submission
+timeout's own cleanup). Regression test:
+`blast.tests.CheckBlastRunsTest.test_gives_up_on_runs_stuck_past_the_staleness_cutoff`.
+
 **`BlastRun.history`/`history_fileid` were `CharField(max_length=20)` -
 too narrow for this Galaxy server's real encoded ids.** Once the two
 bugs above were fixed, a real Pasteur submission ran for real on Galaxy
