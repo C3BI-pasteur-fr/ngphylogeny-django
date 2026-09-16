@@ -646,6 +646,23 @@ visually identical rather than drifting apart over time. See
 `workspace.tests.JobCompletionEmailTest`'s coverage of the same shared
 machinery.
 
+**`launch_pasteur_blast()` got the same 10-minute
+`soft_time_limit`/`time_limit` as `launch_ncbi_blast`**, plus cleanup of
+any Galaxy history it already created before timing out. Unlike NCBI,
+the actual blast computation runs asynchronously on Galaxy once
+submitted and is separately monitored (still with no timeout of its
+own) by `checkblastruns()` - a hang inside `launch_pasteur_blast` itself
+is most likely in the (network-bound) `create_history`/`upload_file`/
+`run_tool` calls that submit the job in the first place. On
+`SoftTimeLimitExceeded`, if `b.history` was already set (the Galaxy
+history got created before the timeout fired), `deletegalaxyhistory` is
+queued (`.delay()`, not called directly - this task already blew its
+own time budget) to clean it up rather than leaving an orphaned history
+nothing will ever reference again; previously an orphaned history like
+this would just sit until `deleteoldblastruns()`'s 14-day cutoff.
+Regression test: `blast.tests.LaunchPasteurBlastTest
+.test_timeout_marks_error_and_cleans_up_galaxy_history`.
+
 **BLAST analysis was briefly, temporarily disabled** (code-level, not
 via a CI/CD variable) right after real usage surfaced two open issues:
 `launch_ncbi_blast`'s NCBI client could hang indefinitely with no

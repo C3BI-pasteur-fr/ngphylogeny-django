@@ -4,6 +4,7 @@ from __future__ import unicode_literals
 import copy
 from unittest.mock import MagicMock, patch
 
+from celery.exceptions import SoftTimeLimitExceeded
 from django.conf import settings
 from django.core import mail
 from django.test import TestCase, override_settings
@@ -77,6 +78,36 @@ class LaunchPasteurBlastTest(TestCase):
         self.assertFalse(b.message)
         galaxycon.tools.upload_file.assert_called_once()
         galaxycon.tools.run_tool.assert_called_once()
+
+    @override_settings(BLASTS=_blasts_with_pasteur_activated())
+    @patch('blast.tasks.deletegalaxyhistory')
+    @patch('blast.tasks.galaxy_connection')
+    def test_timeout_marks_error_and_cleans_up_galaxy_history(
+            self, mock_galaxy_connection, mock_deletegalaxyhistory):
+        """
+        Regression test: launch_pasteur_blast() used to have no timeout
+        at all (unlike launch_ncbi_blast, which got one after NCBI's
+        qblast() turned out to hang indefinitely) - a hang in the
+        (network-bound) create_history/upload_file/run_tool calls that
+        submit the job would leave the run stuck forever, with the
+        Galaxy history it already created orphaned on the Galaxy server
+        since nothing else would ever clean it up before the 14-day
+        deleteoldblastruns() cutoff.
+        """
+        galaxycon = MagicMock()
+        galaxycon.histories.create_history.return_value = {'id': 'fakehistoryid'}
+        galaxycon.tools.upload_file.side_effect = SoftTimeLimitExceeded()
+        mock_galaxy_connection.return_value = galaxycon
+
+        b = BlastRun.objects.create(query_id="", query_seq="")
+
+        launch_pasteur_blast(
+            b.id, ">s1\nACGTACGTAC\n", _PASTEUR_BLASTN, 'nt', 0.00001, 0.8, 10)
+
+        b.refresh_from_db()
+        self.assertEqual(b.status, BlastRun.ERROR)
+        self.assertIn('too long', b.message)
+        mock_deletegalaxyhistory.delay.assert_called_once_with('fakehistoryid')
 
     def test_history_fields_are_wide_enough_for_real_galaxy_ids(self):
         """
