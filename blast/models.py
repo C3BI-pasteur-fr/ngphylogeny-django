@@ -49,8 +49,16 @@ class BlastRun(models.Model):
     maxseqs = models.PositiveIntegerField(default=10)
     database = models.CharField(max_length=100, default='swissprot')
     blastprog = models.CharField(max_length=100, default='blastp')
-    history = models.CharField(max_length=20) # If pasteur blast: galaxy history id
-    history_fileid= models.CharField(max_length=20) # If pasteur blast: output file galaxy id 
+    # max_length=250, not 20: matches workflows.Workflow.id_galaxy's
+    # existing convention for the same kind of value (an opaque
+    # Galaxy-provided encoded id). 20 was too tight for this Galaxy
+    # server's actual dataset ids - launch_pasteur_blast() would run the
+    # blast job for real, then crash saving the result:
+    # "django.db.utils.DataError: value too long for type character
+    # varying(20)" on history_fileid, leaving the run stuck showing
+    # PENDING in NGPhylogeny while it kept running/finished on Galaxy.
+    history = models.CharField(max_length=250) # If pasteur blast: galaxy history id
+    history_fileid= models.CharField(max_length=250) # If pasteur blast: output file galaxy id
     status = models.CharField(max_length=1, default=PENDING, choices=RUNSTATUS)
     server = models.CharField(max_length=50, default=NCBI, choices=BLASTSERVERS)
     message = models.TextField(null=True)
