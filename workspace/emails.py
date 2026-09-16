@@ -5,6 +5,11 @@ images rather than embedded base64 data: URIs - most mail clients,
 Outlook chief among them, don't render data: URI images in HTML email at
 all (see workspace/reports.py's module docstring - the daily report hit
 this exact problem first).
+
+build_branded_html_email()/site_url()/CID_HEADER_LOGO/CID_FOOTER_LOGO are
+also reused directly by blast.emails, so every NGPhylogeny.fr completion
+notification (workflow job, BLAST search) shares one look rather than
+each notification type maintaining its own MIME/branding wiring.
 """
 import os
 from email.mime.image import MIMEImage
@@ -34,7 +39,7 @@ def _read_logo(cid):
         return f.read()
 
 
-def _site_url(path):
+def site_url(path):
     """
     Absolute link back to the site for the given path - https if
     NGPHYLO_HTTPS_HOST is configured (the real deployment always sets
@@ -48,37 +53,14 @@ def _site_url(path):
     return 'http://%s%s' % (host, path)
 
 
-def build_job_completion_email(history_id, recipient, error):
+def build_branded_html_email(subject, plain_text, html, recipient):
     """
-    Returns an unsent EmailMultiAlternatives for a finished job - see
-    send_job_completion_email(), which actually sends it. Split out so
-    tests can inspect the built message without needing a working SMTP
-    backend/recipient.
+    Wraps subject/plain_text/html into an EmailMultiAlternatives with the
+    two inline (CID-referenced) logo images attached - the MIME wiring
+    shared by every NGPhylogeny.fr HTML notification (job completion,
+    BLAST completion), so they render identically instead of each one
+    duplicating this.
     """
-    results_url = _site_url(
-        reverse('history_detail', kwargs={'history_id': history_id}))
-    site_home_url = _site_url('/')
-    html = render_to_string('workspace/job_completion_email.html', {
-        'error': error,
-        'results_url': results_url,
-        'site_home_url': site_home_url,
-        'header_logo_cid': CID_HEADER_LOGO,
-        'footer_logo_cid': CID_FOOTER_LOGO,
-    })
-    if error:
-        subject = 'NGPhylogeny.fr - your analysis finished with errors'
-        status_line = 'finished with errors'
-    else:
-        subject = 'NGPhylogeny.fr - your analysis has finished'
-        status_line = 'finished successfully'
-    plain_text = (
-        'Dear NGPhylogeny.fr user,\n\n'
-        'Your analysis has %s.\n\n'
-        'View your results: %s\n\n'
-        'Thank you for using NGPhylogeny.fr.\n'
-        'The NGPhylogeny.fr team\n' % (status_line, results_url)
-    )
-
     msg = EmailMultiAlternatives(
         # Reuses the daily report's sender setting rather than a separate
         # hardcoded address: it's the same SMTP account either way, and
@@ -102,6 +84,46 @@ def build_job_completion_email(history_id, recipient, error):
                           filename='%s.png' % cid)
         msg.attach(image)
     return msg
+
+
+def build_job_completion_email(history_id, recipient, error):
+    """
+    Returns an unsent EmailMultiAlternatives for a finished job - see
+    send_job_completion_email(), which actually sends it. Split out so
+    tests can inspect the built message without needing a working SMTP
+    backend/recipient.
+    """
+    results_url = site_url(
+        reverse('history_detail', kwargs={'history_id': history_id}))
+    site_home_url = site_url('/')
+    html = render_to_string('workspace/job_completion_email.html', {
+        'error': error,
+        'results_url': results_url,
+        'site_home_url': site_home_url,
+        'header_logo_cid': CID_HEADER_LOGO,
+        'footer_logo_cid': CID_FOOTER_LOGO,
+        'success_message': (
+            'Your analysis has finished running successfully. Your '
+            'results are ready to view.'),
+        'error_message': (
+            'Your analysis has finished running, but one or more steps '
+            'reported an error. You can inspect the details of each '
+            'step from your results page.'),
+    })
+    if error:
+        subject = 'NGPhylogeny.fr - your analysis finished with errors'
+        status_line = 'finished with errors'
+    else:
+        subject = 'NGPhylogeny.fr - your analysis has finished'
+        status_line = 'finished successfully'
+    plain_text = (
+        'Dear NGPhylogeny.fr user,\n\n'
+        'Your analysis has %s.\n\n'
+        'View your results: %s\n\n'
+        'Thank you for using NGPhylogeny.fr.\n'
+        'The NGPhylogeny.fr team\n' % (status_line, results_url)
+    )
+    return build_branded_html_email(subject, plain_text, html, recipient)
 
 
 def send_job_completion_email(history_id, recipient, error):

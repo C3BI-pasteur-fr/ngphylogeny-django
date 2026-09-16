@@ -626,6 +626,26 @@ ALTER TABLE blast_blastrun ALTER COLUMN history TYPE varchar(250);
 ALTER TABLE blast_blastrun ALTER COLUMN history_fileid TYPE varchar(250);
 ```
 
+**BLAST completion email now reuses the workflow job-completion email's
+branded HTML template**, rather than the hand-built plain-text
+`send_mail()` call it used before. `workspace/emails.py`'s MIME/logo
+wiring was split out into `build_branded_html_email(subject, plain_text,
+html, recipient)`, and its `site_url()` helper (https if
+`NGPHYLO_HTTPS_HOST` is set, http otherwise) was made non-private
+(`site_url`, not `_site_url`) since it's now used across apps - both
+shared by the new `blast/emails.py`
+(`build_blast_completion_email()`/`send_blast_completion_email()`), which
+`blast/tasks.py`'s three notification sites (`launch_ncbi_blast`,
+`launch_pasteur_blast`'s counterpart in `checkblastruns`) now call
+instead of building `send_mail()` messages by hand. Both notification
+types render the *same* `templates/workspace/job_completion_email.html`
+file directly (not a copy) - `success_message`/`error_message` context
+variables are the only notification-specific text, so the two stay
+visually identical rather than drifting apart over time. See
+`blast.tests.BlastCompletionEmailTest`, which mirrors
+`workspace.tests.JobCompletionEmailTest`'s coverage of the same shared
+machinery.
+
 **BLAST analysis was briefly, temporarily disabled** (code-level, not
 via a CI/CD variable) right after real usage surfaced two open issues:
 `launch_ncbi_blast`'s NCBI client could hang indefinitely with no
