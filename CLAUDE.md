@@ -545,18 +545,21 @@ workflow has been submitted and completed successfully against it. **See
 "Getting `deploy-dev` from green pipeline to actually working" below for
 everything that took to get there** — none of it was a manifest/pipeline
 authoring mistake caught by review, all of it only surfaced by actually
-running a real deploy against a real cluster. **`deploy-prod`'s
-namespace/environment/domain are still a placeholder guess**
-(`ngphylogeny-prod`/`k8sprod-ngphylogeny`/`ngphylogeny.pasteur.cloud`,
-following drmab-web's own naming convention) — nothing prod-side is
-provisioned yet; confirm the real values once it is (same process as
-dev: update `.gitlab-ci.yml`'s `deploy-prod` block and, for the public
-hostname, manifest.yaml's `NGPHYLO_HTTPS_HOST`/Ingress `host`), and
-expect to hit the same class of first-real-deploy issues listed below
-again against whatever cluster/namespace prod actually turns out to be.
-`deploy-dev` triggers on every push to `upgrade`; `deploy-prod` requires
-a manual trigger from the pipeline page even then, on purpose — nothing
-rolls out to production automatically.
+running a real deploy against a real cluster. **`deploy-prod`'s real
+values**: namespace `ngphylogenyfr-prod`, GitLab Environment
+`k8sprod-02-ngphylogenyfr`, public URL `ngphylogeny.fr` (external
+ingress class - was briefly `ngphylogeny.pasteur.cloud`/`internal`
+before the real production domain was confirmed and wired in), set via
+`.gitlab-ci.yml`'s `deploy-prod` block's `PUBLIC_URL`/`INGRESS_CLASS`
+variables (consumed by `manifest.yaml`'s `${PUBLIC_URL}`/
+`${INGRESS_CLASS}` - the app's own `NGPHYLO_HTTPS_HOST` env var and the
+Ingress `host`/`ingress.class` all derive from the same two variables,
+not set independently). Expect to hit the same class of
+first-real-deploy issues documented below the first time `deploy-prod`
+is actually triggered against this domain, the same way `deploy-dev`
+did. `deploy-dev` triggers on every push to `upgrade`; `deploy-prod`
+requires a manual trigger from the pipeline page even then, on purpose
+— nothing rolls out to production automatically.
 
 **Getting `deploy-dev` from green pipeline to actually working** took
 several rounds of real-cluster-only issues, worth knowing about before
