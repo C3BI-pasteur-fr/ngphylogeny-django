@@ -424,6 +424,75 @@ columns rewritten before import:
   the value briefly not resolve to a real row while the fixup `UPDATE`
   runs in the same transaction.
 
+**Both restore scripts (`prepare_legacy_dump_import.sh`/
+`prepare_ifbcloud_delta_import.sh`, both untracked) now also restore
+`blast_blastrun`/`blast_blastsubject`, alongside
+`workspace_workspacehistory` as before**, so the "BLAST" category (see
+above) can reflect real pre-existing historical volume too, not just
+usage since the restore. `blast_blastrun`/`blast_blastsubject` needed
+a different id/FK strategy than `workspace_workspacehistory` - verified
+directly against a real `manage.py migrate`-generated schema (a
+throwaway Postgres via `docker run postgres:15`), not assumed from the
+old dump's own (not necessarily current) DDL:
+- `blast_blastrun.id` is a `uuid` with **no DB-level default** (Django
+  assigns it client-side via `uuid.uuid4()` on save, not a Postgres
+  sequence/`gen_random_uuid()`) and the row has no FK to anything - so
+  its original id is restored completely as-is rather than
+  dropped-and-reassigned, which is also collision-safe (uuid). One
+  consequence: unlike `workspace_workspacehistory` (fresh
+  sequence-assigned id every run), re-running `prepare_legacy_dump_import.sh`'s
+  *output* a second time against the same target fails outright on a
+  primary key violation (transaction rolled back cleanly, verified) -
+  this is a one-shot historical import, not meant to be re-run, whereas
+  the IFB Cloud script's delta approach naturally dedupes by the same
+  preserved `id` directly (simpler than `workspace_workspacehistory`'s
+  `history`-column indirection, needed there only because its own id
+  *is* reassigned).
+- `blast_blastsubject.id` *is* a real Postgres identity column with
+  nothing else referencing it, so it's dropped/reassigned - same
+  reasoning as `workspace_workspacehistory.id`. Its `blastrun_id` is
+  kept as-is (referencing the preserved `blast_blastrun` ids above).
+  Every restored `blast_blastrun` row has `deleted` forced to `true`,
+  same reasoning as `workspace_workspacehistory`'s rows: so
+  `blast.tasks.deleteoldblastruns()`'s daily cleanup (`deleted=false`
+  filter) never tries to call Galaxy's real delete-history API against
+  years-old, near-certainly-defunct Pasteur BLAST histories.
+- The `blast_blastrun`<->`blast_blastsubject` FK is `DEFERRABLE INITIALLY
+  DEFERRED` on the real deployed schema (also verified directly, not
+  assumed) - unlike `workspace_workspacehistory`'s FKs, which aren't -
+  so no trigger-disabling is needed for these two tables, just COPYing
+  `blast_blastrun` before `blast_blastsubject` in the same transaction.
+- The IFB Cloud delta script now takes a 4th argument, a separate
+  tracking file for already-imported `blast_blastrun` ids (distinct
+  from the existing history-id tracking file - different table, different
+  natural key) - `touch` it once before the first run, same as the
+  existing tracking file. A `blast_blastsubject` row is only ever
+  imported alongside a `blast_blastrun` row that's new in that same
+  run, so it needs no tracking file of its own.
+
+Both extended scripts were verified end to end against a real Postgres
+(not just read over) - real sample rows from `ngphylo_dump.sql`,
+migrated with the actual `manage.py migrate` schema, imported, and
+queried back; the delta script was also run through three rounds
+(initial import, an unchanged re-run producing zero new rows, and a
+real incremental delta) to confirm dedup and the tracking-file updates
+behave correctly. One thing that surfaced during that verification, true
+of the original script too and not something either script guards
+against: the tracking file(s) are updated as soon as the SQL is
+*written*, regardless of whether it was actually successfully applied
+to the target Postgres - if a generated import fails partway (transaction
+rolled back), its ids are still recorded as "imported," and the next
+delta will skip them. Rerunning after a failed apply needs the affected
+line(s) manually removed from the relevant tracking file first.
+
+**`prepare_legacy_dump_import.sh` writes two separate output files, not
+one** (`<dump> <workspacehistory_output.sql> <blast_output.sql>`) - each
+wrapped in its own `BEGIN`/`COMMIT`, so either can be applied without the
+other (e.g. restoring only the BLAST history into a deployment that
+already has its workflow history, or vice versa). `prepare_ifbcloud_delta_import.sh`
+still writes one combined output - not split, since it wasn't asked for
+there, but the same approach would apply if it ever is.
+
 ### Kubernetes deployment (GitLab CI)
 
 A third deployment path, alongside `docker-compose.yml` (local/dev) and
