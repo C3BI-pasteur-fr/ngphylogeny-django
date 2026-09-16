@@ -6,12 +6,16 @@
 <link rel="stylesheet" type="text/css" href="{% static 'css/biblio.css' %}"/>
 <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.16/css/dataTables.bootstrap.min.css">
 <style>
-  /* Workflow step chain - one box per tool step (consecutive datasets
-     from the same tool collapsed into one, same grouping the table
-     below already does via get_dataset_tool/get_tool_name), colored by
-     status. Colors match templates/workspace/job_completion_email.html's
-     existing .status-ok/.status-error palette, for consistency with the
-     other place this app already color-codes a run's outcome. */
+  /* Workflow step chain (workspace/include/history_contents_refreshable.html)
+     - one box per tool step (consecutive datasets from the same tool
+     collapsed into one, same grouping the table there already does via
+     get_dataset_tool/get_tool_name), colored by status. Colors match
+     templates/workspace/job_completion_email.html's existing
+     .status-ok/.status-error palette, for consistency with the other
+     place this app already color-codes a run's outcome. Stays here
+     (not in that fragment) since this stylesheet block is only ever
+     rendered once, into the page's own <head> - it applies to that
+     fragment's elements however many times it's reloaded. */
   .workflow-step-chain {
     display: flex;
     flex-wrap: wrap;
@@ -51,21 +55,24 @@
     $(document).ready(function(){
 	$('[data-toggle="tooltip"]').tooltip();
 	var interval = 10000;
-	var autorefresh = setInterval(refresh, interval);
+	// Global (not a plain local var) so history_contents_refreshable.html's
+	// own "the run is finished" check - re-evaluated on every reload of
+	// that fragment, including this first one - can clearInterval it.
+	window.historyRefreshTimer = setInterval(refresh, interval);
 	var elt = $('#countdown_span');
 	elt.html(interval / 1000);
-	
+
 	function countdown() {
 	    elt.html(elt.html() - 1);
 	    if (elt.html() < 0) {
 		elt.html(interval / 1000);
 	    }
 	}
-	
+
 	setInterval(countdown, 1000);
 	{% if object.finished %}
 	$('#info-refresh').hide();
-	clearInterval(autorefresh);
+	clearInterval(window.historyRefreshTimer);
 	{% endif %}
 
         var ajax = $.getJSON("{% url 'get_dataset_citations' object.history_info.id %}",
@@ -81,142 +88,20 @@
     });
 </script>
 
-<script >
-    $(function () {
-	var deferreds = [];
-	// Loop using .each
-	$("[data]").each(function (index, value) {
-	    var ajax = $.post("{% url 'get_dataset_tool' object.history_info.id %}",
-			      {
-				  'dataset_id': $(this).attr('id'),
-				  'csrfmiddlewaretoken': '{{ csrf_token }}'
-			      },
-			      function (response) {
-				  var result = response;
-				  $('#' + result.dataset_id).attr('data', result.tool_id)
-			      });
-	    // Push promise to 'deferreds' array
-	    deferreds.push(ajax);
-	});
-        // Use .apply onto array from deferreds
-	$.when.apply($, deferreds).then(function () {
-	    // group dataset by tool
-	    var id_tool = '';
-	    var first_dataset = '';
-	    var cmpt = 1;
-	    
-	    $("[data]").each(function (index, el) {
-		if (id_tool == $(el).attr('data')) {
-		    cmpt++;
-		    $(el).remove();
-		} else {
-		    cmpt = 1;
-		    first_dataset = $(el).attr('id');
-		    id_tool = $(el).attr('data');
-		    $.post("{% url 'get_tool_name' %}",
-			   {
-			       'tool_id': $(this).attr('data'),
-			       'csrfmiddlewaretoken': '{{ csrf_token }}'
-			   },
-			   function (response) {
-			       var result = response;
-			       $(el).text(result.name);
-			   });
-		}
-		$('#' + first_dataset).attr('rowspan', cmpt);
-	    });
-	});
-    });
-</script>
-
 <script>
-    // Graphical step-by-step view of the run, above the detailed table -
-    // one box per tool step (consecutive datasets from the same tool
-    // collapsed into one, exactly like the table's own Tool column
-    // grouping above - kept as a separate pass rather than sharing that
-    // one's DOM/AJAX calls, so this can't regress the existing table
-    // logic). Independent of it entirely: builds from historySteps
-    // (this run's datasets, oldest first - a left-to-right chain reads
-    // naturally as progress through the pipeline, the reverse of the
-    // table's own newest-first ordering) rather than scraping the table.
-    var historySteps = [
-	{% for file in object.history_content|dictsort:"hid" %}
-	{id: "{{ file.id|escapejs }}", name: "{{ file.name|escapejs }}", state: "{{ file.state|escapejs }}"},
-	{% endfor %}
-    ];
-
-    $(function () {
-	if (historySteps.length === 0) {
-	    return;
-	}
-
-	var deferreds = $.map(historySteps, function (step) {
-	    return $.post("{% url 'get_dataset_tool' object.history_info.id %}", {
-		'dataset_id': step.id,
-		'csrfmiddlewaretoken': '{{ csrf_token }}'
-	    }, function (response) {
-		step.tool_id = response.tool_id;
-	    });
-	});
-
-	$.when.apply($, deferreds).then(function () {
-	    // Collapse consecutive datasets sharing the same tool_id into
-	    // one step - a tool with multiple outputs (e.g. a log file
-	    // alongside its main result) shouldn't show as multiple steps.
-	    var groups = [];
-	    $.each(historySteps, function (index, step) {
-		var last = groups[groups.length - 1];
-		if (last && last.tool_id === step.tool_id) {
-		    last.states.push(step.state);
-		} else {
-		    groups.push({tool_id: step.tool_id, name: step.name, states: [step.state]});
-		}
-	    });
-
-	    function statusClass(states) {
-		if (states.indexOf('error') !== -1) {
-		    return 'workflow-step-error';
-		}
-		if (states.indexOf('running') !== -1) {
-		    return 'workflow-step-running';
-		}
-		var allOk = $.grep(states, function (s) { return s.indexOf('ok') === -1; }).length === 0;
-		if (allOk) {
-		    return 'workflow-step-finished';
-		}
-		// queued / new / paused / anything else not yet resolved
-		return 'workflow-step-pending';
-	    }
-
-	    var $chain = $('#workflow-step-chain');
-	    $.each(groups, function (index, group) {
-		if (index > 0) {
-		    $chain.append($('<div class="workflow-step-connector"></div>'));
-		}
-		var $box = $('<div class="workflow-step-box"></div>')
-		    .addClass(statusClass(group.states))
-		    .text(group.name);
-		$chain.append($('<div class="workflow-step"></div>').append($box));
-
-		// Same tool-name lookup the table above already uses -
-		// starts as the raw dataset/tool_id name, upgraded to the
-		// friendly tool name once resolved.
-		$.post("{% url 'get_tool_name' %}", {
-		    'tool_id': group.tool_id,
-		    'csrfmiddlewaretoken': '{{ csrf_token }}'
-		}, function (response) {
-		    if (response.name) {
-			$box.text(response.name);
-		    }
-		});
-	    });
-	});
-    });
-</script>
-
-  <script>
+    // Was a full location.reload() every 10s - reloads just the part
+    // that actually changes as the run progresses instead (step chain +
+    // table, workspace/include/history_contents_refreshable.html, via
+    // workspace.views.HistoryContentRefreshView). jQuery's .load() -
+    // unlike a plain $.get() swapped in via .html() - executes the
+    // <script> tags in the response, so that fragment's own JS
+    // (tool-name resolution, step-chain building, tooltip init, and the
+    // "stop polling once finished" check) re-runs exactly as it would
+    // on a real page load, with no separate re-init logic needed here.
     function refresh() {
-	location.reload();
+	$('#history-refreshable-region').load(
+	    "{% url 'history_content_refresh' object.history_info.id %}"
+	);
     }
   function renameHistory(el){
       $.post("{% url 'history_rename' object.history_info.id %}",
@@ -305,141 +190,14 @@
 </div>
 <br>
 <hr>
-<div class="row">
-  <div class="col-md-12">
-    <div id="workflow-step-chain" class="workflow-step-chain"></div>
-  </div>
-</div>
-<div class="row">
-  <div class="col-md-12">
-    <table id="myTable" class="table table-striped ">
-      <thead>
-        <th style="width: 10%;">Tool</th>
-        <th>Step</th>
-        <th style="width: 40%;">File Name</th>
-        <th>Status</th>
-        <th></th>
-      </thead>
-      <tbody>
-        <tr></tr>
-
-        {% for file in object.history_content|dictsortreversed:"hid" %}
-        <tr {% if not file.visible %}class='hidden' {% endif %}>
-          <td id="{{ file.id }}" data=''></td>
-          <td>{{ file.hid }}.</td>
-          <td>{{ file.name }}</td>
-          <td id="state_{{ file.id }}">
-            {% if 'ok' in file.state %}
-            <span class="glyphicon glyphicon-ok  text-success"
-                  data-toggle="tooltip" data-placement="right"
-                  title="Success!">
-            </span>
-            {% elif 'queued' in file.state or 'new' in file.state %}
-            <span class="loading-dot"
-                  data-toggle="tooltip" data-placement="right"
-                  title="Waiting to be launch">
-              <span class="h2 loader-dot">.</span>
-              <span class="h2 loader-dot">.</span>
-              <span class="h2 loader-dot">.</span>
-            </span>
-            {% elif "running" in file.state %}
-            <span class="glyphicon glyphicon-refresh spin"
-                  data-toggle="tooltip" data-placement="right"
-                  title="Your job is running">
-            </span>
-            {% else %}
-            <span class="glyphicon glyphicon-remove text-danger"
-                  data-toggle="tooltip" data-placement="right"
-                  title="Your job fail">
-            </span>
-            {% endif %}
-          </td>
-          <td id="action_{{ file.id }}">
-            {% if 'ok' in file.state %}
-            {# <a class="btn btn-default btn-sm" title="Export big data in your personal outputs folder" #}
-                  {# href="{% url 'export_file' file.id %}"> #}
-              {# <span class="glyphicon glyphicon-export text-primary" aria-hidden="true"></span></a>#}
-	    {% if file.id in request.session.files %} 
-            <a class="btn btn-default btn-sm" title="Remove file from session"
-               data-toggle="tooltip" data-placement="right"
-               href="{% url 'remove_file_from_session' file.id %}">
-              <span class="glyphicon glyphicon-minus text-primary"></span></a>
-	    {% else %}
-            <a class="btn btn-default btn-sm" title="Add file to session to use it as input of another tool or workflow"
-               data-toggle="tooltip" data-placement="right"
-               href="{% url 'add_file_to_session' file.id %}">
-              <span class="glyphicon glyphicon-plus text-primary"></span></a>
-	    {% endif %}
-            <a class="btn btn-default btn-sm" title="Run parameters"
-               data-toggle="tooltip" data-placement="right"
-               href="{% url 'display_params' file.id %}">
-              <span class="glyphicon glyphicon-cog text-primary"></span></a>
-	    <a class="btn btn-default btn-sm"
-	       data-toggle="tooltip" data-placement="right"
-	       title="Show stdout"
-	       href="{% url 'galaxy_error_url' file.id %}">
-	      <span class="glyphicon glyphicon-chevron-right text-primary"></span>
-	    </a>
-            <a class="btn btn-default btn-sm" title="Dowload the file"
-               data-toggle="tooltip" data-placement="right"
-               href="{% url 'download_file' file.id %}">
-              <span class="glyphicon glyphicon-download-alt text-primary"></span></a>
-            <a class="btn btn-default btn-sm"
-               href="{% url 'display_file' file.id %}"
-               data-toggle="tooltip" data-placement="right"
-               title="Display this file in your web browser">
-              {% if file.extension in "svg" %}
-              <span class="glyphicon glyphicon-picture"></span>.svg
-              {% else %}
-              <span class="glyphicon glyphicon-eye-open text-primary"></span>.{{ file.extension }}
-	      {% endif %}
-	    </a>
-	    {% if file.extension in "nhx,nwk" %}
-	    <a class="btn btn-success btn-sm" title="Open Interactive Tree visualisation"
-	       href="{% url 'display_tree' file.id %}"
-	       data-toggle="tooltip" data-placement="right">
-	      <span class="glyphicon text-success" aria-hidden="true">
-		<img src="{% static 'images/ptree.svg' %}">
-	      </span>
-	      Viewer
-	    </a>
-	    <a class="btn btn-warning btn-sm" title="Export tree to iTOL: Interactive Tree Of Life"
-	       href="{% url 'export_to_itol' file.id %}" target="_blank"
-	       data-toggle="tooltip" data-placement="right"
-	       title="Export your newick tree into iTol, external tree viewer">
-	      <span class="glyphicon glyphicon-export" aria-hidden="true"> </span>
-	      iTol
-	    </a>
-	    {% endif %}
-	    {% if file.extension in "fasta,fsa,msa,fna" %}
-	    <a class="btn btn-info btn-sm" title="MSAViewer"
-	       href="{% url 'display_msa' file.id %}"
-	       data-toggle="tooltip" data-placement="right"
-	       title="Multipe sequences viewer">
-	      <span class="glyphicon glyphicon-align-justify" aria-hidden="true"></span>
-	      MSAViewer
-	    </a>
-	    {% endif %}
-	    {% elif 'error' in file.state %}
-	    <a class="btn btn-default btn-sm"
-	       href="{% url 'galaxy_error_url' file.id %}"
-	      data-toggle="tooltip" data-placement="right"
-	      title="Show messages">
-	      <span class="glyphicon glyphicon-exclamation-sign text-danger"></span>
-	    </a>
-	    {% endif %}
-	  </td>
-	</tr>
-	{% endfor %}
-      </tbody>
-    </table>
-  </div>
+<div id="history-refreshable-region">
+  {% include "workspace/include/history_contents_refreshable.html" %}
 </div>
 <h4>References of tools to cite</h4>
 <a class="label label-success" href="{% url 'get_dataset_citations_bibtex' object.history_info.id %}" target="_blank">bibTeX</a> <a class="label label-info" href="{% url 'get_dataset_citations_txt' object.history_info.id %}" target="_blank">txt</a></h4>
 <article id="publications" class="list">
   <ul id="pub-container" class="pubs">
-    
+
   </ul>
 </article>
 <h4>Files stored in session</h4>

@@ -384,6 +384,35 @@ directly via `render_to_string()` with a fake object - same approach
 `DailyReportTest` already uses to test `render_report_html()` without
 going through its own view.
 
+**Partial refresh instead of a full `location.reload()` every 10s.** The
+step chain + table (everything that actually changes as a run
+progresses) now lives in its own template,
+`templates/workspace/include/history_contents_refreshable.html`, `{%
+include %}`d once into `history_contents_provenance_ajax.html` inside
+`<div id="history-refreshable-region">`. `workspace.views.
+HistoryContentRefreshView` (`GET /workspace/history/<id>/refresh`, urls.py
+name `history_content_refresh`) renders just that fragment; client-side,
+`refresh()` calls jQuery's `$('#history-refreshable-region').load(url)`
+on the same 10s timer that used to call `location.reload()`. `.load()`
+specifically executes `<script>` tags in the fetched HTML (unlike a
+plain `$.get()` swapped in via `.html()`, which doesn't reliably run
+embedded scripts) - so the fragment's own scripts (step-chain building,
+table tool-name grouping, tooltip init, the "stop polling once finished"
+check) re-run on every poll exactly as they do on first load, with no
+separate client-side re-init path to maintain. `window.historyRefreshTimer`
+is a global (not a local `var`) specifically so the refreshable
+fragment's own finished-check can `clearInterval()` it from inside
+`.load()`-injected script, on every reload, not just the first.
+
+Splitting out the fragment means anything whose *filling* script only
+ever runs once at the outer page's `$(document).ready` - here, the
+`#pub-container` citations list, fetched via its own `get_dataset_citations`
+AJAX call - has to stay in the outer shell, not move into the repeatedly-
+reloaded fragment, or its content gets wiped by the fragment's `.load()`
+swap on the very first poll and never repopulated (that call never runs
+again). Everything that does need to re-run on every poll (step chain,
+table, the finished/polling check) moved into the fragment instead.
+
 ### Daily workflow-usage report
 
 `workspace.tasks.send_daily_report` (`CELERY_BEAT_SCHEDULE`, 8am UTC) emails
