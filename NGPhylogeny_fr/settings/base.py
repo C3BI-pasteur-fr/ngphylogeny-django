@@ -386,7 +386,7 @@ BLASTS = {
                 'type' : 'tblastn',
                 'input': 'aa',
             },
-            'toolshedtoolshed.g2.bx.psu.edu/repos/devteam/ncbi_blast_plus/ncbi_blastx_wrapper/2.14.1+galaxy2' : {
+            'toolshed.g2.bx.psu.edu/repos/devteam/ncbi_blast_plus/ncbi_blastx_wrapper/2.14.1+galaxy2' : {
                 'name': 'blastx (nt query vs. aa db)',
                 'test_data' : 'DNA_Human.fa',
                 'dbs' : {
