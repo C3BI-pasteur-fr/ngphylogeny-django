@@ -68,10 +68,20 @@ class DeleteBlastRunViewTest(TestCase):
         self.assertTrue(b.deleted)
 
 
-_PASTEUR_BLASTN = (
-    'toolshed.pasteur.fr/repos/fmareuil/ncbi_blast_plus/'
-    'ncbi_blastn_wrapper/2.6.0'
-)
+def _pasteur_blastn_prog():
+    """
+    The settings.BLASTS['pasteur']['progs'] key for the blastn wrapper -
+    derived by 'type', not hardcoded as a literal tool id/version string,
+    since that id has already changed once (toolshed.pasteur.fr/repos/
+    fmareuil/... -> toolshed.g2.bx.psu.edu/repos/devteam/...) independently
+    of anything in this test file, silently breaking it until the id was
+    updated here too.
+    """
+    for prog, cfg in settings.BLASTS['pasteur']['progs'].items():
+        if cfg['type'] == 'blastn':
+            return prog
+    raise AssertionError(
+        "No 'blastn' entry in settings.BLASTS['pasteur']['progs']")
 
 
 def _blasts_with_pasteur_activated():
@@ -131,7 +141,7 @@ class LaunchPasteurBlastTest(TestCase):
         b = BlastRun.objects.create(query_id="", query_seq="")
 
         launch_pasteur_blast(
-            b.id, ">s1\nACGTACGTAC\n", _PASTEUR_BLASTN, 'nt', 0.00001, 0.8, 10)
+            b.id, ">s1\nACGTACGTAC\n", _pasteur_blastn_prog(), 'nt', 0.00001, 0.8, 10)
 
         b.refresh_from_db()
         self.assertEqual(b.status, BlastRun.PENDING)
@@ -163,7 +173,7 @@ class LaunchPasteurBlastTest(TestCase):
         b = BlastRun.objects.create(query_id="", query_seq="")
 
         launch_pasteur_blast(
-            b.id, ">s1\nACGTACGTAC\n", _PASTEUR_BLASTN, 'nt', 0.00001, 0.8, 10)
+            b.id, ">s1\nACGTACGTAC\n", _pasteur_blastn_prog(), 'nt', 0.00001, 0.8, 10)
 
         b.refresh_from_db()
         self.assertEqual(b.status, BlastRun.ERROR)
