@@ -174,7 +174,14 @@ def launch_ncbi_blast(blastrunid, sequence, prog, db, evalue, coverage, maxseqs)
     b.save()
     time.sleep(30)
 
-@shared_task
+# soft_time_limit/time_limit: same reasoning as launch_ncbi_blast's own
+# comment above, but the likely hang location differs - the blast
+# computation itself runs asynchronously on Galaxy once submitted, and
+# is separately monitored (with no timeout of its own - see CLAUDE.md's
+# BLAST notes) by checkblastruns(). A hang here is most likely in the
+# (network-bound) create_history/upload_file/run_tool calls that submit
+# the job in the first place. 10 minutes, matching launch_ncbi_blast.
+@shared_task(soft_time_limit=600, time_limit=660)
 def launch_pasteur_blast(blastrunid, sequence, prog, db, evalue, coverage, maxseqs):
     """
     Celery task that will launch a blast on the pasteur Galaxy Server
@@ -243,13 +250,30 @@ def launch_pasteur_blast(blastrunid, sequence, prog, db, evalue, coverage, maxse
             b.status = BlastRun.ERROR
             b.message = "More than one record in the fasta file! %d" % (
                 len(list(records)))
+    except SoftTimeLimitExceeded:
+        logging.warning(
+            "Pasteur BLAST run %s exceeded the time limit and was "
+            "aborted" % (blastrunid))
+        # b.history (an in-memory attribute set right after
+        # create_history() returns, whether or not it's been saved yet -
+        # see above) tells us whether a Galaxy history actually got
+        # created before the timeout fired. Clean it up rather than
+        # leaving an orphaned history nothing will ever reference again
+        # - queued separately (not called directly) so this already
+        # timed-out task doesn't also block on deleting it.
+        if b.history:
+            deletegalaxyhistory.delay(b.history)
+        b.status = BlastRun.ERROR
+        b.message = ("Submitting this search to the Pasteur Galaxy "
+                      "server took too long and it was aborted. Please "
+                      "try again.")
     except Exception as e:
         logging.exception(str(e))
         b.status = BlastRun.ERROR
         b.message = str(e)
     b.save()
     time.sleep(30)
-    
+
 
 @shared_task
 def build_tree(blastrunid):
