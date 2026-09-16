@@ -8,7 +8,7 @@ from django.conf import settings
 from django.test import TestCase, override_settings
 
 from .models import BlastRun
-from .tasks import launch_pasteur_blast
+from .tasks import launch_pasteur_blast, checkblastruns
 
 
 class BlastViewTest(TestCase):
@@ -75,3 +75,66 @@ class LaunchPasteurBlastTest(TestCase):
         self.assertFalse(b.message)
         galaxycon.tools.upload_file.assert_called_once()
         galaxycon.tools.run_tool.assert_called_once()
+
+
+class CheckBlastRunsTest(TestCase):
+    """
+    Regression test: checkblastruns() (the every-minute Celery-beat task
+    that polls pending/running Pasteur runs) used to crash with
+    "AttributeError: 'list' object has no attribute 'get'" - a real race
+    with launch_pasteur_blast(), which saves a run as PENDING right after
+    creating its Galaxy history but only sets history_fileid afterwards,
+    once the (network-bound) file upload + tool run calls complete. If
+    this task's schedule fires in that window, show_dataset(b.history,
+    '') hits Galaxy's history *contents list* endpoint (trailing empty
+    dataset id) instead of a single dataset, and gets a list back. The
+    whole per-run loop also used to share one try/except, so this alone
+    silently aborted checking every other pending/running run in the same
+    pass too - both are covered here.
+    """
+
+    def _pasteur_run(self, history_fileid, status=BlastRun.PENDING):
+        return BlastRun.objects.create(
+            query_id="", query_seq="", server=BlastRun.PASTEUR,
+            status=status, history='fakehistory',
+            history_fileid=history_fileid)
+
+    @patch('blast.tasks.galaxy_connection')
+    def test_skips_runs_without_history_fileid_yet(self, mock_galaxy_connection):
+        pending_submission = self._pasteur_run(history_fileid='')
+        ready_run = self._pasteur_run(history_fileid='realfileid')
+
+        galaxycon = MagicMock()
+        galaxycon.histories.show_dataset.return_value = {
+            'state': 'running', 'misc_info': ''}
+        mock_galaxy_connection.return_value = galaxycon
+
+        checkblastruns()
+
+        galaxycon.histories.show_dataset.assert_called_once_with(
+            'fakehistory', 'realfileid')
+        pending_submission.refresh_from_db()
+        self.assertEqual(pending_submission.status, BlastRun.PENDING)
+        ready_run.refresh_from_db()
+        self.assertEqual(ready_run.status, BlastRun.RUNNING)
+
+    @patch('blast.tasks.galaxy_connection')
+    def test_one_runs_failure_does_not_block_the_others(self, mock_galaxy_connection):
+        broken_run = self._pasteur_run(history_fileid='brokenfileid')
+        healthy_run = self._pasteur_run(history_fileid='healthyfileid')
+
+        def fake_show_dataset(history, fileid):
+            if fileid == 'brokenfileid':
+                raise AttributeError("'list' object has no attribute 'get'")
+            return {'state': 'running', 'misc_info': ''}
+
+        galaxycon = MagicMock()
+        galaxycon.histories.show_dataset.side_effect = fake_show_dataset
+        mock_galaxy_connection.return_value = galaxycon
+
+        checkblastruns()
+
+        broken_run.refresh_from_db()
+        self.assertEqual(broken_run.status, BlastRun.ERROR)
+        healthy_run.refresh_from_db()
+        self.assertEqual(healthy_run.status, BlastRun.RUNNING)
