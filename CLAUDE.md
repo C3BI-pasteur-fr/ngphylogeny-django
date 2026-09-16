@@ -594,6 +594,38 @@ polled queryset (that run is picked up again once it's set) and giving
 each run its own `try/except` so one failure can't starve the rest;
 regression tests `blast.tests.CheckBlastRunsTest`.
 
+**`BlastRun.history`/`history_fileid` were `CharField(max_length=20)` -
+too narrow for this Galaxy server's real encoded ids.** Once the two
+bugs above were fixed, a real Pasteur submission ran for real on Galaxy
+(job genuinely executing) but crashed saving that fact back:
+`django.db.utils.DataError: value too long for type character
+varying(20)` on `history_fileid` in `launch_pasteur_blast()`'s final
+`b.save()` - the run was left showing `PENDING` in NGPhylogeny
+indefinitely while actually running/finishing on Galaxy. Bumped both to
+`max_length=250`, matching `workflows.Workflow.id_galaxy`'s existing
+convention for the same kind of value (an opaque Galaxy-provided encoded
+id) elsewhere in this codebase. `workspace.WorkspaceHistory.history` has
+the exact same `max_length=20` shape and hasn't hit this yet - only
+because OneClick/Advanced history ids have happened to fit so far - and
+would need the same fix if it ever doesn't.
+
+Can't be caught by `manage.py test`: CI's test DB is sqlite (no
+`NGPHYLO_DATABASE_HOST` set - see `.gitlab-ci.yml`'s `test` job), which
+doesn't enforce `CharField` `max_length` at the DB layer the way
+Postgres does; `blast.tests.LaunchPasteurBlastTest`'s regression test
+checks the field's `max_length` directly instead of reproducing the
+crash. **And per "Migrations vs. a persistent database" above, this
+needs the same manual fixup on any already-deployed Postgres**:
+`makemigrations`+`migrate` regenerating a same-named `0001_initial` a
+second time silently no-ops the real `ALTER TABLE` on a database that
+already has that migration recorded as applied - run this by hand
+against the live Postgres pod for any deployment that already has BLAST
+data:
+```sql
+ALTER TABLE blast_blastrun ALTER COLUMN history TYPE varchar(250);
+ALTER TABLE blast_blastrun ALTER COLUMN history_fileid TYPE varchar(250);
+```
+
 **BLAST analysis was briefly, temporarily disabled** (code-level, not
 via a CI/CD variable) right after real usage surfaced two open issues:
 `launch_ncbi_blast`'s NCBI client could hang indefinitely with no

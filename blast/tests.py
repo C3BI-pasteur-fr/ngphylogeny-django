@@ -76,6 +76,26 @@ class LaunchPasteurBlastTest(TestCase):
         galaxycon.tools.upload_file.assert_called_once()
         galaxycon.tools.run_tool.assert_called_once()
 
+    def test_history_fields_are_wide_enough_for_real_galaxy_ids(self):
+        """
+        Regression test: history/history_fileid used to be
+        CharField(max_length=20) - too narrow for this Galaxy server's
+        actual encoded dataset ids. launch_pasteur_blast() would run the
+        blast job for real, then crash saving the result:
+        "django.db.utils.DataError: value too long for type character
+        varying(20)", leaving the run stuck showing PENDING in
+        NGPhylogeny while it kept running/finished on Galaxy. Checked at
+        the field level, not via an actual oversized save() - CI's test
+        DB is sqlite (no NGPHYLO_DATABASE_HOST set - see settings/base.py
+        and .gitlab-ci.yml's test job), which doesn't enforce CharField
+        max_length at the DB layer the way the real deployment's Postgres
+        does, so a save()-based test can't reproduce this crash here.
+        """
+        self.assertGreaterEqual(
+            BlastRun._meta.get_field('history').max_length, 250)
+        self.assertGreaterEqual(
+            BlastRun._meta.get_field('history_fileid').max_length, 250)
+
 
 class CheckBlastRunsTest(TestCase):
     """
