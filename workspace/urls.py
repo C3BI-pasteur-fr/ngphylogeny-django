@@ -15,7 +15,7 @@ Including another URLconf
 """
 from django.urls import re_path
 
-from .views import HistoryDetailView, PreviousHistoryListView, \
+from .views import HistoryDetailView, HistoryContentRefreshView, PreviousHistoryListView, \
     get_dataset_toolprovenance, GalaxyErrorView, \
     get_dataset_citations, get_dataset_citations_bibtex, get_dataset_citations_txt, \
     WorkspaceDeleteView, WorkspaceRenameView, \
@@ -30,6 +30,8 @@ urlpatterns = [
         PreviousHistoryListView.as_view(), name="previous_analyses"),
     re_path(r'^history/(?P<history_id>[\w-]+)$',
         HistoryDetailView.as_view(), name="history_detail"),
+    re_path(r'^history/(?P<history_id>[\w-]+)/refresh$',
+        HistoryContentRefreshView.as_view(), name="history_content_refresh"),
     re_path(r'^history/(?P<history_id>[\w-]+)/rename$',
         WorkspaceRenameView.as_view(), name="history_rename"),
     re_path(r'^history/(?P<history_id>[\w-]+)/email$',

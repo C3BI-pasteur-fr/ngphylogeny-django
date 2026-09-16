@@ -571,10 +571,11 @@ class JobCompletionEmailTest(TestCase):
 
 class HistoryStepChainTemplateTest(TestCase):
     """
-    templates/workspace/include/history_contents_provenance_ajax.html's
-    graphical step-chain (above the detailed dataset table) - one box
-    per tool step, colored by status. Rendered directly against the
-    template (not through HistoryDetailView) since Galaxy-connected
+    templates/workspace/include/history_contents_refreshable.html's
+    graphical step-chain (above the detailed dataset table, included by
+    history_contents_provenance_ajax.html into workspace/history.html) -
+    one box per tool step, colored by status. Rendered directly against
+    the template (not through HistoryDetailView) since Galaxy-connected
     views (galaxy.decorator.connection_galaxy) have no existing
     mocking pattern anywhere in this codebase to build a real
     request/response test on - this covers what's actually new here
@@ -648,3 +649,82 @@ class HistoryStepChainTemplateTest(TestCase):
         ])
         self.assertNotIn('weird"</script>', html)
         self.assertIn('</script>', html)  # the real closing tags survive
+
+
+class HistoryPartialRefreshTemplateTest(TestCase):
+    """
+    Regression test: the history detail page used to poll with a full
+    location.reload() every 10s. It now reloads just
+    workspace/include/history_contents_refreshable.html (step chain +
+    table) via jQuery's .load() (which - unlike a plain AJAX GET swapped
+    in via .html() - executes that fragment's own <script> tags, so its
+    tool-name resolution/step-chain building/tooltip init all re-run
+    exactly as on a real page load, with no separate client-side re-init
+    logic needed). Covers the two things that would silently break this:
+    the outer page actually wiring up window.historyRefreshTimer/the
+    #history-refreshable-region container the JS targets, and the
+    refreshed fragment's own "the run is finished" check knowing to stop
+    polling - re-evaluated fresh on every reload rather than only once at
+    the initial page load, unlike before.
+    """
+
+    def _obj(self, finished):
+        class FakeObj:
+            pass
+        obj = FakeObj()
+        # history.html only includes history_contents_provenance_ajax.html
+        # (and, transitively, the refreshable fragment) once there's more
+        # than one dataset - otherwise it shows history_wait.html instead.
+        obj.history_content = [
+            {'id': 'd1', 'hid': 1, 'name': 'input.fasta', 'state': 'ok',
+             'visible': True, 'extension': 'fasta'},
+            {'id': 'd2', 'hid': 2, 'name': 'MAFFT alignment', 'state': 'ok',
+             'visible': True, 'extension': 'fasta'},
+        ]
+        obj.history_info = {'id': 'fakehist123', 'name': 'Test run'}
+        obj.finished = finished
+        obj.name = 'Test run'
+        obj.email = ''
+        obj.workflow = None
+        return obj
+
+    def _request(self):
+        request = RequestFactory().get('/workspace/history/fakehist123')
+        request.session = {}
+        return request
+
+    def test_outer_page_wires_up_the_refreshable_region_and_timer(self):
+        request = self._request()
+        html = render_to_string(
+            'workspace/history.html',
+            {'object': self._obj(False), 'request': request,
+             'csrf_token': 'faketoken'},
+            request=request)
+        self.assertIn('id="history-refreshable-region"', html)
+        self.assertIn('window.historyRefreshTimer', html)
+        self.assertIn(
+            "$('#history-refreshable-region').load(", html)
+        # function refresh() { location.reload(); } is what this
+        # replaced - checked for the actual function body, not just the
+        # bare phrase "location.reload()", since an explanatory comment
+        # in the new code legitimately mentions it too.
+        self.assertNotIn('function refresh() {\n\tlocation.reload();', html)
+
+    def test_unfinished_fragment_does_not_stop_polling(self):
+        request = self._request()
+        html = render_to_string(
+            'workspace/include/history_contents_refreshable.html',
+            {'object': self._obj(False), 'request': request,
+             'csrf_token': 'faketoken'},
+            request=request)
+        self.assertNotIn('clearInterval(window.historyRefreshTimer)', html)
+
+    def test_finished_fragment_stops_polling(self):
+        request = self._request()
+        html = render_to_string(
+            'workspace/include/history_contents_refreshable.html',
+            {'object': self._obj(True), 'request': request,
+             'csrf_token': 'faketoken'},
+            request=request)
+        self.assertIn('clearInterval(window.historyRefreshTimer)', html)
+        self.assertIn("$('#info-refresh').hide();", html)
