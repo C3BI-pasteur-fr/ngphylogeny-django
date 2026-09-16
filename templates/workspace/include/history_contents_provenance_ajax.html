@@ -1,6 +1,5 @@
 {% load static %}
 {% block stylesheet %}
-<script src="https://cdn.rawgit.com/zenorocha/clipboard.js/v1.7.1/dist/clipboard.min.js"></script>
 <script src="https://cdn.datatables.net/1.10.16/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.10.16/js/dataTables.bootstrap.min.js"></script>
 <link rel="stylesheet" type="text/css" href="{% static 'css/biblio.css' %}"/>
@@ -48,6 +47,59 @@
   .workflow-step-error    { background: #d9534f; }
   @keyframes workflow-step-pulse {
     50% { opacity: 0.55; }
+  }
+
+  /* History name/email panel - replaces the old plain input-group rows
+     (which also included a now-removed read-only Url field). */
+  .history-meta-panel {
+    border: none;
+    border-radius: 8px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+    margin-bottom: 22px;
+  }
+  .history-meta-panel .panel-body {
+    padding: 20px 24px;
+  }
+  .history-meta-field {
+    margin-bottom: 0;
+  }
+  .history-meta-field + .history-meta-field {
+    margin-top: 16px;
+  }
+  .history-meta-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #8a94a6;
+    margin-bottom: 6px;
+  }
+  .history-meta-label .glyphicon {
+    color: #446cb3;
+    margin-right: 4px;
+    font-size: 12px;
+  }
+  .history-meta-panel input.form-control {
+    border: 1px solid #e1e5ea;
+    border-radius: 4px;
+    box-shadow: none;
+    transition: border-color .15s ease, box-shadow .15s ease;
+  }
+  .history-meta-panel input.form-control:focus {
+    border-color: #446cb3;
+    box-shadow: 0 0 0 2px rgba(68, 108, 179, 0.15);
+  }
+  @media (min-width: 768px) {
+    .history-meta-panel .history-meta-field {
+      display: inline-block;
+      width: calc(50% - 12px);
+      vertical-align: top;
+    }
+    .history-meta-panel .history-meta-field + .history-meta-field {
+      margin-top: 0;
+      margin-left: 24px;
+    }
   }
 </style>
 {% endblock %}
@@ -120,76 +172,37 @@
 	    );
   }
 </script>
-<script>
-    new Clipboard('#clip');
-  function copied() {
-      $("#success-copy").fadeIn();
-      setTimeout(function(){ $("#success-copy").fadeOut("slow"); }, 2000);
-  }
-</script>
 <div id="info-refresh" class="alert alert-info alert-dismissable fade in">
   <a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
   <strong>Info !</strong> This page is will be refreshed in <span id="countdown_span">5</span> sec.
 </div>
-<div id="success-copy" class="alert alert-success" style="display:none;">
-  <a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
-  <strong>Success !</strong> The link is copied in you Clipboard!
-</div>
 
 <div class="row">
-  <div class="col-md-6">
-    <div class="input-group">
-      <div class="input-group-addon">
-        Url
+  <div class="col-md-10">
+    <div class="panel panel-default history-meta-panel">
+      <div class="panel-body">
+        <div class="history-meta-field">
+          <label for="rename_history" class="history-meta-label">
+            <span class="glyphicon glyphicon-pencil"></span> Analysis name
+          </label>
+          <input id="rename_history" type="text" class="form-control"
+                 onblur="renameHistory(this);" value="{{ object.name }}"
+                 data-toggle="tooltip" data-placement="top"
+                 title="Rename your analysis">
+        </div>
+        <div class="history-meta-field">
+          <label for="change_email" class="history-meta-label">
+            <span class="glyphicon glyphicon-envelope"></span> Notification email
+          </label>
+          <input id="change_email" type="email" class="form-control"
+                 onblur="changeEmail(this);" value="{{ object.email }}"
+                 data-toggle="tooltip" data-placement="top"
+                 title="Get notified by email when this analysis finishes">
+        </div>
       </div>
-      <span class="form-control" readonly
-            value="{{ request.META.HTTP_HOST }}{% url 'history_detail' object.history_info.id  %}">
-        {{ request.META.HTTP_HOST }}{% url 'history_detail' object.history_info.id  %}
-      </span>
-      <a id='clip' class="btn btn-default input-group-addon btn-sm"
-         data-clipboard-text="{{ request.META.HTTP_HOST }}{% url 'history_detail' object.history_info.id  %}"
-         title="copy the url of analyse"
-         data-toggle="tooltip" data-placement="right"
-         onclick="copied()">
-        <span class="glyphicon glyphicon-copy text-primary"></span>
-      </a>
     </div>
   </div>
 </div>
-<div class="row">
-  <div class="col-md-6">
-    <div class="input-group" onclick="$('#rename_history').focus();">
-      <div class="input-group-addon">
-        Name
-      </div>
-      <input id="rename_history" class="form-control input" onblur="renameHistory(this);"
-             value="{{ object.name }}">
-      <a class="btn input-group-addon btn-sm"
-	 title="Rename your analyse"
-	 data-toggle="tooltip" data-placement="right">
-	<span class="glyphicon glyphicon-pencil text-primary"> </span>
-      </a>
-    </div>
-  </div>
-</div>
-<div class="row">
-  <div class="col-md-6">
-    <div class="input-group" onclick="$('#change_email).focus();">
-      <div class="input-group-addon">
-        e-mail
-      </div>
-      <input id="change_email" class="form-control input" onblur="changeEmail(this);"
-             value="{{ object.email }}" />
-      <a class="btn input-group-addon btn-sm"
-	 title="Change contact email if you want to be notified"
-	 data-toggle="tooltip" data-placement="right">
-	<span class="glyphicon glyphicon-send text-primary"> </span>
-      </a>
-    </div>
-  </div>
-</div>
-<br>
-<hr>
 <div id="history-refreshable-region">
   {% include "workspace/include/history_contents_refreshable.html" %}
 </div>
