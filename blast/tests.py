@@ -32,6 +32,39 @@ class BlastViewTest(TestCase):
         self.assertTemplateNotUsed(response, 'blast/blast_disabled.html')
 
 
+class DeleteBlastRunViewTest(TestCase):
+    """
+    Regression test: clicking "delete" on a blast run used to crash with
+    "TemplateDoesNotExist: blast/blastrun_confirm_delete.html". Django
+    4.x's BaseDeleteView.post() was rewritten to go through FormMixin
+    (get_form()/form_valid()/form_invalid()) and no longer calls
+    self.delete() at all - the view's get() (forwarding to self.post()
+    to skip DeleteView's confirmation page, since this view never had
+    one) built an unbound form (get_form_kwargs() only binds
+    request.POST/FILES when request.method is actually 'POST'), so
+    form.is_valid() was always False and it fell through to rendering
+    the (never-created, never-wanted) confirmation template instead of
+    soft-deleting and redirecting.
+    """
+
+    def _run(self):
+        return BlastRun.objects.create(query_id="", query_seq="")
+
+    def test_get_soft_deletes_and_redirects(self):
+        b = self._run()
+        response = self.client.get('/blast/%s/delete' % b.id)
+        self.assertRedirects(response, '/blast/')
+        b.refresh_from_db()
+        self.assertTrue(b.deleted)
+
+    def test_post_soft_deletes_and_redirects(self):
+        b = self._run()
+        response = self.client.post('/blast/%s/delete' % b.id)
+        self.assertRedirects(response, '/blast/')
+        b.refresh_from_db()
+        self.assertTrue(b.deleted)
+
+
 _PASTEUR_BLASTN = (
     'toolshed.pasteur.fr/repos/fmareuil/ncbi_blast_plus/'
     'ncbi_blastn_wrapper/2.6.0'
