@@ -56,6 +56,29 @@ region stays exactly as it was, untouched, for the whole build.
     window.__historyStepChainReady = $.Deferred();
     window.__historyTableReady = $.Deferred();
 </script>
+<script>
+    // References of tools to cite (#pub-container, in the outer shell -
+    // not part of $root/duplicated between staging and live, so a plain
+    // global selector is fine here regardless of staging) - re-fetched
+    // on every render, not just the very first one, so it actually picks
+    // up citations from tools that have run since: used to only be
+    // fetched once, from history_contents_provenance_ajax.html's own
+    // $(document).ready, which meant a page loaded before/during the
+    // "please wait" state (see this file's top comment) never got any
+    // citations at all once the run actually started producing them.
+    $(function () {
+	$.getJSON("{% url 'get_dataset_citations' object.history_info.id %}",
+		  function (data) {
+		      var items = [];
+		      $.each(data, function (index, element) {
+			  $.each(element, function (i, citation) {
+			      items.push("<li>" + citation + "</li>");
+			  });
+		      });
+		      $("#pub-container").html(items.join(""));
+		  });
+    });
+</script>
 {% if object.history_content and object.history_content|dictsortreversed:"hid"|length > 1 %}
 <script>
     // Graphical step-by-step view of the run, above the detailed table -

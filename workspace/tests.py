@@ -780,6 +780,37 @@ class HistoryPartialRefreshTemplateTest(TestCase):
         self.assertNotIn('info-refresh', html)
         self.assertNotIn('countdown_span', html)
 
+    def test_citations_are_fetched_by_the_refreshed_fragment_not_just_once(self):
+        """
+        Regression test: get_dataset_citations used to be fetched once
+        from the outer shell's own $(document).ready, so a page loaded
+        before any tool had run yet (see HistoryUnifiedWaitStateTest)
+        never picked up citations once the run actually produced some.
+        Moved into the fragment itself so it re-fetches on every poll.
+        """
+        request = self._request()
+        fragment_html = render_to_string(
+            'workspace/include/history_contents_refreshable.html',
+            {'object': self._obj(False), 'request': request,
+             'csrf_token': 'faketoken', 'staging': True},
+            request=request)
+        self.assertIn(
+            '$.getJSON("/workspace/history/citations/fakehist123"',
+            fragment_html)
+        self.assertIn("$(\"#pub-container\").html", fragment_html)
+
+        # workspace/history.html includes history_contents_provenance_ajax.html,
+        # which itself includes this same fragment once - the fetch
+        # should show up exactly that one time, not also duplicated in
+        # the outer shell's own $(document).ready (which is what this
+        # used to do, before being moved into the fragment).
+        full_html = render_to_string(
+            'workspace/history.html',
+            {'object': self._obj(False), 'request': request,
+             'csrf_token': 'faketoken'},
+            request=request)
+        self.assertEqual(full_html.count('$.getJSON('), 1)
+
 
 class HistoryUnifiedWaitStateTest(TestCase):
     """
