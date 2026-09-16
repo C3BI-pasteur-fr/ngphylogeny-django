@@ -5,6 +5,47 @@
 <script src="https://cdn.datatables.net/1.10.16/js/dataTables.bootstrap.min.js"></script>
 <link rel="stylesheet" type="text/css" href="{% static 'css/biblio.css' %}"/>
 <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.16/css/dataTables.bootstrap.min.css">
+<style>
+  /* Workflow step chain - one box per tool step (consecutive datasets
+     from the same tool collapsed into one, same grouping the table
+     below already does via get_dataset_tool/get_tool_name), colored by
+     status. Colors match templates/workspace/job_completion_email.html's
+     existing .status-ok/.status-error palette, for consistency with the
+     other place this app already color-codes a run's outcome. */
+  .workflow-step-chain {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    margin: 6px 0 22px;
+  }
+  .workflow-step {
+    display: flex;
+    align-items: center;
+  }
+  .workflow-step-box {
+    padding: 8px 14px;
+    border-radius: 4px;
+    color: #fff;
+    font-size: 13px;
+    font-weight: bold;
+    white-space: nowrap;
+    text-align: center;
+  }
+  .workflow-step-connector {
+    width: 26px;
+    height: 3px;
+    background: #ccc;
+    margin: 0 4px;
+    flex-shrink: 0;
+  }
+  .workflow-step-finished { background: #21bd8d; }
+  .workflow-step-running  { background: #446cb3; animation: workflow-step-pulse 1.4s infinite; }
+  .workflow-step-pending  { background: #b0b6bd; }
+  .workflow-step-error    { background: #d9534f; }
+  @keyframes workflow-step-pulse {
+    50% { opacity: 0.55; }
+  }
+</style>
 {% endblock %}
 <script  type="text/javascript">
     $(document).ready(function(){
@@ -83,6 +124,91 @@
 			   });
 		}
 		$('#' + first_dataset).attr('rowspan', cmpt);
+	    });
+	});
+    });
+</script>
+
+<script>
+    // Graphical step-by-step view of the run, above the detailed table -
+    // one box per tool step (consecutive datasets from the same tool
+    // collapsed into one, exactly like the table's own Tool column
+    // grouping above - kept as a separate pass rather than sharing that
+    // one's DOM/AJAX calls, so this can't regress the existing table
+    // logic). Independent of it entirely: builds from historySteps
+    // (this run's datasets, oldest first - a left-to-right chain reads
+    // naturally as progress through the pipeline, the reverse of the
+    // table's own newest-first ordering) rather than scraping the table.
+    var historySteps = [
+	{% for file in object.history_content|dictsort:"hid" %}
+	{id: "{{ file.id|escapejs }}", name: "{{ file.name|escapejs }}", state: "{{ file.state|escapejs }}"},
+	{% endfor %}
+    ];
+
+    $(function () {
+	if (historySteps.length === 0) {
+	    return;
+	}
+
+	var deferreds = $.map(historySteps, function (step) {
+	    return $.post("{% url 'get_dataset_tool' object.history_info.id %}", {
+		'dataset_id': step.id,
+		'csrfmiddlewaretoken': '{{ csrf_token }}'
+	    }, function (response) {
+		step.tool_id = response.tool_id;
+	    });
+	});
+
+	$.when.apply($, deferreds).then(function () {
+	    // Collapse consecutive datasets sharing the same tool_id into
+	    // one step - a tool with multiple outputs (e.g. a log file
+	    // alongside its main result) shouldn't show as multiple steps.
+	    var groups = [];
+	    $.each(historySteps, function (index, step) {
+		var last = groups[groups.length - 1];
+		if (last && last.tool_id === step.tool_id) {
+		    last.states.push(step.state);
+		} else {
+		    groups.push({tool_id: step.tool_id, name: step.name, states: [step.state]});
+		}
+	    });
+
+	    function statusClass(states) {
+		if (states.indexOf('error') !== -1) {
+		    return 'workflow-step-error';
+		}
+		if (states.indexOf('running') !== -1) {
+		    return 'workflow-step-running';
+		}
+		var allOk = $.grep(states, function (s) { return s.indexOf('ok') === -1; }).length === 0;
+		if (allOk) {
+		    return 'workflow-step-finished';
+		}
+		// queued / new / paused / anything else not yet resolved
+		return 'workflow-step-pending';
+	    }
+
+	    var $chain = $('#workflow-step-chain');
+	    $.each(groups, function (index, group) {
+		if (index > 0) {
+		    $chain.append($('<div class="workflow-step-connector"></div>'));
+		}
+		var $box = $('<div class="workflow-step-box"></div>')
+		    .addClass(statusClass(group.states))
+		    .text(group.name);
+		$chain.append($('<div class="workflow-step"></div>').append($box));
+
+		// Same tool-name lookup the table above already uses -
+		// starts as the raw dataset/tool_id name, upgraded to the
+		// friendly tool name once resolved.
+		$.post("{% url 'get_tool_name' %}", {
+		    'tool_id': group.tool_id,
+		    'csrfmiddlewaretoken': '{{ csrf_token }}'
+		}, function (response) {
+		    if (response.name) {
+			$box.text(response.name);
+		    }
+		});
 	    });
 	});
     });
@@ -179,6 +305,11 @@
 </div>
 <br>
 <hr>
+<div class="row">
+  <div class="col-md-12">
+    <div id="workflow-step-chain" class="workflow-step-chain"></div>
+  </div>
+</div>
 <div class="row">
   <div class="col-md-12">
     <table id="myTable" class="table table-striped ">
