@@ -561,6 +561,32 @@ did. `deploy-dev` triggers on every push to `upgrade`; `deploy-prod`
 requires a manual trigger from the pipeline page even then, on purpose
 — nothing rolls out to production automatically.
 
+**`deploy-prod`'s TLS is via cert-manager, patched in separately from
+the shared `manifest.yaml`.** First attempt was a pre-existing
+Pasteur-wide `wildcard-pasteur-tls` secret an operator suggested
+(`*.pasteur.fr` wildcard) - didn't work, since `ngphylogeny.fr` isn't a
+`pasteur.fr` subdomain at all (a separate domain registration, not
+covered by that wildcard's SAN list). A manual `certbot`/DNS-01 attempt
+was also started (independent of the cluster entirely - would have
+needed a `_acme-challenge.ngphylogeny.fr` TXT record and a recurring
+manual renewal, since nothing would auto-renew it) but abandoned once
+the operator confirmed cert-manager is already installed cluster-wide
+with a `letsencrypt-prod` `ClusterIssuer` - the standard, auto-renewing
+path. Since `manifest.yaml` is shared with `deploy-dev` through plain
+`envsubst` (no conditionals), the `cert-manager.io/cluster-issuer`
+annotation and `tls:` block aren't in `manifest.yaml` itself - baking
+them in unconditionally would've also applied to dev's Ingress (with an
+empty `secretName` there, untested, and dev's `internal` ingress class
+may already handle TLS some other way outside this Ingress object
+entirely). Instead, the `.deploy` script's own `kubectl patch ingress`
+step (right after the deployment-rollout patches) applies both, gated
+on `INGRESS_TLS_SECRET_NAME` being set - only `deploy-prod`'s own
+`variables:` block sets `INGRESS_CLUSTER_ISSUER`/
+`INGRESS_TLS_SECRET_NAME`, so the patch is a no-op for dev. `secretName`
+(`ngphylogeny-fr-tls`) doesn't need to exist beforehand - cert-manager's
+ingress-shim watches for the annotation and creates/populates/renews
+that Secret itself once the annotation lands.
+
 **Getting `deploy-dev` from green pipeline to actually working** took
 several rounds of real-cluster-only issues, worth knowing about before
 repeating this for prod:

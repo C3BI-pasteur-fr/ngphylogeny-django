@@ -152,12 +152,27 @@ build:
     - kubectl patch deployment -n ${NAMESPACE} ngphylogeny-web -p "{\"spec\":{\"template\":{\"metadata\":{\"labels\":{\"date\":\"`date +'%s'`\"}}}}}"
     - kubectl patch deployment -n ${NAMESPACE} ngphylogeny-celery-worker -p "{\"spec\":{\"template\":{\"metadata\":{\"labels\":{\"date\":\"`date +'%s'`\"}}}}}"
     - kubectl patch deployment -n ${NAMESPACE} ngphylogeny-celery-beat -p "{\"spec\":{\"template\":{\"metadata\":{\"labels\":{\"date\":\"`date +'%s'`\"}}}}}"
+    # TLS via cert-manager, prod only: manifest.yaml is shared with dev
+    # through plain envsubst (no conditionals), so baking a tls: block in
+    # there directly would apply to dev too, with an empty secretName -
+    # untested, and dev's ingress may already handle TLS some other way
+    # at the "internal" ingress class level. This patch is a no-op
+    # whenever INGRESS_TLS_SECRET_NAME isn't set, which deploy-dev's own
+    # variables never do. cert-manager's ingress-shim watches for the
+    # cluster-issuer annotation and creates/renews the Certificate (and
+    # populates secretName) on its own once this lands - secretName
+    # itself doesn't need to (and shouldn't) already exist.
+    - |
+      if [ -n "${INGRESS_TLS_SECRET_NAME:-}" ]; then
+        kubectl patch ingress ngphylogeny-web -n ${NAMESPACE} --type=merge -p "{\"metadata\":{\"annotations\":{\"cert-manager.io/cluster-issuer\":\"${INGRESS_CLUSTER_ISSUER}\"}},\"spec\":{\"tls\":[{\"hosts\":[\"${PUBLIC_URL}\"],\"secretName\":\"${INGRESS_TLS_SECRET_NAME}\"}]}}"
+      fi
 
 # deploy-dev's namespace/domain are real and confirmed (2026-09: the
 # ngphylogenyfr-dev namespace + Deploy Token + kubectl context for the
-# runner already exist). deploy-prod's are still a placeholder/guess
-# matching drmab-web's naming convention - nothing prod-side exists yet;
-# confirm the real namespace/environment/domain once it does.
+# runner already exist). deploy-prod's are real too (2026-09): namespace
+# ngphylogenyfr-prod, domain ngphylogeny.fr, external ingress class,
+# TLS via cert-manager (see the deploy-prod block's own
+# INGRESS_CLUSTER_ISSUER/INGRESS_TLS_SECRET_NAME).
 #
 # Every job scoped to each deploy's "Environment" (Settings -> CI/CD ->
 # Variables in GitLab) needs:
@@ -183,9 +198,12 @@ build:
 #     Pasteur Galaxy BLAST server option (settings.BLASTS['pasteur']
 #     ['activated'], off by default) and deactivates NCBI's public server
 #     option at the same time (mutually exclusive, not independently
-#     toggleable - see CLAUDE.md). Note the whole BLAST analysis page is
-#     currently disabled regardless (BlastView.dispatch() in
-#     blast/views.py) - this variable alone won't bring the page back.
+#     toggleable - see CLAUDE.md).
+#   - INGRESS_CLUSTER_ISSUER / INGRESS_TLS_SECRET_NAME (plain, optional,
+#     deploy-prod only): wires up TLS via cert-manager's ingress-shim -
+#     see the deploy job's own "TLS via cert-manager" script comment.
+#     Left unset (dev never sets these), the whole patch step is a
+#     no-op - dev's ingress is untouched.
 #   - Masked + protected values, envsubst'd into the two Secrets in
 #     manifest.yaml/manifest_datastores.yaml (stringData, never committed):
 #     POSTGRES_PASSWORD, DJANGO_SECRET_KEY (generate with
@@ -212,6 +230,13 @@ deploy-prod:
     NAMESPACE: "ngphylogenyfr-prod"
     PUBLIC_URL: "ngphylogeny.fr"
     INGRESS_CLASS: "external"
+    # Confirmed by the cluster operator - cert-manager is already
+    # installed cluster-wide with this ClusterIssuer. secretName is not
+    # a pre-existing secret (unlike the wildcard-pasteur-tls one first
+    # suggested, which turned out not to cover ngphylogeny.fr at all -
+    # this one is a fresh name cert-manager creates/populates itself).
+    INGRESS_CLUSTER_ISSUER: "letsencrypt-prod"
+    INGRESS_TLS_SECRET_NAME: "ngphylogeny-fr-tls"
   environment:
     name: k8sprod-02-ngphylogenyfr
     url: https://ngphylogeny.fr
