@@ -766,6 +766,36 @@ above for anything already cleaned up. Regression tests:
 `blast.tests.LaunchNcbiBlastTest`/`LaunchPasteurBlastTest`/
 `DeleteOldBlastRunsTest`.
 
+**Pasteur's wrapper tool ids changed** (`settings.BLASTS['pasteur']['progs']`,
+`toolshed.pasteur.fr/repos/fmareuil/ncbi_blast_plus/...` ->
+`toolshed.g2.bx.psu.edu/repos/devteam/ncbi_blast_plus/.../2.14.1+galaxy2`),
+independently of anything in this session - see git history for the
+exact diff. This surfaced two real bugs, both about that literal `+` in
+the new ids' version suffix, not the id change itself:
+- **`blast/urls.py`'s `available_blasts_dbs`/`blast_example` routes
+  404ed for every Pasteur program.** Both take the tool id as a path
+  segment, inserted as-is (not `encodeURIComponent`-escaped) by
+  `templates/blast/blast.html`'s JS - their `prog` regex (`[\w/\.]+`,
+  `\w` = letters/digits/`_`) didn't allow `+`. Symptom: the BLAST
+  database dropdown came back empty and the example-sequence button did
+  nothing, for every Pasteur program (NCBI's own progs are plain words
+  like `blastn` - never hit this). Fixed by widening the regex to
+  `[\w/.+-]+` (`-` added too, pre-emptively - not currently in any id
+  here, but a very plausible one in a toolshed owner/repo name).
+  Regression tests: `blast.tests.BlastAjaxEndpointsTest`.
+- **The `blastx` entry's id had a typo**: `toolshedtoolshed.g2.bx.psu.edu/...`
+  (duplicated prefix) - Galaxy wouldn't recognize that tool id at all,
+  breaking `blastx` submissions on Pasteur specifically. Not caught by
+  any test (nothing exercises the actual tool id strings against a real
+  Galaxy) - found by inspection when the other two bugs above were being
+  diagnosed.
+- Separately, `blast/tests.py` hardcoded the *old* blastn wrapper id as
+  a literal string - broke this test file's own Pasteur-path tests the
+  moment the real id changed, unrelated to either bug above. Now derived
+  from `settings.BLASTS['pasteur']['progs']` by looking up the `'blastn'`
+  type (`_pasteur_blastn_prog()`), so it can't go stale the same way
+  again.
+
 **`BlastRun.history`/`history_fileid` were `CharField(max_length=20)` -
 too narrow for this Galaxy server's real encoded ids.** Once the two
 bugs above were fixed, a real Pasteur submission ran for real on Galaxy

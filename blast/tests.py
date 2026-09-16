@@ -90,6 +90,39 @@ def _blasts_with_pasteur_activated():
     return blasts
 
 
+class BlastAjaxEndpointsTest(TestCase):
+    """
+    Regression test: available_blasts_dbs/blast_example's URL routes
+    (blast/urls.py) take the Galaxy toolshed tool id as a path segment,
+    inserted as-is by templates/blast/blast.html's JS (url.replace(...),
+    not encodeURIComponent-escaped). Their prog regex ([\\w/\\.]+) didn't
+    allow "+" - which Pasteur's current wrapper ids all contain (e.g.
+    "...ncbi_blastn_wrapper/2.14.1+galaxy2") - so both routes 404ed for
+    every Pasteur program: the database dropdown came back empty and the
+    example-sequence button did nothing, with nothing but a 404 in the
+    browser console to show why.
+    """
+
+    @override_settings(BLASTS=_blasts_with_pasteur_activated())
+    def test_dbs_endpoint_resolves_for_a_prog_id_containing_a_plus(self):
+        prog = _pasteur_blastn_prog()
+        self.assertIn('+', prog)  # otherwise this isn't testing the bug
+
+        response = self.client.get('/blast/dbs/pasteur/%s' % prog)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('nt', response.json())
+
+    @override_settings(BLASTS=_blasts_with_pasteur_activated())
+    def test_example_endpoint_resolves_for_a_prog_id_containing_a_plus(self):
+        prog = _pasteur_blastn_prog()
+
+        response = self.client.get('/blast/example/pasteur/%s' % prog)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json())  # non-empty: the fasta content
+
+
 class LaunchNcbiBlastTest(TestCase):
     """
     query_length used to only be derivable from query_seq - which
