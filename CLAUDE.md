@@ -571,8 +571,20 @@ was also started (independent of the cluster entirely - would have
 needed a `_acme-challenge.ngphylogeny.fr` TXT record and a recurring
 manual renewal, since nothing would auto-renew it) but abandoned once
 the operator confirmed cert-manager is already installed cluster-wide
-with a `letsencrypt-prod` `ClusterIssuer` - the standard, auto-renewing
-path. Since `manifest.yaml` is shared with `deploy-dev` through plain
+with a `ClusterIssuer` - the standard, auto-renewing path. **The
+`ClusterIssuer`'s real name is `letsencrypt`**, not `letsencrypt-prod` -
+that first guess (a plausible-looking name, not actually confirmed)
+went in first and failed with `clusterissuer.cert-manager.io
+"letsencrypt-prod" not found`, caught via `kubectl describe
+certificaterequest` (the `Certificate`/`CertificateRequest` objects
+were created fine - `ClusterIssuer` resolution happens one step later,
+inside the `CertificateRequest`'s own `IssuerNotFound` condition, so no
+`Order`/`Challenge` objects ever got created at all while this was
+wrong). Confirming the real name needed the operator - `ClusterIssuer`
+is cluster-scoped, and the deploying user's own kubectl access got
+`Forbidden` (not `NotFound`) on both `list` and `get` for it, so it was
+never independently checkable from this project's own access level.
+Since `manifest.yaml` is shared with `deploy-dev` through plain
 `envsubst` (no conditionals), the `cert-manager.io/cluster-issuer`
 annotation and `tls:` block aren't in `manifest.yaml` itself - baking
 them in unconditionally would've also applied to dev's Ingress (with an
