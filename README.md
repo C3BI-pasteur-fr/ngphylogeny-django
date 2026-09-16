@@ -157,6 +157,18 @@ override `NGPHYLO_SETTINGS_MODULE=NGPhylogeny_fr.settings.prod` for
 production-like behavior, but then something needs to serve `STATIC_ROOT`
 (`/static/`) separately - this compose file doesn't set that up.
 
+## Maintenance mode and BLAST server selection
+
+`NGPHYLO_MAINTENANCE_MODE=True` serves `templates/maintenance.html` (503)
+for every request instead of routing normally (see
+`NGPhylogeny_fr/middleware.py`). Off by default; safe to flip on/off
+without a rebuild since it's just an env var.
+
+`NGPHYLO_PASTEUR_BLAST_ENABLED=True` activates the Institut Pasteur Galaxy
+BLAST server option and deactivates NCBI's public one at the same time -
+the two aren't independently toggleable (see `settings/base.py`'s `BLASTS`
+dict). Off by default, meaning BLAST runs go to NCBI's public server.
+
 ## Email: job-completion notices and the daily report
 
 Both job-completion emails and the daily workflow-usage report (HTML, with
