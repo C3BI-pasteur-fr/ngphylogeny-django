@@ -12,8 +12,9 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from .emails import build_blast_completion_email, send_blast_completion_email
-from .models import BlastRun
-from .tasks import PASTEUR_RUN_STALE_AFTER, launch_pasteur_blast, checkblastruns
+from .models import BlastRun, BlastSubject
+from .tasks import (PASTEUR_RUN_STALE_AFTER, deleteoldblastruns,
+                     launch_ncbi_blast, launch_pasteur_blast, checkblastruns)
 
 
 class BlastViewTest(TestCase):
@@ -79,6 +80,30 @@ def _blasts_with_pasteur_activated():
     return blasts
 
 
+class LaunchNcbiBlastTest(TestCase):
+    """
+    query_length used to only be derivable from query_seq - which
+    deleteoldblastruns() later clears to free space, losing the length
+    entirely. launch_ncbi_blast() now sets it right alongside query_seq,
+    before anything else (including the alphabet check below) can
+    short-circuit the run into ERROR - deliberately triggering that
+    branch here (a protein sequence submitted to blastn) so this stays a
+    fast, no-network test rather than needing to mock NCBIWWW.qblast().
+    """
+
+    def test_query_length_set_even_when_alphabet_check_fails(self):
+        sequence = "MASGILVNVKEEVTCPICLE"
+        b = BlastRun.objects.create(query_id="", query_seq="")
+
+        launch_ncbi_blast(
+            b.id, ">s1\n%s\n" % sequence, 'blastn', 'nr', 0.00001, 0.8, 10)
+
+        b.refresh_from_db()
+        self.assertEqual(b.status, BlastRun.ERROR)
+        self.assertIn('wrong alphabet', b.message.lower())
+        self.assertEqual(b.query_length, len(sequence))
+
+
 class LaunchPasteurBlastTest(TestCase):
     """
     Regression test: launch_pasteur_blast() used to crash with "TypeError:
@@ -111,6 +136,7 @@ class LaunchPasteurBlastTest(TestCase):
         b.refresh_from_db()
         self.assertEqual(b.status, BlastRun.PENDING)
         self.assertFalse(b.message)
+        self.assertEqual(b.query_length, len("ACGTACGTAC"))
         galaxycon.tools.upload_file.assert_called_once()
         galaxycon.tools.run_tool.assert_called_once()
 
@@ -262,6 +288,90 @@ class CheckBlastRunsTest(TestCase):
             'fakehistory', 'freshfileid')
         fresh_run.refresh_from_db()
         self.assertEqual(fresh_run.status, BlastRun.RUNNING)
+
+
+class DeleteOldBlastRunsTest(TestCase):
+    """
+    blast.tasks.deleteoldblastruns() (the daily 2am cleanup, 14-day
+    cutoff on BlastRun.date). Covers: the deletegalaxyhistory call now
+    being queued rather than blocking the rest of the batch, and
+    query_seq/tree now being cleared to free space on old runs - safe
+    for the daily report (workspace/reports.py), which only ever reads
+    BlastRun's date/deleted/id, never query_seq/tree.
+    """
+
+    def _run(self, days_ago, server=BlastRun.NCBI, history=''):
+        b = BlastRun.objects.create(
+            query_id="", query_seq="ACGT", tree="(a,b);",
+            server=server, history=history)
+        BlastRun.objects.filter(pk=b.pk).update(
+            date=timezone.now() - timedelta(days=days_ago))
+        b.refresh_from_db()
+        return b
+
+    @patch('blast.tasks.deletegalaxyhistory')
+    def test_clears_query_seq_and_tree_on_old_runs(self, mock_deletegalaxyhistory):
+        old_run = self._run(days_ago=15)
+        BlastSubject.objects.create(
+            subject_id='s1', subject_seq='ACGT', subject_fullseq='ACGT',
+            blastrun=old_run)
+
+        deleteoldblastruns()
+
+        old_run.refresh_from_db()
+        self.assertTrue(old_run.deleted)
+        self.assertEqual(old_run.query_seq, "")
+        self.assertEqual(old_run.tree, "")
+        self.assertEqual(BlastSubject.objects.filter(blastrun=old_run).count(), 0)
+
+    @patch('blast.tasks.deletegalaxyhistory')
+    def test_derives_query_length_before_clearing_query_seq(
+            self, mock_deletegalaxyhistory):
+        """
+        Regression guard: query_length is normally set at submission
+        time (blast/tasks.py's launch_ncbi_blast/launch_pasteur_blast),
+        but a row predating that field (or from some other path that
+        never set it) would otherwise lose the length entirely once
+        query_seq is cleared here - re-derived from query_seq, before
+        it's cleared, only when not already set.
+        """
+        never_set = self._run(days_ago=15)  # _run() leaves query_length unset
+        already_set = self._run(days_ago=15)
+        BlastRun.objects.filter(pk=already_set.pk).update(query_length=999)
+
+        deleteoldblastruns()
+
+        never_set.refresh_from_db()
+        self.assertEqual(never_set.query_length, len("ACGT"))
+        already_set.refresh_from_db()
+        self.assertEqual(already_set.query_length, 999)
+
+    @patch('blast.tasks.deletegalaxyhistory')
+    def test_leaves_recent_runs_untouched(self, mock_deletegalaxyhistory):
+        recent_run = self._run(days_ago=1)
+
+        deleteoldblastruns()
+
+        recent_run.refresh_from_db()
+        self.assertFalse(recent_run.deleted)
+        self.assertEqual(recent_run.query_seq, "ACGT")
+        self.assertEqual(recent_run.tree, "(a,b);")
+
+    @patch('blast.tasks.deletegalaxyhistory')
+    def test_queues_galaxy_history_deletion_instead_of_blocking(
+            self, mock_deletegalaxyhistory):
+        pasteur_run = self._run(
+            days_ago=15, server=BlastRun.PASTEUR, history='realhistoryid')
+        ncbi_run = self._run(days_ago=15, server=BlastRun.NCBI, history='')
+
+        deleteoldblastruns()
+
+        mock_deletegalaxyhistory.assert_not_called()
+        mock_deletegalaxyhistory.delay.assert_called_once_with('realhistoryid')
+        pasteur_run.refresh_from_db()
+        ncbi_run.refresh_from_db()
+        self.assertTrue(pasteur_run.deleted)
+        self.assertTrue(ncbi_run.deleted)
 
 
 class BlastCompletionEmailTest(TestCase):
