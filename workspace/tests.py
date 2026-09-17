@@ -669,6 +669,10 @@ class RunningJobsViewTest(TestCase):
         self.assertIn('Older run', content)
         self.assertIn('Newer run', content)
         self.assertIn('query1', content)
+        # Regression guard: BlastRun.BLASTSERVERS used to label NCBI
+        # runs as "Pasteur" too (see blast/models.py) - this page's own
+        # server_labels lookup would have silently inherited that.
+        self.assertIn('NCBI BLAST', content)
         self.assertNotIn('Finished run', content)
         self.assertNotIn('Deleted run', content)
         self.assertNotIn('query2', content)

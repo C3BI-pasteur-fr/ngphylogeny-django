@@ -36,7 +36,7 @@ class BlastRun(models.Model):
     NCBI = 'ncbi'
     BLASTSERVERS =(
         (PASTEUR, 'Pasteur'),
-        (NCBI, 'Pasteur'),
+        (NCBI, 'NCBI'),
     )
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -105,8 +105,16 @@ class BlastRun(models.Model):
         return 'Error'
 
     def server_str(self):
+        # Was comparing against self.status (a RUNSTATUS code, e.g. 'P'/
+        # 'R') instead of self.server (a BLASTSERVERS code, 'pasteur'/
+        # 'ncbi') - two entirely different code spaces that can never
+        # match, so this always fell through to 'Error' regardless of
+        # the actual server. No current caller (found while fixing the
+        # BLASTSERVERS mislabeling right above - both NCBI and Pasteur
+        # runs displayed as "Pasteur" anywhere that used it), but worth
+        # fixing alongside rather than leaving broken next to the fix.
         for (code, desc) in self.BLASTSERVERS:
-            if self.status == code:
+            if self.server == code:
                 return desc
         return 'Error'
 
