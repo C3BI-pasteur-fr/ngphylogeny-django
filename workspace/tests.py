@@ -786,6 +786,29 @@ class HistoryPartialRefreshTemplateTest(TestCase):
         self.assertNotIn('info-refresh', html)
         self.assertNotIn('countdown_span', html)
 
+    def test_table_grouping_never_merges_unresolved_rows(self):
+        """
+        Regression test: the table's grouping script starts id_tool at ''
+        and an unresolved dataset's own cell stays at its default data=''
+        too (never overwritten - there's nothing to set) - a bare
+        `id_tool == toolId` comparison matches '' against '' from the
+        very first row onward whenever nothing resolves, collapsing every
+        such row into one and $(el).remove()-ing the rest instead of
+        leaving each its own visible row with a blank Tool label. Hit for
+        real: a bug in the load-reduction refactor above left
+        dataset_tool_ids/tool_names completely unresolved on
+        HistoryDetailView's first render, and this compounded it further
+        - not just blank Tool labels, but most rows vanishing from the
+        table outright.
+        """
+        request = self._request()
+        html = render_to_string(
+            'workspace/include/history_contents_refreshable.html',
+            {'object': self._obj(False), 'request': request,
+             'csrf_token': 'faketoken', 'staging': True},
+            request=request)
+        self.assertIn("toolId !== '' && id_tool === toolId", html)
+
     def test_citations_are_embedded_server_side_not_fetched_by_ajax(self):
         """
         Regression test: citations used to be fetched via a client-side
@@ -1047,6 +1070,33 @@ class HistoryContentRefreshViewTest(TestCase):
         self.assertNotIn('get_tool_name', html)
         self.assertNotIn('get_dataset_citations', html)
         self.assertIn('NGPhylogeny.fr', html)
+
+    def test_history_detail_view_also_resolves_tool_names_on_first_load(self):
+        """
+        Regression test: dataset_tool_ids/tool_names/citations used to be
+        computed only by HistoryContentRefreshView.get_context_data() -
+        HistoryDetailView (the very first render, before any poll) never
+        set them at all. Harmless for a still-running history (the first
+        poll, moments later, would backfill it) but permanently broken
+        for an *already-finished* one: object.finished being true clears
+        the client's own polling timer before it ever fires once (see
+        history_contents_provenance_ajax.html), so /refresh is never
+        called and the step chain/table/citations stay unresolved
+        forever. Real bug, hit live on a finished production run - see
+        CLAUDE.md's step-chain section. Fixed by moving the computation
+        up into WorkspaceHistoryObjectMixin.get_context_data(), shared by
+        both views.
+        """
+        WorkspaceHistory.objects.filter(pk=self.history.pk).update(finished=True)
+        with patch('bioblend.galaxy.histories.HistoryClient.show_dataset_provenance',
+                   return_value={'tool_id': 'mafft'}), \
+             patch('workspace.views.updateworkspacestatus.delay'):
+            response = self.client.get(
+                reverse('history_detail', kwargs={'history_id': 'hist1'}))
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode()
+        self.assertIn('MAFFT', html)
+        self.assertIn('"d1": "mafft"', html)
 
     def test_wait_state_does_not_call_galaxy_for_tool_resolution(self):
         """

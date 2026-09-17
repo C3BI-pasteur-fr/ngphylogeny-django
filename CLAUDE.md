@@ -640,6 +640,65 @@ of `get_dataset_tool`/`get_tool_name`/`get_dataset_citations` - the
 actual thing this change set out to prove, not just that the helper
 function works in isolation.
 
+**Real bug from the change above: `dataset_tool_ids`/`tool_names`/
+`citations` were only ever computed by `HistoryContentRefreshView.
+get_context_data()` - `HistoryDetailView` (the very first render, before
+any poll) never set them at all**, so its own inclusion of
+`history_contents_refreshable.html` rendered the Tool column and
+citations list permanently unresolved. Harmless for a still-running
+history (the first poll, 10s later, backfills it) but permanent for an
+*already-finished* one: `object.finished` being true clears the
+client's own polling timer before it ever fires once (see
+`history_contents_provenance_ajax.html`'s `{% if object.finished %}`),
+so `/refresh` is never called at all. Caught live on a real completed
+`deploy-dev` run (`workspace/history/<id>`) - fetched the actual page
+(publicly viewable, no auth needed for an anonymous-session history)
+and read the embedded `datasetToolIds`/`toolNames` JS literals directly
+out of the raw HTML (this only works because they're rendered server-
+side as literal JS source, not fetched at runtime - the same property
+that made this change possible in the first place) to confirm both were
+empty `{}` despite 13 real, fully-`ok` datasets - not a hunch, verified
+against the real deployed data. **Not** a dataset-collection issue
+(checked first, since `show_history(contents=True)` mixes datasets and
+collections with no code anywhere handling the latter's different shape
+- ruled out because the affected row was confirmed to be a plain
+dataset).
+
+Fixed by moving the whole computation up into
+`WorkspaceHistoryObjectMixin.get_context_data()` - both `HistoryDetailView`
+and `HistoryContentRefreshView` inherit `(WorkspaceHistoryObjectMixin,
+DetailView)` in that MRO order, so defining it once on the mixin (calling
+`super().get_context_data()` to still reach `DetailView`'s own) reaches
+both automatically; `HistoryContentRefreshView`'s own override shrinks to
+just adding `staging` on top. Regression test:
+`workspace.tests.HistoryContentRefreshViewTest.
+test_history_detail_view_also_resolves_tool_names_on_first_load` - marks
+the fixture history `finished=True` and hits `history_detail` (not
+`history_content_refresh`) directly, exactly reproducing the real
+failure mode.
+
+**A second, compounding bug found while diagnosing the above: the
+table's own grouping script collapses every row into one whenever
+nothing resolves, not just leaving each with a blank Tool label.** Its
+loop variable `id_tool` starts at `''`, and an unresolved dataset's own
+cell also stays at its default `data=''` (nothing overwrites it - there
+was nothing to set). A bare `id_tool == toolId` comparison then matches
+`'' == ''` starting from the very first row, so every such row gets
+folded into "the same tool" and `$(el).remove()`d except the first -
+this is *worse* than just a blank label, it makes most of the table
+vanish outright. This exact scenario (`dataset_tool_ids` completely
+empty) is precisely what the `HistoryDetailView` bug above produced on
+a real finished run, so both bugs compounded on the same real page.
+Fixed with an explicit `toolId !== ''` guard alongside the equality
+check, so an unresolved row is never treated as matching anything -
+including another unresolved row - and keeps its own place in the table
+with just a blank Tool cell, the intended degraded state. This is
+defense in depth independent of the fix above: an individual dataset's
+provenance call can still transiently fail on its own (see
+`resolve_dataset_tools`'s own `continue`-on-failure), so a partially-
+empty `dataset_tool_ids` is a real, expected case this has to handle
+correctly regardless.
+
 ### Daily workflow-usage report
 
 `workspace.tasks.send_daily_report` (`CELERY_BEAT_SCHEDULE`, 8am UTC) emails
