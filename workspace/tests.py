@@ -657,6 +657,84 @@ class HistoryStepChainTemplateTest(TestCase):
         self.assertIn('</script>', html)  # the real closing tags survive
 
 
+class HistoryTableRedesignTest(TestCase):
+    """
+    Regression tests for the dataset table's redesign (card container,
+    color-coded status pills reusing the step-chain's own palette, line-
+    art SVG icon buttons with a fixed set of action slots so the same
+    action lines up in the same column across rows) - the old plain
+    Bootstrap-striped table with bare glyphicon buttons should be
+    entirely gone, not just visually superseded.
+    """
+
+    def _render(self, history_content):
+        rf = RequestFactory()
+        request = rf.get('/workspace/history/fakehist123')
+        request.session = {}
+
+        class FakeObj:
+            pass
+        obj = FakeObj()
+        obj.history_content = history_content
+        obj.history_info = {'id': 'fakehist123', 'name': 'Test run'}
+        obj.finished = False
+        obj.name = 'Test run'
+        obj.email = ''
+        obj.workflow = None
+
+        return render_to_string('workspace/history.html',
+                                 {'object': obj, 'request': request,
+                                  'csrf_token': 'faketoken'},
+                                 request=request)
+
+    def test_ok_row_shows_a_done_pill_and_no_old_glyphicons(self):
+        html = self._render([
+            {'id': 'd1', 'hid': 1, 'name': 'input.fasta', 'state': 'ok',
+             'visible': True, 'extension': 'fasta'},
+            {'id': 'd2', 'hid': 2, 'name': 'MAFFT alignment', 'state': 'ok',
+             'visible': True, 'extension': 'fasta'},
+        ])
+        self.assertIn('history-table-card', html)
+        self.assertIn('status-pill-ok', html)
+        self.assertIn('<span class="dot"></span>Done', html)
+        # The whole point: no leftover glyphicon-based buttons/status
+        # from the previous design.
+        self.assertNotIn('glyphicon-ok', html)
+        self.assertNotIn('glyphicon-download-alt', html)
+        self.assertNotIn('glyphicon-eye-open', html)
+
+    def test_action_slots_stay_aligned_for_a_plain_dataset(self):
+        """
+        A dataset with no special extension gets the 4 always-present
+        actions (session/params/stdout/download/display is 5, actually -
+        see below) plus two empty spacer slots (shared tree/MSA viewer
+        slot, iTOL slot) so it still lines up with rows that do have
+        those actions.
+        """
+        html = self._render([
+            {'id': 'd1', 'hid': 1, 'name': 'input.fasta', 'state': 'ok',
+             'visible': True, 'extension': 'fasta'},
+            {'id': 'd2', 'hid': 2, 'name': 'some.txt', 'state': 'ok',
+             'visible': True, 'extension': 'txt'},
+        ])
+        # d2 is .txt - no MSAViewer/tree-viewer/iTOL - just the two
+        # trailing empty spacer slots.
+        self.assertIn(
+            '<span class="action-slot"></span>\n              '
+            '<span class="action-slot wide"></span>', html)
+
+    def test_error_row_shows_an_error_pill_and_the_messages_button(self):
+        html = self._render([
+            {'id': 'd1', 'hid': 1, 'name': 'input.fasta', 'state': 'ok',
+             'visible': True, 'extension': 'fasta'},
+            {'id': 'd2', 'hid': 2, 'name': 'broken output', 'state': 'error',
+             'visible': True, 'extension': 'txt'},
+        ])
+        self.assertIn('status-pill-error', html)
+        self.assertIn('<span class="dot"></span>Error', html)
+        self.assertIn('icon-btn danger" title="Show messages"', html)
+
+
 class HistoryPartialRefreshTemplateTest(TestCase):
     """
     Regression test: the history detail page used to poll with a full

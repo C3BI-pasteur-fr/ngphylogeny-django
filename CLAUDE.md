@@ -699,6 +699,64 @@ provenance call can still transiently fail on its own (see
 empty `dataset_tool_ids` is a real, expected case this has to handle
 correctly regardless.
 
+**Dataset table redesign**: `#myTable` (in `history_contents_refreshable.html`)
+moved from a plain Bootstrap-striped table with bare glyphicon buttons to
+a card container (`.history-table-card`), color-coded status pills
+reusing the step-chain's own finished/running/pending/error palette
+(`.status-pill-*`), and line-art SVG icon buttons (`.icon-btn`, inline
+SVGs - not glyphicons, not emoji) instead of a row of identical small
+buttons. `table-layout: fixed` with an explicit `<colgroup>` (Tool 15%,
+Step 6%, File name 44%, Status 13%, Actions 22%) replaces the previous
+`style="width: ..."` guesses on two of five `<th>`s. Iterated as an
+Artifact mockup built from a real production history's actual rendered
+data (fetched directly via `curl` - real tool names/groupings, not
+invented ones) before touching the template, per the session's usual
+"propose visually first" pattern for UI changes.
+
+**Fixed action-slot alignment**: every row now shows the same action
+icons in the same column position, whether or not that row actually has
+each one - previously a variable-length list of only-the-applicable
+buttons meant e.g. Download could be the 3rd icon in one row and the 2nd
+in the next, depending on what else that row had. Canonical order:
+session toggle, parameters, stdout/messages, download, display, a
+*shared* tree-viewer/MSAViewer slot (never both on the same row, since a
+dataset is never simultaneously a tree output and a fasta alignment),
+then iTOL. A row missing a given action gets an invisible `.action-slot`
+(same width as `.icon-btn`, or `.action-slot.wide` matching the 36px
+`.itol-badge`) there instead of the next real button sliding left into
+that column.
+
+**Two real buttons the approved mockup didn't show, restored in the
+actual implementation**: the mockup (being a quick visual proposal, not
+a full behavior spec) dropped the "Show stdout" button entirely and
+never depicted the `error`-state row's "Show messages" button at all -
+implementing it directly from the mockup would have been a silent
+functional regression, not just a restyle. Both are back: stdout uses a
+plain chevron SVG in the shared 3rd slot; an `error` row uses that exact
+same slot for "Show messages" instead (a row is never both `ok` and
+`error`), styled `.icon-btn.danger` (red, reusing the status pill's own
+error color) rather than `.warn` (amber - already used for iTOL, a
+different, unrelated meaning) to keep the color coding consistent with
+what "error" already means everywhere else on this page.
+
+**The real app's own `static/images/ptree.svg` (used by the old "Viewer"
+button) was deliberately not reused for the new tree-viewer icon.** It's
+a solid white-filled mark meant for a colored button background: this
+redesign's icon buttons are the opposite (light tinted background,
+`currentColor`-stroked icon), so the white fill would simply be
+invisible on them. Kept the inline cladogram SVG from the mockup instead
+(a real branching-tree diagram, `stroke="currentColor"`, adapts to the
+button's own color automatically) - already verified visually via the
+Artifact preview before implementing, not a first attempt here.
+
+Test coverage: `workspace.tests.HistoryTableRedesignTest` (an `ok` row
+gets a `status-pill-ok`/"Done" pill and none of the old glyphicon
+classes; a plain dataset with no special extension still gets its
+trailing empty action slots so alignment holds; an `error` row gets a
+`status-pill-error` pill and the `.icon-btn.danger` "Show messages"
+button) - rendered directly via `render_to_string`, the same
+no-view-mock pattern as this section's other template tests.
+
 ### Daily workflow-usage report
 
 `workspace.tasks.send_daily_report` (`CELERY_BEAT_SCHEDULE`, 8am UTC) emails
