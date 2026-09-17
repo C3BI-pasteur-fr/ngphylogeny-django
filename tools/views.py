@@ -248,10 +248,24 @@ def get_tool_name(request):
     context = dict()
 
     if request.POST:
-        gi = request.galaxy
         toolid = request.POST.get('tool_id')
 
         if toolid:
+            # This app already mirrors every tool it actually runs
+            # locally (Tool, keyed by galaxy_server+id_galaxy - see
+            # CLAUDE.md's "App responsibilities") - a local lookup avoids
+            # a Galaxy API round trip (and a dependency on Galaxy being
+            # reachable at all) for a tool that's almost always already
+            # known here, since NGPhylogeny only ever submits its own
+            # preconfigured/imported workflows. Falls back to Galaxy only
+            # for a tool this app doesn't know about yet.
+            local_tool = Tool.objects.filter(
+                galaxy_server=request.galaxy_server, id_galaxy=toolid).first()
+            if local_tool:
+                context.update({'tool_id': toolid, 'name': local_tool.name})
+                return HttpResponse(json.dumps(context), content_type='application/json')
+
+            gi = request.galaxy
             try:
                 # get_tools(tool_id=...) was removed from bioblend (its
                 # signature still accepts the kwarg, but the

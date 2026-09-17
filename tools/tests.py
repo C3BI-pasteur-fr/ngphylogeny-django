@@ -321,3 +321,31 @@ class GetToolNameViewTest(TestCase):
                 '/tools/tool/galaxy_id/', {'tool_id': 'mytool'})
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'MyTool', response.content)
+
+    def test_resolves_a_known_tool_locally_without_calling_galaxy(self):
+        """
+        Regression test: this used to always call gi.tools.show_tool(),
+        even though NGPhylogeny only ever submits its own preconfigured/
+        imported workflows - the tool that produced any given dataset is
+        almost always already mirrored locally (Tool). Now polled every
+        10s per tool group by the history detail page's step chain/table
+        (see CLAUDE.md), so an unnecessary Galaxy call here directly adds
+        to a real production incident's root cause (pod restarts from
+        Galaxy-call load) - checks the local DB first and skips Galaxy
+        entirely when it's already known there.
+        """
+        with patch('tools.models.requests.get',
+                   return_value=Mock(status_code=200, json=lambda: {
+                       'id': 'mytool', 'name': 'ignored', 'version': '1.0',
+                       'inputs': [], 'outputs': [],
+                   })):
+            Tool.objects.create(
+                galaxy_server=self.server, id_galaxy='mytool',
+                name='Local MyTool', description='A tool', version='1.0')
+
+        with patch('bioblend.galaxy.tools.ToolClient.show_tool') as show_tool:
+            response = self.client.post(
+                '/tools/tool/galaxy_id/', {'tool_id': 'mytool'})
+        show_tool.assert_not_called()
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'Local MyTool', response.content)

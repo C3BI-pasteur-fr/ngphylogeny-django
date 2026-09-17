@@ -1,15 +1,20 @@
+import json
 from datetime import timedelta
 from unittest.mock import Mock, patch
 
+import requests
 from django.contrib.auth.models import User
 from django.core import mail
 from django.core.cache import cache
 from django.template.loader import render_to_string
 from django.test import RequestFactory, TestCase, override_settings
+from django.urls import reverse
+
 from django.utils import timezone
 
 from blast.models import BlastRun
-from galaxy.models import Server
+from galaxy.models import GalaxyUser, Server
+from tools.models import Tool
 from workflows.models import Workflow
 from workspace.emails import build_job_completion_email, send_job_completion_email
 from workspace.models import WorkspaceHistory
@@ -18,6 +23,7 @@ from workspace.reports import (WEEKLY_TO_MONTHLY_SPAN_DAYS,
                                 gather_all_time, gather_last_7_days,
                                 gather_period_totals, render_report_html)
 from workspace.tasks import deleteoldgalaxyhistory, send_daily_report
+from workspace.views import build_citations, resolve_dataset_tools
 
 
 class DeleteOldGalaxyHistoryTest(TestCase):
@@ -780,36 +786,35 @@ class HistoryPartialRefreshTemplateTest(TestCase):
         self.assertNotIn('info-refresh', html)
         self.assertNotIn('countdown_span', html)
 
-    def test_citations_are_fetched_by_the_refreshed_fragment_not_just_once(self):
+    def test_citations_are_embedded_server_side_not_fetched_by_ajax(self):
         """
-        Regression test: get_dataset_citations used to be fetched once
-        from the outer shell's own $(document).ready, so a page loaded
-        before any tool had run yet (see HistoryUnifiedWaitStateTest)
-        never picked up citations once the run actually produced some.
-        Moved into the fragment itself so it re-fetches on every poll.
+        Regression test: citations used to be fetched via a client-side
+        $.getJSON call from within this fragment (itself a fix for an
+        even older bug - see git history - where it was only ever
+        fetched once from the outer shell, missing anything from a page
+        loaded during the "please wait" state). That AJAX call was one
+        of three independent, redundant Galaxy-backed AJAX round trips
+        this fragment made every 10s poll (see CLAUDE.md's step-chain
+        section for the real production incident - pod restarts - this
+        contributed to) - now HistoryContentRefreshView.get_context_data
+        resolves citations server-side (reusing the same dataset_tool_ids
+        it already computes for the step chain/table) and this fragment
+        just writes the result into the DOM, no AJAX call left at all.
         """
         request = self._request()
         fragment_html = render_to_string(
             'workspace/include/history_contents_refreshable.html',
             {'object': self._obj(False), 'request': request,
-             'csrf_token': 'faketoken', 'staging': True},
+             'csrf_token': 'faketoken', 'staging': True,
+             'citations': ['<b>Citation A</b>', '<b>Citation B</b>']},
             request=request)
-        self.assertIn(
-            '$.getJSON("/workspace/history/citations/fakehist123"',
-            fragment_html)
-        self.assertIn("$(\"#pub-container\").html", fragment_html)
-
-        # workspace/history.html includes history_contents_provenance_ajax.html,
-        # which itself includes this same fragment once - the fetch
-        # should show up exactly that one time, not also duplicated in
-        # the outer shell's own $(document).ready (which is what this
-        # used to do, before being moved into the fragment).
-        full_html = render_to_string(
-            'workspace/history.html',
-            {'object': self._obj(False), 'request': request,
-             'csrf_token': 'faketoken'},
-            request=request)
-        self.assertEqual(full_html.count('$.getJSON('), 1)
+        self.assertNotIn('$.getJSON(', fragment_html)
+        # escapejs turns <b> into <b> (defense in depth against
+        # a citation string breaking out of the JS string literal) -
+        # check for the actual escaped form, not the raw text.
+        self.assertIn('Citation A\\u003C/b\\u003E', fragment_html)
+        self.assertIn('Citation B\\u003C/b\\u003E', fragment_html)
+        self.assertIn('$("#pub-container").html(citationItems', fragment_html)
 
 
 class HistoryUnifiedWaitStateTest(TestCase):
@@ -896,3 +901,168 @@ class HistoryUnifiedWaitStateTest(TestCase):
         self.assertIn(
             '$.when(window.__historyStepChainReady, '
             'window.__historyTableReady).done(function () {', html)
+
+
+class ResolveDatasetToolsTest(TestCase):
+    """
+    Unit tests for resolve_dataset_tools/build_citations - the helpers
+    HistoryContentRefreshView now uses to resolve dataset->tool_id/
+    tool_id->name/citations once per poll, shared across the step chain,
+    the table, and the citations list (previously three independent,
+    redundant rounds of Galaxy-backed AJAX calls every 10s - see
+    CLAUDE.md's step-chain section for the real production incident,
+    pod restarts, this contributed to). Tested directly against a mocked
+    `gi` rather than through the decorated view/HTTP layer - see
+    HistoryContentRefreshViewTest below for that.
+    """
+
+    def setUp(self):
+        with patch('galaxy.models.requests.get',
+                   return_value=Mock(status_code=200,
+                                      json=lambda: {'version_major': '25.1'})):
+            self.server = Server.objects.create(
+                url='http://fake-galaxy.example.org', current=True)
+        with patch('tools.models.requests.get',
+                   return_value=Mock(status_code=200, json=lambda: {
+                       'id': 'mafft', 'name': 'ignored', 'version': '1.0',
+                       'inputs': [], 'outputs': [],
+                   })):
+            self.tool = Tool.objects.create(
+                galaxy_server=self.server, id_galaxy='mafft',
+                name='MAFFT', description='Alignment', version='1.0')
+
+    def test_resolves_tool_ids_and_prefers_the_local_tool_name(self):
+        gi = Mock()
+        gi.histories.show_dataset_provenance.side_effect = (
+            lambda history_id, dataset_id, follow: {'tool_id': 'mafft'})
+
+        dataset_tool_ids, tool_names = resolve_dataset_tools(
+            gi, self.server, 'hist1', ['d1', 'd2'])
+
+        self.assertEqual(dataset_tool_ids, {'d1': 'mafft', 'd2': 'mafft'})
+        self.assertEqual(tool_names, {'mafft': 'MAFFT'})
+        # The whole point: a tool already known locally shouldn't need a
+        # Galaxy API call at all to get its name.
+        gi.tools.show_tool.assert_not_called()
+
+    def test_falls_back_to_galaxy_for_an_unknown_tool(self):
+        gi = Mock()
+        gi.histories.show_dataset_provenance.return_value = {'tool_id': 'unknown_tool'}
+        gi.tools.show_tool.return_value = {'name': 'Unknown Tool'}
+
+        dataset_tool_ids, tool_names = resolve_dataset_tools(
+            gi, self.server, 'hist1', ['d1'])
+
+        self.assertEqual(tool_names, {'unknown_tool': 'Unknown Tool'})
+        gi.tools.show_tool.assert_called_once_with(tool_id='unknown_tool')
+
+    def test_a_dataset_that_fails_to_resolve_is_just_left_out(self):
+        gi = Mock()
+        gi.histories.show_dataset_provenance.side_effect = requests.exceptions.Timeout('boom')
+
+        dataset_tool_ids, tool_names = resolve_dataset_tools(
+            gi, self.server, 'hist1', ['d1'])
+
+        self.assertEqual(dataset_tool_ids, {})
+        self.assertEqual(tool_names, {})
+
+    def test_build_citations_includes_ngphylo_plus_resolved_tools(self):
+        # self.tool has no Citation rows of its own here - just checks
+        # ngphylo's own citation is always present regardless.
+        refs = build_citations({'d1': 'mafft'})
+        self.assertEqual(len(refs), 1)
+        self.assertIn('NGPhylogeny.fr', refs[0])
+
+    def test_build_citations_extends_with_a_resolved_tools_own_citations(self):
+        from tools.models import Citation
+        Citation.objects.create(
+            tool=self.tool, reference='@article{a,title={MAFFT paper}}')
+        refs = build_citations({'d1': 'mafft'})
+        self.assertEqual(len(refs), 2)
+        self.assertTrue(any('MAFFT paper' in r for r in refs))
+
+
+class HistoryContentRefreshViewTest(TestCase):
+    """
+    Integration test for HistoryContentRefreshView going through the
+    actual decorated view (galaxy.decorator.connection_galaxy), not just
+    rendering the template directly like this file's other history-
+    detail-page tests. tools.tests.GetToolNameViewTest already
+    established that this is workable for a Galaxy-connected view: a
+    real Server + anonymous GalaxyUser DB fixture, then patching the
+    specific bioblend client methods actually called - no need to mock
+    HTTP directly, and no need for CELERY_TASK_ALWAYS_EAGER either,
+    since updateworkspacestatus.delay() is patched out (this test cares
+    about what the view renders from the history_content already stored
+    on the row, not about that Celery task refreshing it).
+    """
+
+    def setUp(self):
+        with patch('galaxy.models.requests.get',
+                   return_value=Mock(status_code=200,
+                                      json=lambda: {'version_major': '25.1'})):
+            self.server = Server.objects.create(
+                url='http://fake-galaxy.example.org', current=True)
+        user = User.objects.create_user('admin')
+        GalaxyUser.objects.create(
+            user=user, galaxy_server=self.server, api_key='fakekey',
+            anonymous=True)
+        with patch('tools.models.requests.get',
+                   return_value=Mock(status_code=200, json=lambda: {
+                       'id': 'mafft', 'name': 'ignored', 'version': '1.0',
+                       'inputs': [], 'outputs': [],
+                   })):
+            Tool.objects.create(
+                galaxy_server=self.server, id_galaxy='mafft',
+                name='MAFFT', description='Alignment', version='1.0')
+
+        history_content = [
+            {'id': 'd1', 'hid': 1, 'name': 'input.fasta', 'state': 'ok',
+             'visible': True, 'extension': 'fasta'},
+            {'id': 'd2', 'hid': 2, 'name': 'MAFFT alignment', 'state': 'ok',
+             'visible': True, 'extension': 'fasta'},
+        ]
+        self.history = WorkspaceHistory.objects.create(
+            history='hist1', name='Test run', email='', monitored=True,
+            finished=False, source_ip='127.0.0.1',
+            workflow_category='OneClick', workflow_steps='',
+            galaxy_server=self.server,
+            history_content_json=json.dumps(history_content),
+            history_info_json=json.dumps({'id': 'hist1', 'name': 'Test run'}))
+
+    def test_resolves_and_embeds_tool_names_with_no_client_ajax_left(self):
+        with patch('bioblend.galaxy.histories.HistoryClient.show_dataset_provenance',
+                   return_value={'tool_id': 'mafft'}), \
+             patch('workspace.views.updateworkspacestatus.delay'):
+            response = self.client.get(
+                reverse('history_content_refresh', kwargs={'history_id': 'hist1'}))
+
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode()
+        self.assertIn('MAFFT', html)
+        # The whole point of this change: the rendered fragment no
+        # longer contains any of the client-side AJAX calls it used to
+        # make to resolve this same data every poll.
+        self.assertNotIn('get_dataset_tool', html)
+        self.assertNotIn('get_tool_name', html)
+        self.assertNotIn('get_dataset_citations', html)
+        self.assertIn('NGPhylogeny.fr', html)
+
+    def test_wait_state_does_not_call_galaxy_for_tool_resolution(self):
+        """
+        Fewer than 2 datasets - resolve_dataset_tools shouldn't be
+        called at all (nothing to resolve yet, see the template's own
+        "please wait" branch).
+        """
+        WorkspaceHistory.objects.filter(pk=self.history.pk).update(
+            history_content_json=json.dumps([
+                {'id': 'd1', 'hid': 1, 'name': 'input.fasta', 'state': 'ok',
+                 'visible': True, 'extension': 'fasta'},
+            ]))
+        with patch('bioblend.galaxy.histories.HistoryClient.show_dataset_provenance') as prov, \
+             patch('workspace.views.updateworkspacestatus.delay'):
+            response = self.client.get(
+                reverse('history_content_refresh', kwargs={'history_id': 'hist1'}))
+        self.assertEqual(response.status_code, 200)
+        prov.assert_not_called()
+        self.assertIn('Analysis is being initialized', response.content.decode())
