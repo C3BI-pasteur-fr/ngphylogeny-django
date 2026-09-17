@@ -786,6 +786,22 @@ class HistoryPartialRefreshTemplateTest(TestCase):
         self.assertNotIn('info-refresh', html)
         self.assertNotIn('countdown_span', html)
 
+    def test_manual_refresh_button_is_gone(self):
+        """
+        The manual "Refresh" button (onclick="refresh()") is redundant
+        now that the page already refreshes itself in the background
+        every 10s - removed, though the refresh() function itself stays
+        (still what drives that automatic polling).
+        """
+        request = self._request()
+        html = render_to_string(
+            'workspace/history.html',
+            {'object': self._obj(False), 'request': request,
+             'csrf_token': 'faketoken'},
+            request=request)
+        self.assertNotIn('onclick="refresh()"', html)
+        self.assertIn('function refresh() {', html)
+
     def test_table_grouping_never_merges_unresolved_rows(self):
         """
         Regression test: the table's grouping script starts id_tool at ''
