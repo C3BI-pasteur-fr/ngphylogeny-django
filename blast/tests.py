@@ -17,6 +17,26 @@ from .tasks import (PASTEUR_RUN_STALE_AFTER, deleteoldblastruns,
                      launch_ncbi_blast, launch_pasteur_blast, checkblastruns)
 
 
+class BlastRunServerStrTest(TestCase):
+    """
+    Regression test: BlastRun.server_str() compared self.status (a
+    RUNSTATUS code, e.g. 'P'/'R') against BLASTSERVERS codes ('pasteur'/
+    'ncbi') - two different code spaces that can never match, so this
+    always fell through to 'Error' regardless of the actual server.
+    Found alongside BLASTSERVERS itself mislabeling NCBI as "Pasteur"
+    too - both in the same few lines. Tested on a plain, unsaved
+    instance (no DB/Galaxy dependency needed - same approach as
+    ToolCanRunOnDataTest for Tool.can_run_on_data()).
+    """
+
+    def test_returns_the_actual_server_label_not_always_error(self):
+        run = BlastRun(server=BlastRun.NCBI, status=BlastRun.RUNNING)
+        self.assertEqual(run.server_str(), 'NCBI')
+
+        run = BlastRun(server=BlastRun.PASTEUR, status=BlastRun.PENDING)
+        self.assertEqual(run.server_str(), 'Pasteur')
+
+
 class BlastViewTest(TestCase):
     """
     Reactivated after a temporary disable (both submission paths had open

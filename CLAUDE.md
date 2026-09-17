@@ -1389,6 +1389,24 @@ ALTER TABLE blast_blastrun ALTER COLUMN history TYPE varchar(250);
 ALTER TABLE blast_blastrun ALTER COLUMN history_fileid TYPE varchar(250);
 ```
 
+**`BlastRun.BLASTSERVERS` labeled NCBI runs as "Pasteur" too**
+(`(NCBI, 'Pasteur')` instead of `(NCBI, 'NCBI')`) - found while building
+`workspace.views.running_jobs_view` (its own `dict(BlastRun.BLASTSERVERS)`
+lookup would have silently inherited this). No DB/migration impact -
+`choices=` is display-only, the stored `server` value itself
+('pasteur'/'ncbi') was never wrong. Fixing it also exposed a second,
+previously-inert bug right next to it: `BlastRun.server_str()` compared
+`self.status` (a `RUNSTATUS` code, e.g. `'P'`/`'R'`) against
+`BLASTSERVERS` codes (`'pasteur'`/`'ncbi'`) - two code spaces that can
+never match, so it always fell through to returning `'Error'`
+regardless of the actual server. Nothing currently calls `server_str()`,
+so this had zero live impact, but it was broken and sitting right next
+to the fix - corrected alongside rather than left broken. Regression
+tests: `blast.tests.BlastRunServerStrTest` (both server values return
+their real label, not `'Error'`, on a plain unsaved instance);
+`workspace.tests.RunningJobsViewTest` now also asserts an NCBI run
+actually shows `"NCBI BLAST"` on the running-jobs page.
+
 **BLAST completion email now reuses the workflow job-completion email's
 branded HTML template**, rather than the hand-built plain-text
 `send_mail()` call it used before. `workspace/emails.py`'s MIME/logo
