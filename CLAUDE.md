@@ -1740,3 +1740,74 @@ patched to raise a real `ConnectionError` shaped like the actual incident
 (`workflow_oneclick_list`, `workflows_advanced`, `workflow_oneclick_form`,
 `workflows_advanced_fullsteps`) return `503` and render
 `workflows/galaxy_unavailable.html` rather than raising.
+
+### Permalink to "Workspace" (the previous-analyses list)
+
+`request.session['histories']` (a plain list of Galaxy history ids -
+`workspace.views.create_history`/`PreviousHistoryListView`) is the
+*only* thing "Workspace" (`/workspace/histories`,
+`previous_analyses.html`) is built from - clear cookies, switch
+browsers/devices, or just come back much later, and the page shows
+nothing, even though the underlying `WorkspaceHistory` rows (and their
+Galaxy data, until the 14-day cleanup) are still there. Added a
+permalink: `PreviousHistoryListView.get_context_data()` now also builds
+`permalink_url` - `site_url(reverse('workspace_permalink', kwargs=
+{'token': signing.dumps(history_ids, salt=PERMALINK_SALT)}))` - shown
+on the page as a read-only, click-to-select input with a "Copy" button
+(plain `document.execCommand('copy')`, matching this app's existing
+jQuery-2.1.4/Bootstrap-3 stack rather than reaching for the newer
+`navigator.clipboard` API). Built from `self.request.session['histories']`
+*after* `get_queryset()` has already run (it prunes deleted/no-longer-
+matching ids first - `BaseListView.get()` always calls `get_queryset()`
+before `get_context_data()`), so the token never encodes a stale id
+`get_queryset()` would just drop again anyway.
+
+`workspace.views.WorkspacePermalinkView` (`GET
+/workspace/permalink/<token>`, no `connection_galaxy` decorator needed -
+it only touches the session, no Galaxy call) decodes the token with
+`signing.loads(..., salt=PERMALINK_SALT)`, **merges** (set union, not
+replace) the decoded ids into whatever's already in *that* browser's own
+`request.session['histories']`, and redirects to `previous_analyses` -
+so following a permalink in a browser that already has its own,
+different analyses adds to that list instead of clobbering it. A
+tampered/invalid token (`signing.BadSignature`) shows a plain error
+message (`django.contrib.messages`, same `{% if "error" in message.tags
+%}` block already established in `workflows/workflows_alacarte.html`,
+now duplicated into `previous_analyses.html` too) and redirects back
+rather than raising - it's user-shareable input, so it has to degrade
+cleanly.
+
+**Deliberately no encryption, no expiry, no server-side revocation, and
+no new model/migration** - `django.core.signing` only guarantees the
+token wasn't *tampered with*, not that it's secret, and that's fine
+here: an individual history is already reachable the exact same way with
+no ownership check at all -
+`WorkspaceHistoryObjectMixin.get_object()` (`history_detail`,
+`/workspace/history/<id>`) looks a history up by its Galaxy id with no
+session/ownership gate whatsoever, so anyone who already knows (or
+receives) one of these 16-character ids can open it directly. A
+permalink bundling several of those same already-not-secret ids
+together is not a new kind of exposure, just a convenient way to
+restore or share the same list - so no expiry was added either (unlike,
+say, a password-reset token): the whole point is that it should still
+work long after a normal browser session would've expired, and a
+permalink pointing at histories Galaxy has already cleaned up just
+renders an empty/partial list once followed (`get_queryset()`'s own
+`deleted=False` filter), no separate cleanup needed for the permalink
+itself. Encoding the id list directly into a signed token (rather than a
+new DB-backed model keyed by a random id) also means zero schema
+changes - consistent with this project's general preference to avoid
+new migrations when an existing mechanism (here, `SECRET_KEY`-backed
+signing, already a Django built-in) does the job.
+
+Regression tests: `workspace.tests.WorkspacePermalinkTest` - the
+established `Server` + anonymous `GalaxyUser` DB fixture (`previous_analyses`
+is `connection_galaxy`-decorated even though this feature itself never
+calls Galaxy), covering: no permalink shown for an empty session; a
+permalink is present and points at `/workspace/permalink/`; following it
+with a **separate `django.test.Client`** (a genuinely different,
+cookie-isolated session - the real scenario this exists for) restores
+the right history list and renders that history's name; following it
+when the current session already has a *different* history merges
+rather than replaces; a garbage token redirects with the error message
+instead of raising.

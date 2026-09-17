@@ -3,6 +3,49 @@
 {% block title %}Previous analyses{% endblock %}
 {% block content %}
 <div class="col-md-offset-1">
+  {% if messages %}
+  <ul class="messages">
+    {% for message in messages %}
+    {% if "error" in message.tags %}
+    <div class="alert alert-danger alert-dismissable">
+      <a href="#" class="close" data-dismiss="alert"
+         aria-label="close">&times;</a><strong>Warning!</strong>
+      {{ message }}
+    </div>
+    {% endif %}
+    {% endfor %}
+  </ul>
+  {% endif %}
+  {% if permalink_url %}
+  <div class="panel panel-info">
+    <div class="panel-heading">Permalink to this list</div>
+    <div class="panel-body">
+      <p class="text-muted">
+        Bookmark or share this link to get back to this exact list of
+        analyses later, even from a different browser or device.
+      </p>
+      <div class="input-group">
+        <input id="permalink-url" type="text" class="form-control"
+               value="{{ permalink_url }}" readonly
+               onclick="this.select();">
+        <span class="input-group-btn">
+          <button class="btn btn-default" type="button"
+                  onclick="copyPermalink()">
+            <span class="glyphicon glyphicon-copy"></span> Copy
+          </button>
+        </span>
+      </div>
+    </div>
+  </div>
+  <script>
+    function copyPermalink() {
+      var input = document.getElementById('permalink-url');
+      input.select();
+      input.setSelectionRange(0, input.value.length);
+      document.execCommand('copy');
+    }
+  </script>
+  {% endif %}
   <ul class="nav histories-nav nav-pills">
     {% for history in histories %}
       <li class="col-md-9" style="background-color:{% cycle '#f5f9fb' '#fcfcfc' %}">

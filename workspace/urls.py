@@ -20,7 +20,7 @@ from .views import HistoryDetailView, HistoryContentRefreshView, PreviousHistory
     get_dataset_citations, get_dataset_citations_bibtex, get_dataset_citations_txt, \
     WorkspaceDeleteView, WorkspaceRenameView, \
     WorkspaceChangeEmailView, DeleteAllHistories, daily_report_view, \
-    running_jobs_view
+    running_jobs_view, WorkspacePermalinkView
 
 urlpatterns = [
     re_path(r'^report$',
@@ -31,6 +31,8 @@ urlpatterns = [
         HistoryDetailView.as_view(), name="history_current_detail"),
     re_path(r'^histories$',
         PreviousHistoryListView.as_view(), name="previous_analyses"),
+    re_path(r'^permalink/(?P<token>[\w:=-]+)$',
+        WorkspacePermalinkView.as_view(), name="workspace_permalink"),
     re_path(r'^history/(?P<history_id>[\w-]+)$',
         HistoryDetailView.as_view(), name="history_detail"),
     re_path(r'^history/(?P<history_id>[\w-]+)/refresh$',

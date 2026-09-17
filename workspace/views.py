@@ -2,7 +2,9 @@ from __future__ import unicode_literals
 import json
 
 import requests
+from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
+from django.core import signing
 from django.http import HttpResponse
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
@@ -18,10 +20,19 @@ from .tasks import deletegalaxyhistory
 from workflows.tasks import deletegalaxyworkflow
 
 from galaxy.decorator import connection_galaxy
+from .emails import site_url
 from .models import WorkspaceHistory
 from .reports import CATEGORY_LABELS, build_report_web_context
 from tools.models import Tool
 from .tasks import updateworkspacestatus
+
+# Salt for the workspace/histories permalink (PreviousHistoryListView/
+# WorkspacePermalinkView below) - just namespaces the signed token so it
+# can't be reinterpreted by some unrelated future use of
+# django.core.signing in this app; doesn't add real secrecy on its own
+# (nothing here does - see WorkspacePermalinkView's own docstring for
+# why that's fine).
+PERMALINK_SALT = 'workspace.permalink'
 
 from utils import ip
 
@@ -602,6 +613,64 @@ class PreviousHistoryListView(ListView):
         self.request.session['histories'] = list(self.queryset.values_list('history', flat=True))
 
         return self.queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Permalink to *this* list - see WorkspacePermalinkView below.
+        # Built from the just-cleaned session list (get_queryset() above
+        # already dropped any deleted history), not the raw queryset, so
+        # the token always matches what get_queryset() would itself
+        # filter down to a second time when the permalink is followed.
+        history_ids = self.request.session.get('histories', [])
+        context['permalink_url'] = (
+            site_url(reverse('workspace_permalink', kwargs={
+                'token': signing.dumps(history_ids, salt=PERMALINK_SALT),
+            }))
+            if history_ids else None)
+        return context
+
+
+class WorkspacePermalinkView(View):
+    """
+    GET /workspace/permalink/<token> - restores the exact list of
+    analyses a permalink (PreviousHistoryListView.get_context_data()
+    above) was generated for into *this* browser's session, then
+    redirects to the normal previous-analyses page. The whole point:
+    "Workspace" is otherwise only ever readable from the one browser
+    session that actually ran each analysis (see PreviousHistoryListView's
+    own docstring) - clearing cookies, switching devices, or just coming
+    back much later loses access to it entirely even though the
+    underlying data is still there. This link is how to get it back (or
+    hand the same list to a collaborator).
+
+    The token itself is just a signed (not encrypted) list of history
+    ids - django.core.signing guarantees it wasn't tampered with, not
+    that it's secret. That's consistent with how an individual history
+    is already reachable: WorkspaceHistoryObjectMixin.get_object()
+    (history_detail, /workspace/history/<id>) has no ownership/session
+    check at all - anyone who knows a 16-character Galaxy history id can
+    already open that history directly. A permalink bundling several of
+    those already-not-secret ids together doesn't introduce a new kind
+    of exposure, just a convenient way to share/restore the same list.
+
+    Merges with (rather than replacing) whatever's already in the
+    current session, so following a permalink in a browser that already
+    has its own, different set of analyses adds to that list instead of
+    losing it.
+    """
+
+    def get(self, request, token):
+        try:
+            history_ids = signing.loads(token, salt=PERMALINK_SALT)
+        except signing.BadSignature:
+            messages.add_message(
+                request, messages.ERROR,
+                "This permalink is invalid or has been corrupted.")
+            return redirect('previous_analyses')
+
+        existing = set(request.session.get('histories', []))
+        request.session['histories'] = list(existing.union(history_ids))
+        return redirect('previous_analyses')
 
 
 @method_decorator(connection_galaxy, name="dispatch")
