@@ -22,7 +22,8 @@ from workspace.reports import (WEEKLY_TO_MONTHLY_SPAN_DAYS,
                                 build_report_context, build_report_web_context,
                                 gather_all_time, gather_last_7_days,
                                 gather_period_totals, render_report_html)
-from workspace.tasks import deleteoldgalaxyhistory, send_daily_report
+from workspace.tasks import (deleteoldgalaxyhistory, send_daily_report,
+                              updateworkspacestatus)
 from workspace.views import build_citations, resolve_dataset_tools
 
 
@@ -121,6 +122,105 @@ class DeleteOldGalaxyHistoryTest(TestCase):
         h_ok.refresh_from_db()
         self.assertFalse(h_fail.deleted)
         self.assertTrue(h_ok.deleted)
+
+
+class UpdateWorkspaceStatusStaleRunTest(TestCase):
+    """
+    Regression tests for updateworkspacestatus()'s new staleness check:
+    a WorkspaceHistory used to stay finished=False forever if its Galaxy
+    jobs got stuck (a hung cluster node, a tool that never returns) -
+    launchmonitorworkspaces just keeps polling it, and
+    deleteoldgalaxyhistory only ever looks at finished=True rows, so
+    nothing ever cleaned it up either. Same class of gap
+    blast.tests.CheckBlastRunsTest already covers for BLAST
+    (PASTEUR_RUN_STALE_AFTER) - this is that same fix for regular
+    workflow/tool runs (WORKFLOW_RUN_STALE_AFTER, 24h).
+
+    Goes through galaxy_connection() for real (not request.galaxy/
+    connection_galaxy - this is a Celery task, not a view) - same
+    Server + anonymous GalaxyUser DB fixture established elsewhere this
+    session (e.g. tools.tests.GetToolNameViewTest), with the specific
+    bioblend client methods actually called patched directly.
+    """
+
+    def setUp(self):
+        with patch('galaxy.models.requests.get',
+                   return_value=Mock(status_code=200,
+                                      json=lambda: {'version_major': '25.1'})):
+            self.server = Server.objects.create(
+                url='http://fake-galaxy.example.org', current=True)
+        user = User.objects.create_user('admin')
+        GalaxyUser.objects.create(
+            user=user, galaxy_server=self.server, api_key='fakekey',
+            anonymous=True)
+
+    def _make_history(self, age, history_content):
+        h = WorkspaceHistory.objects.create(
+            history='hist1', name='test', email='', monitored=True,
+            finished=False, source_ip='127.0.0.1',
+            workflow_category='OneClick', workflow_steps='',
+            galaxy_server=self.server,
+            history_content_json=json.dumps(history_content),
+            history_info_json=json.dumps({'id': 'hist1', 'name': 'test'}))
+        WorkspaceHistory.objects.filter(pk=h.pk).update(
+            created_date=timezone.now() - age)
+        h.refresh_from_db()
+        return h
+
+    def _fake_show_history(self, history_content):
+        def fake(history_id, contents=False, **kwargs):
+            if contents:
+                return history_content
+            return {'id': history_id, 'name': 'test'}
+        return fake
+
+    def test_cancels_stale_jobs_and_marks_running_datasets_as_error(self):
+        history_content = [
+            {'id': 'd1', 'hid': 1, 'name': 'input.fasta', 'state': 'ok',
+             'visible': True, 'extension': 'fasta'},
+            {'id': 'd2', 'hid': 2, 'name': 'still going', 'state': 'running',
+             'visible': True, 'extension': 'fasta'},
+        ]
+        h = self._make_history(timedelta(hours=25), history_content)
+        jobs = [
+            {'id': 'job-finished', 'state': 'ok'},
+            {'id': 'job-stuck', 'state': 'running'},
+        ]
+        with patch('bioblend.galaxy.histories.HistoryClient.show_history',
+                   side_effect=self._fake_show_history(history_content)), \
+             patch('bioblend.galaxy.jobs.JobsClient.get_jobs',
+                   return_value=jobs) as get_jobs, \
+             patch('bioblend.galaxy.jobs.JobsClient.cancel_job') as cancel_job:
+            updateworkspacestatus(h.history)
+
+        get_jobs.assert_called_once_with(history_id='hist1')
+        cancel_job.assert_called_once_with('job-stuck')
+
+        h.refresh_from_db()
+        self.assertTrue(h.finished)
+        saved_content = json.loads(h.history_content_json)
+        by_id = {f['id']: f['state'] for f in saved_content}
+        self.assertEqual(by_id['d1'], 'ok')  # untouched - already done
+        self.assertEqual(by_id['d2'], 'error')  # was running, now error
+
+    def test_leaves_a_fresh_still_running_history_alone(self):
+        history_content = [
+            {'id': 'd1', 'hid': 1, 'name': 'input.fasta', 'state': 'ok',
+             'visible': True, 'extension': 'fasta'},
+            {'id': 'd2', 'hid': 2, 'name': 'still going', 'state': 'running',
+             'visible': True, 'extension': 'fasta'},
+        ]
+        h = self._make_history(timedelta(hours=1), history_content)
+        with patch('bioblend.galaxy.histories.HistoryClient.show_history',
+                   side_effect=self._fake_show_history(history_content)), \
+             patch('bioblend.galaxy.jobs.JobsClient.get_jobs') as get_jobs, \
+             patch('bioblend.galaxy.jobs.JobsClient.cancel_job') as cancel_job:
+            updateworkspacestatus(h.history)
+
+        get_jobs.assert_not_called()
+        cancel_job.assert_not_called()
+        h.refresh_from_db()
+        self.assertFalse(h.finished)
 
 
 class DailyReportTest(TestCase):
@@ -483,6 +583,101 @@ class DailyReportViewTest(TestCase):
             self.client.get('/workspace/report?refresh=1')
             self.assertTrue(
                 mock_build.call_args_list[-1].kwargs.get('force_refresh'))
+
+
+class RunningJobsViewTest(TestCase):
+    """
+    Access-control + content tests for workspace.views.running_jobs_view
+    (URL name 'running_jobs', /workspace/running) - admin/staff only,
+    same access-control pattern as daily_report_view
+    (DailyReportViewTest above). Lists still-running WorkspaceHistory and
+    BlastRun rows together, oldest first - finished/deleted rows of
+    either kind must not show up, since this is meant to answer "what's
+    running right now", not a usage history.
+    """
+
+    def setUp(self):
+        with patch('galaxy.models.requests.get',
+                   return_value=Mock(status_code=200,
+                                      json=lambda: {'version_major': '25.1'})):
+            self.server = Server.objects.create(
+                url='http://fake-galaxy.example.org', current=True)
+
+    def test_anonymous_user_is_redirected_to_login(self):
+        response = self.client.get('/workspace/running')
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/admin/login/', response.url)
+
+    def test_non_staff_user_is_redirected_to_login(self):
+        User.objects.create_user('regularuser', password='pw')
+        self.client.login(username='regularuser', password='pw')
+        response = self.client.get('/workspace/running')
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/admin/login/', response.url)
+
+    def test_staff_user_sees_running_jobs_oldest_first_with_step_counts(self):
+        User.objects.create_user('staffuser', password='pw', is_staff=True)
+        self.client.login(username='staffuser', password='pw')
+
+        older = WorkspaceHistory.objects.create(
+            history='hist-older', name='Older run', email='', monitored=True,
+            finished=False, deleted=False, source_ip='127.0.0.1',
+            workflow_category='OneClick', workflow_steps='',
+            galaxy_server=self.server,
+            history_content_json=json.dumps([
+                {'id': 'd1', 'hid': 1, 'name': 'a', 'state': 'ok'},
+                {'id': 'd2', 'hid': 2, 'name': 'b', 'state': 'running'},
+            ]))
+        WorkspaceHistory.objects.filter(pk=older.pk).update(
+            created_date=timezone.now() - timedelta(hours=2))
+
+        WorkspaceHistory.objects.create(
+            history='hist-newer', name='Newer run', email='', monitored=True,
+            finished=False, deleted=False, source_ip='127.0.0.1',
+            workflow_category='Tool', workflow_steps='MAFFT',
+            galaxy_server=self.server,
+            history_content_json=json.dumps([
+                {'id': 'd1', 'hid': 1, 'name': 'a', 'state': 'queued'},
+            ]))
+
+        # Should NOT show up: finished, or deleted.
+        WorkspaceHistory.objects.create(
+            history='hist-finished', name='Finished run', email='',
+            monitored=True, finished=True, deleted=False,
+            source_ip='127.0.0.1', workflow_category='OneClick',
+            workflow_steps='', galaxy_server=self.server)
+        WorkspaceHistory.objects.create(
+            history='hist-deleted', name='Deleted run', email='',
+            monitored=True, finished=False, deleted=True,
+            source_ip='127.0.0.1', workflow_category='OneClick',
+            workflow_steps='', galaxy_server=self.server)
+
+        blast_running = BlastRun.objects.create(
+            query_id='query1', status=BlastRun.RUNNING, server=BlastRun.NCBI,
+            blastprog='blastn', deleted=False)
+        BlastRun.objects.filter(pk=blast_running.pk).update(
+            date=timezone.now() - timedelta(hours=1))
+        # Should NOT show up: a finished BLAST run.
+        BlastRun.objects.create(
+            query_id='query2', status=BlastRun.FINISHED, server=BlastRun.NCBI,
+            blastprog='blastn', deleted=False)
+
+        response = self.client.get('/workspace/running')
+
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn('Older run', content)
+        self.assertIn('Newer run', content)
+        self.assertIn('query1', content)
+        self.assertNotIn('Finished run', content)
+        self.assertNotIn('Deleted run', content)
+        self.assertNotIn('query2', content)
+        # Oldest (2h ago) first, then the BLAST run (1h ago), then the
+        # just-created workflow run.
+        self.assertLess(content.index('Older run'), content.index('query1'))
+        self.assertLess(content.index('query1'), content.index('Newer run'))
+        # 1 of "Older run"'s 2 datasets is 'ok'.
+        self.assertIn('1 / 2', content)
 
 
 class JobCompletionEmailTest(TestCase):

@@ -341,6 +341,91 @@ gone if it runs second; if it runs first instead, it already marks the
 row `deleted=True` itself, so this task's own `deleted=False` filter
 skips it in turn.
 
+**24h staleness cutoff for regular workflow/tool runs**
+(`workspace.tasks.WORKFLOW_RUN_STALE_AFTER`) - the same class of gap
+`blast.tasks.checkblastruns()`'s own `PASTEUR_RUN_STALE_AFTER` already
+covers for BLAST, just never ported over to `updateworkspacestatus()`: a
+`WorkspaceHistory` used to stay `finished=False` forever if its Galaxy
+jobs got stuck (a hung cluster node, a tool that never returns) -
+`launchmonitorworkspaces` just keeps polling it every minute, and
+`deleteoldgalaxyhistory` only ever looks at `finished=True` rows (see
+above), so nothing ever cleaned it up either. Reference point is
+`WorkspaceHistory.created_date`, same choice as `BlastRun.date` for
+BLAST.
+
+Once a history's still running/queued past that cutoff,
+`cancel_stale_jobs()` calls bioblend's `gi.jobs.get_jobs(history_id=...)`
+(one call, not filtered per-state server-side, to keep this endpoint's
+own Galaxy load down - see the step-chain section below for why that
+matters here) and `cancel_job()` on whatever it finds still
+new/queued/running. `cancel_job()` is explicitly a *per-job* operation -
+it deletes that job's own not-yet-materialized output dataset, but
+every other, already-completed dataset in the same history (earlier
+steps that finished fine) is untouched and stays downloadable - a
+deliberate choice (confirmed with the user before implementing): a
+stuck step shouldn't cost the user results they already have. The
+newly-error'd datasets are picked up by `deleteoldgalaxyhistory`'s
+normal 14-day cleanup from there, same as any other finished-with-error
+history - no separate cleanup path needed.
+
+The still-running/queued dataset *states* are forced to `'error'`
+directly in the fetched `history_content` (not inferred by re-fetching
+to see how Galaxy itself now represents a cancelled job's dataset) right
+before the existing finished/error-detection loop runs - that loop then
+naturally computes `finished=True`/`error=True` and fires the existing
+job-completion email path unchanged, with no duplicated logic.
+
+Test coverage: `workspace.tests.UpdateWorkspaceStatusStaleRunTest` -
+goes through `galaxy_connection()` for real (this is a Celery task, not
+a view - `request.galaxy`/`connection_galaxy` don't apply), same
+`Server` + anonymous `GalaxyUser` DB fixture pattern established
+elsewhere this session, with `HistoryClient.show_history`/
+`JobsClient.get_jobs`/`JobsClient.cancel_job` patched directly. Confirms
+only the actually-stuck job gets cancelled (not an already-`ok` one in
+the same history), the already-`ok` dataset's own state is left alone,
+and a history that hasn't hit the cutoff yet is left running untouched.
+
+**`workspace.views.running_jobs_view` (`/workspace/running`, URL name
+`running_jobs`) is a live, admin/staff-only page listing everything
+currently running** - both `WorkspaceHistory` rows (`monitored=True`,
+`finished=False`, `deleted=False`) and `BlastRun` rows (`status` still
+`PENDING`/`RUNNING`, `deleted=False`), merged into one list and sorted
+oldest-first, so a run approaching or past one of the two staleness
+cutoffs above (`WORKFLOW_RUN_STALE_AFTER`/`PASTEUR_RUN_STALE_AFTER`)
+surfaces at the top instead of being buried under newer ones. Per row:
+name (linking to the history/BLAST detail page), type (`workflow_category`
+mapped through `workspace.reports.CATEGORY_LABELS` - the same mapping
+the daily report already uses - or, for BLAST, the server+program+status),
+created date, runtime (just `now - created_date`, rendered via Python's
+own `timedelta.__str__`, no extra dependency), and steps done/running -
+counted from `history_content` for workflows (a dataset's own `state`),
+or a fixed 0/1 for BLAST (it's not a multi-step pipeline the same way).
+Deliberately **not cached** (unlike `daily_report_view`'s 15-minute
+cache) - the whole point of this page is a live, up-to-the-moment
+picture, not a stale snapshot of what was running a quarter-hour ago.
+`history_content_json` is defensively filtered to dict-shaped entries
+only, same reasoning as `WorkspaceHistoryObjectMixin.get_context_data`'s
+own note on this (a genuinely malformed one shouldn't crash a page that
+reads it).
+
+The dataset-table look (card container, color-coded status pills,
+line-art SVG icon buttons, fixed action-slot alignment - see the
+step-chain section below) moved from being inline in
+`history_contents_provenance_ajax.html`'s own `{% block stylesheet %}`
+into `assets/css/custom.css` (global, loaded on every page via
+`base.html`) once this page needed the exact same look for an unrelated
+table, rather than duplicating that CSS a second time - `@keyframes
+workflow-step-pulse` moved with it, since `.status-pill-running`'s own
+animation depends on it regardless of which page it's used from.
+
+Test coverage: `workspace.tests.RunningJobsViewTest` - same
+access-control pattern as `DailyReportViewTest` (anonymous/non-staff
+redirected to admin login; a staff user sees the page), plus content
+checks that a finished or deleted `WorkspaceHistory`/`BlastRun` never
+shows up, that mixed workflow+BLAST rows sort oldest-first together,
+and that the done/total step count is correct for a partially-completed
+run.
+
 ### Graphical step-chain on the history detail page
 
 `templates/workspace/include/history_contents_provenance_ajax.html`

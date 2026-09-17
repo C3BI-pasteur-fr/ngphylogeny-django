@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title-block %} - Running Jobs{% endblock %}
+{% block content %}
+<div class="report-wrapper">
+  <h2>Running Jobs</h2>
+  <p style="color:#8a94a6;font-size:13px;">
+    Live - {{ rows|length }} job{{ rows|length|pluralize }} currently running or queued
+    (workflow/tool runs and BLAST searches), oldest first. Reloading this page always
+    shows the current state - nothing here is cached.
+  </p>
+
+  <div class="history-table-card">
+    <table class="history-table">
+      <colgroup>
+        <col>
+        <col style="width: 160px;">
+        <col style="width: 150px;">
+        <col style="width: 110px;">
+        <col style="width: 90px;">
+        <col style="width: 100px;">
+      </colgroup>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Created</th>
+          <th>Runtime</th>
+          <th>Steps done</th>
+          <th>Steps running</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td class="col-filename" title="{{ row.name }}">
+            <a href="{{ row.url }}">{{ row.name }}</a>
+          </td>
+          <td class="col-tool" title="{{ row.type }}">{{ row.type }}</td>
+          <td class="col-step">{{ row.created_date|date:"Y-m-d H:i" }}</td>
+          <td class="col-step">{{ row.runtime }}</td>
+          <td class="col-step">{{ row.steps_done }} / {{ row.steps_total }}</td>
+          <td class="col-step">
+            {% if row.steps_running %}
+            <span class="status-pill status-pill-running"><span class="dot"></span>{{ row.steps_running }}</span>
+            {% else %}
+            0
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="6" style="text-align:center;color:#8a94a6;padding:24px;">
+            Nothing is currently running.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p style="color:#8a94a6;font-size:12px;">
+    A workflow/tool run is automatically stopped and marked as errored after 24h
+    (see <code>workspace.tasks.WORKFLOW_RUN_STALE_AFTER</code>); a BLAST run after 3h
+    (<code>blast.tasks.PASTEUR_RUN_STALE_AFTER</code>) - a run near the top of this list
+    for a while is worth a look.
+  </p>
+</div>
+{% endblock %}

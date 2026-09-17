@@ -19,11 +19,14 @@ from .views import HistoryDetailView, HistoryContentRefreshView, PreviousHistory
     get_dataset_toolprovenance, GalaxyErrorView, \
     get_dataset_citations, get_dataset_citations_bibtex, get_dataset_citations_txt, \
     WorkspaceDeleteView, WorkspaceRenameView, \
-    WorkspaceChangeEmailView, DeleteAllHistories, daily_report_view
+    WorkspaceChangeEmailView, DeleteAllHistories, daily_report_view, \
+    running_jobs_view
 
 urlpatterns = [
     re_path(r'^report$',
         daily_report_view, name="daily_report"),
+    re_path(r'^running$',
+        running_jobs_view, name="running_jobs"),
     re_path(r'^history$',
         HistoryDetailView.as_view(), name="history_current_detail"),
     re_path(r'^histories$',

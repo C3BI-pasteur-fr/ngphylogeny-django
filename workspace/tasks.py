@@ -28,6 +28,16 @@ from workspace.reports import render_report_email
 LOCK_EXPIRE = 60 * 5 # Lock expires in 5 minutes
 LOCK_EXPIRE_SHORT = 9 # Lock expires in 9 seconds
 
+# A stuck Galaxy job (a hung cluster node, a tool that never returns) used
+# to leave a WorkspaceHistory as finished=False forever - launchmonitorworkspaces
+# just keeps polling it, and deleteoldgalaxyhistory only ever looks at
+# finished=True rows, so nothing ever cleaned it up either. Same class of
+# gap blast.tasks.checkblastruns() was already fixed for
+# (PASTEUR_RUN_STALE_AFTER); this is that same fix for regular workflow/
+# tool runs. Reference point is WorkspaceHistory.created_date, same
+# choice as BlastRun.date there.
+WORKFLOW_RUN_STALE_AFTER = timedelta(hours=24)
+
 
 def flush_transaction():
     transaction.commit()
@@ -61,6 +71,30 @@ def launchmonitorworkspaces():
         historyid = w.history
         updateworkspacestatus.delay(historyid)
 
+def cancel_stale_jobs(galaxycon, historyid):
+    """
+    Cancels every job for this history still in a non-terminal state
+    (new/queued/running) - used once a run has been going for longer
+    than WORKFLOW_RUN_STALE_AFTER. bioblend's cancel_job() deletes that
+    *job's own* not-yet-materialized output dataset, but this is a
+    per-job operation - every other, already-completed dataset in this
+    history (earlier steps that finished fine) is untouched and stays
+    downloadable, same as CheckBlastRunsTest's own approach for BLAST.
+    One `get_jobs` call, not one per state, to keep this endpoint's own
+    Galaxy load down (see CLAUDE.md's step-chain section for why that
+    matters here).
+    """
+    stale_states = ('new', 'queued', 'running')
+    for job in galaxycon.jobs.get_jobs(history_id=historyid):
+        if job.get('state') in stale_states:
+            try:
+                galaxycon.jobs.cancel_job(job['id'])
+            except Exception as e:
+                logging.warning(
+                    "Could not cancel stale job %s (history %s): %s",
+                    job.get('id'), historyid, e)
+
+
 @shared_task
 def updateworkspacestatus(historyid):
     
@@ -88,6 +122,24 @@ def updateworkspacestatus(historyid):
         hi = galaxycon.histories.show_history(historyid)
         w = WorkspaceHistory.objects.get(history=historyid)
         if w.monitored and not w.finished and not w.deleted:
+            stale_states = ('new', 'queued', 'running')
+            still_running = any(
+                any(s in file.get('state', '') for s in stale_states)
+                for file in hc)
+            if still_running and timezone.now() - w.created_date > WORKFLOW_RUN_STALE_AFTER:
+                logging.warning(
+                    "history %s has been running for longer than %s - "
+                    "cancelling its still-running/queued Galaxy jobs",
+                    historyid, WORKFLOW_RUN_STALE_AFTER)
+                cancel_stale_jobs(galaxycon, historyid)
+                # Force these to error locally rather than re-fetching to
+                # see how Galaxy itself now reports a cancelled job's
+                # dataset - a deliberate, known outcome we're causing
+                # here, not something to infer indirectly.
+                for file in hc:
+                    if any(s in file.get('state', '') for s in stale_states):
+                        file['state'] = 'error'
+
             w.history_content_json = json.dumps(hc)
             w.history_info_json =  json.dumps(hi)
             w.save()
