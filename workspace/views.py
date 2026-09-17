@@ -216,6 +216,40 @@ class WorkspaceHistoryObjectMixin(SingleObjectMixin):
         w.history_info = json.loads(w.history_info_json)
         return w
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        # Shared by every view built on this mixin - both HistoryDetailView
+        # (the very first render) and HistoryContentRefreshView (every
+        # later poll) include workspace/include/history_contents_
+        # refreshable.html, which needs this same data either way. This
+        # used to live only on HistoryContentRefreshView's own
+        # get_context_data() - meaning an already-finished history (whose
+        # client-side polling timer gets cleared before ever firing once
+        # - see that template's own {% if object.finished %} handling)
+        # loaded straight through HistoryDetailView and got a step chain/
+        # table/citations list that stayed permanently unresolved, since
+        # /refresh was never going to be called to backfill it. Real
+        # production bug, not just a theoretical gap - a completed run's
+        # tool column and citations list stayed blank forever.
+        #
+        # Matches the template's own "is there a real step chain/table
+        # yet" condition (that same file's top-level {% if %}) - nothing
+        # to resolve in the "please wait" state, so skip the Galaxy calls
+        # entirely rather than doing pointless work before a run has even
+        # really started.
+        history_content = self.object.history_content or []
+        if len(history_content) > 1:
+            dataset_ids = [f.get('id') for f in history_content]
+            dataset_tool_ids, tool_names = resolve_dataset_tools(
+                self.request.galaxy, self.request.galaxy_server,
+                self.object.history_info['id'], dataset_ids)
+            context['dataset_tool_ids'] = dataset_tool_ids
+            context['tool_names'] = tool_names
+            context['citations'] = build_citations(dataset_tool_ids)
+        return context
+
+
 @method_decorator(ensure_csrf_cookie, name="dispatch")
 @method_decorator(connection_galaxy, name="dispatch")
 class HistoryDetailView(WorkspaceHistoryObjectMixin, DetailView):
@@ -255,24 +289,12 @@ class HistoryContentRefreshView(WorkspaceHistoryObjectMixin, DetailView):
     template_name = 'workspace/include/history_contents_refreshable.html'
 
     def get_context_data(self, **kwargs):
+        # dataset_tool_ids/tool_names/citations are resolved by the
+        # shared WorkspaceHistoryObjectMixin.get_context_data() above -
+        # this just adds the one thing specific to being polled rather
+        # than directly included on first load.
         context = super().get_context_data(**kwargs)
         context['staging'] = self.request.GET.get('staging') == '1'
-
-        # Matches the template's own "is there a real step chain/table
-        # yet" condition (workspace/include/history_contents_
-        # refreshable.html's top-level {% if %}) - nothing to resolve in
-        # the "please wait" state, so skip the Galaxy calls entirely
-        # rather than doing pointless work every 10s before a run has
-        # even really started.
-        history_content = self.object.history_content or []
-        if len(history_content) > 1:
-            dataset_ids = [f.get('id') for f in history_content]
-            dataset_tool_ids, tool_names = resolve_dataset_tools(
-                self.request.galaxy, self.request.galaxy_server,
-                self.object.history_info['id'], dataset_ids)
-            context['dataset_tool_ids'] = dataset_tool_ids
-            context['tool_names'] = tool_names
-            context['citations'] = build_citations(dataset_tool_ids)
         return context
 
 

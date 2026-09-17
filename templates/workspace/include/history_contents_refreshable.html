@@ -199,7 +199,17 @@ happens inside a script tag executed asynchronously relative to
 
 	$root.find("[data]").each(function (index, el) {
 	    var toolId = $(el).attr('data');
-	    if (id_tool == toolId) {
+	    // An unresolved dataset's own cell stays at its default
+	    // data='' (never overwritten above, since there was nothing
+	    // to set) - never treat that as "the same tool" as some
+	    // other unresolved dataset, or every such row collapses into
+	    // one (id_tool also starts as '', so '' === '' would
+	    // otherwise match on the very first row already) and gets
+	    // removed instead of staying its own visible row with just a
+	    // blank Tool label - the correct degraded state when a
+	    // dataset's tool genuinely couldn't be resolved (a transient
+	    // Galaxy failure - see resolve_dataset_tools).
+	    if (toolId !== '' && id_tool === toolId) {
 		cmpt++;
 		$(el).remove();
 	    } else {
