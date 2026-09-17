@@ -99,6 +99,11 @@
             {% endif %}
             {% if request.user.is_staff %}
             <li class="user navbar-right">
+                <a href="{% url 'running_jobs' %}" title="Running jobs">
+                    <span class="glyphicon glyphicon-time"></span>
+                </a>
+            </li>
+            <li class="user navbar-right">
                 <a href="{% url 'daily_report' %}" title="Daily workflow report">
                     <span class="glyphicon glyphicon-stats"></span>
                 </a>

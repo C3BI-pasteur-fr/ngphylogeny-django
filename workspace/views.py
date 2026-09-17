@@ -4,7 +4,8 @@ import json
 import requests
 from django.contrib.admin.views.decorators import staff_member_required
 from django.http import HttpResponse
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
+from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.generic import TemplateView, ListView, DeleteView, UpdateView, DetailView, View
@@ -12,12 +13,13 @@ from django.views.generic.edit import SingleObjectMixin
 from bioblend.galaxy.client import ConnectionError
 from django.shortcuts import render, redirect
 from django.http import HttpResponseRedirect
+from blast.models import BlastRun
 from .tasks import deletegalaxyhistory
 from workflows.tasks import deletegalaxyworkflow
 
 from galaxy.decorator import connection_galaxy
 from .models import WorkspaceHistory
-from .reports import build_report_web_context
+from .reports import CATEGORY_LABELS, build_report_web_context
 from tools.models import Tool
 from .tasks import updateworkspacestatus
 
@@ -38,6 +40,82 @@ def daily_report_view(request):
     force_refresh = request.GET.get('refresh') == '1'
     return render(request, 'workspace/report_page.html',
                   build_report_web_context(force_refresh=force_refresh))
+
+
+@staff_member_required
+def running_jobs_view(request):
+    """
+    Live admin/staff-only view of everything currently running - both
+    regular workflow/tool runs (WorkspaceHistory: monitored, not yet
+    finished/deleted) and BLAST runs (BlastRun: still PENDING/RUNNING,
+    not deleted) - oldest first, so a run approaching or past one of the
+    two staleness cutoffs (workspace.tasks.WORKFLOW_RUN_STALE_AFTER,
+    blast.tasks.PASTEUR_RUN_STALE_AFTER - both cancel/error a run out
+    once it's been going too long, see CLAUDE.md) surfaces at the top
+    instead of being buried under newer ones. Not cached, unlike
+    daily_report_view - the whole point here is a live, up-to-the-moment
+    picture, not a 15-minute-old snapshot.
+    """
+    now = timezone.now()
+    rows = []
+
+    for w in (WorkspaceHistory.objects
+              .filter(monitored=True, finished=False, deleted=False)
+              .values('history', 'name', 'created_date', 'email',
+                      'workflow_category', 'workflow_steps', 'workflow__name',
+                      'history_content_json')):
+        # history_content_json is only ever dict-shaped in the normal
+        # case - a genuinely malformed one shouldn't crash this page,
+        # just show as 0 datasets (see WorkspaceHistoryObjectMixin.
+        # get_context_data's own note on this - hit live once already).
+        try:
+            content = json.loads(w['history_content_json'] or '[]')
+        except ValueError:
+            content = []
+        steps = [f for f in content if isinstance(f, dict)]
+        done = sum(1 for f in steps if 'ok' in f.get('state', ''))
+        running = sum(
+            1 for f in steps
+            if any(s in f.get('state', '') for s in ('new', 'queued', 'running')))
+        rows.append({
+            'kind': 'Workflow',
+            'name': w['name'],
+            'type': CATEGORY_LABELS.get(
+                w['workflow_category'], w['workflow_category'] or 'Unknown'),
+            'email': w['email'],
+            'created_date': w['created_date'],
+            'runtime': now - w['created_date'],
+            'steps_total': len(steps),
+            'steps_done': done,
+            'steps_running': running,
+            'url': reverse('history_detail', kwargs={'history_id': w['history']}),
+        })
+
+    server_labels = dict(BlastRun.BLASTSERVERS)
+    status_labels = dict(BlastRun.RUNSTATUS)
+    for b in (BlastRun.objects
+              .filter(status__in=[BlastRun.PENDING, BlastRun.RUNNING], deleted=False)
+              .values('id', 'query_id', 'date', 'email', 'server', 'blastprog', 'status')):
+        is_running = b['status'] == BlastRun.RUNNING
+        rows.append({
+            'kind': 'BLAST',
+            'name': b['query_id'] or 'BLAST run',
+            'type': '%s BLAST (%s, %s)' % (
+                server_labels.get(b['server'], b['server']), b['blastprog'],
+                status_labels.get(b['status'], b['status'])),
+            'email': b['email'],
+            'created_date': b['date'],
+            'runtime': now - b['date'],
+            'steps_total': 1,
+            'steps_done': 0,
+            'steps_running': 1 if is_running else 0,
+            'url': reverse('blast_view', kwargs={'pk': b['id']}),
+        })
+
+    rows.sort(key=lambda r: r['created_date'])
+
+    return render(request, 'workspace/running_jobs.html', {'rows': rows, 'now': now})
+
 
 @connection_galaxy
 def create_history(request, name='', wf_category='', wf_steps=''):
