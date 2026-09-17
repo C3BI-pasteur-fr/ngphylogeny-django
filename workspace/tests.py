@@ -1098,6 +1098,24 @@ class HistoryContentRefreshViewTest(TestCase):
         self.assertIn('MAFFT', html)
         self.assertIn('"d1": "mafft"', html)
 
+    def test_malformed_history_content_does_not_crash_the_view(self):
+        """
+        Regression test: hit live on a real deploy-dev history - one
+        specific history's history_content_json held plain strings, not
+        the usual list of dataset dicts (AttributeError: 'str' object
+        has no attribute 'get', 500ing the whole page from
+        get_context_data's own `f.get('id')`). The template rendering
+        this exact same data never crashed on it (Django template
+        attribute lookups fail silently, not by raising) - this should
+        degrade the same way, not crash.
+        """
+        WorkspaceHistory.objects.filter(pk=self.history.pk).update(
+            history_content_json=json.dumps(['not', 'a', 'list', 'of', 'dicts']))
+        with patch('workspace.views.updateworkspacestatus.delay'):
+            response = self.client.get(
+                reverse('history_detail', kwargs={'history_id': 'hist1'}))
+        self.assertEqual(response.status_code, 200)
+
     def test_wait_state_does_not_call_galaxy_for_tool_resolution(self):
         """
         Fewer than 2 datasets - resolve_dataset_tools shouldn't be
