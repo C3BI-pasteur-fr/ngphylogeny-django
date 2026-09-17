@@ -567,14 +567,78 @@ directly (a plain model property, no `connection_galaxy` decorator
 involved) - the existing `Server.save()`-makes-a-real-HTTP-call-on-create
 wrinkle (see "Restoring historical..."/elsewhere) has an established
 mocking pattern already (`patch('galaxy.models.requests.get', ...)`),
-used here too. No regression test for the broadened exception handling
-itself, though - reaching that specific path means driving a
-*decorated* (`galaxy.decorator.connection_galaxy`) view through Django's
-test client with a mocked bioblend call on top of that same Server
-fixture, which is a bigger lift than this fix's own size warranted here
-- verified instead by inspection (including live-checking bioblend's
-actual exception hierarchy/retry behavior in a real Python shell, not
-guessed) and the existing suite/flake8 staying green.
+used here too. At the time this was written there was no regression
+test for the broadened exception handling itself - reaching that
+specific path means driving a *decorated*
+(`galaxy.decorator.connection_galaxy`) view through Django's test
+client with a mocked bioblend call - verified instead by inspection
+(including live-checking bioblend's actual exception hierarchy/retry
+behavior in a real Python shell, not guessed) and the existing suite/
+flake8 staying green. That pattern turned out to already exist, though
+(`tools.tests.GetToolNameViewTest`, predating this session's work) and
+got reused for real by the load-reduction work below
+(`workspace.tests.HistoryContentRefreshViewTest`) - a real
+`Server`/anonymous `GalaxyUser` DB fixture, then `self.client.get(...)`
+with the specific bioblend client method patched
+(`bioblend.galaxy.histories.HistoryClient.show_dataset_provenance` etc.)
+rather than mocking HTTP directly.
+
+**Further cut the Galaxy call volume behind this feature - the actual
+root cause of the incident above, not just its two symptoms (the 500s,
+the pod restarts) - since step chain/table/citations were each
+independently re-deriving the exact same dataset->tool_id/tool_id->name
+mappings every 10s poll.** Before this: roughly `3N + 2K` Galaxy calls
+per poll (N datasets, K distinct tools) - `get_dataset_toolprovenance`
+once per dataset from *both* the step chain and the table, `get_tool_name`
+once per tool group from *both* of those too, and `get_dataset_citations`
+re-deriving the same per-dataset provenance a third time on top. Two
+changes, both in `workspace/views.py`:
+- **`resolve_dataset_tools(gi, galaxy_server, history_id, dataset_ids)`**
+  - the one piece that still needs a real Galaxy call (bioblend has no
+  bulk provenance-by-dataset-ids API) - now called *once* per poll, by
+  `HistoryContentRefreshView.get_context_data()`, instead of by three
+  separate call sites. Tool *names*, though, are resolved from this
+  app's own `Tool` model (mirrors every tool NGPhylogeny actually runs -
+  see "App responsibilities") before ever calling Galaxy's `show_tool` -
+  since NGPhylogeny only ever submits its own preconfigured/imported
+  workflows, the tool that produced any given dataset is almost always
+  already known locally, cutting the `K` term to near zero in the
+  common case (a DB lookup, not a Galaxy call, and one that doesn't
+  depend on Galaxy being reachable at all). `tools.views.get_tool_name`
+  itself got the same local-first lookup for consistency, even though
+  nothing polls it anymore post-refactor (kept as a still-valid,
+  standalone endpoint rather than deleted, in case anything else ever
+  wants a one-off tool-name lookup).
+- **`build_citations(dataset_tool_ids)`** - reuses the same resolved
+  mapping instead of `get_dataset_citations` re-fetching provenance for
+  every dataset a third time.
+
+Both are computed once, server-side, and passed into
+`history_contents_refreshable.html`'s context as plain dicts/a list
+(`dataset_tool_ids`/`tool_names`/`citations`) - the step chain, the
+table, and the citations list (`#pub-container`) all just read from
+them directly now (embedded as JS objects/an array via `escapejs`, same
+escaping discipline as `historySteps` already used), with **no client-
+side AJAX calls left in this fragment at all**. This also simplified
+the staging-swap mechanics: `__historyStepChainReady`/`__historyTableReady`
+still exist (the staging-swap script - see above - still waits on them),
+but now resolve synchronously since there's no more async tool-name
+resolution to wait for. Net Galaxy load per poll: `N` calls (down from
+`3N + 2K`) - and even those only run once at all, not from two
+independent client scripts. `get_dataset_toolprovenance`/`get_tool_name`/
+`get_dataset_citations` (the original standalone AJAX endpoints) are
+kept, untouched otherwise, in case anything else ever calls them - just
+no longer polled by this page.
+
+Test coverage: `workspace.tests.ResolveDatasetToolsTest` unit-tests
+`resolve_dataset_tools`/`build_citations` directly against a mocked
+`gi` (local-tool-preferred, Galaxy fallback, a failed dataset left out
+rather than raising); `workspace.tests.HistoryContentRefreshViewTest`
+goes through the real decorated view end to end (see the test-pattern
+note above) and asserts the rendered fragment contains zero occurrences
+of `get_dataset_tool`/`get_tool_name`/`get_dataset_citations` - the
+actual thing this change set out to prove, not just that the helper
+function works in isolation.
 
 ### Daily workflow-usage report
 

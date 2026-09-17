@@ -122,6 +122,81 @@ def delete_history(request, history_id=None):
 
     WorkspaceHistory.objects.get(history=history_id).delete()
 
+def resolve_dataset_tools(gi, galaxy_server, history_id, dataset_ids):
+    """
+    Resolve {dataset_id: tool_id} for every dataset in dataset_ids (via
+    Galaxy's provenance API - there's no bulk equivalent bioblend
+    exposes) and {tool_id: name} for every tool_id resolved that way.
+
+    Tool names are looked up in this app's own Tool model (mirrors every
+    tool NGPhylogeny actually runs - see CLAUDE.md's "App
+    responsibilities") before ever falling back to a Galaxy API call:
+    NGPhylogeny only ever submits its own preconfigured/imported
+    workflows, so the tool that produced any given dataset is almost
+    always already known locally, and a DB lookup is both cheaper and
+    doesn't depend on Galaxy being reachable at all.
+
+    Used to be done independently, every 10s poll, by three separate
+    call sites (the step chain, the table, and the citations list - each
+    re-deriving the exact same dataset->tool_id/tool_id->name mappings
+    on their own) - see CLAUDE.md's step-chain section for the real
+    production incident (pod restarts) this contributed to. Computed
+    once per poll instead, in HistoryContentRefreshView.get_context_data,
+    and shared across all three.
+
+    A dataset/tool that can't be resolved (a transient Galaxy failure -
+    see get_dataset_toolprovenance's own docstring for why that's common
+    enough to matter here) is simply left out of the returned dicts
+    rather than raising - callers already treat "not resolved yet" as a
+    normal state (a step chain box/table row just keeps its fallback
+    label).
+    """
+    dataset_tool_ids = {}
+    for dataset_id in dataset_ids:
+        try:
+            provenance = gi.histories.show_dataset_provenance(
+                history_id, dataset_id, follow=False)
+        except (ConnectionError, requests.exceptions.RequestException):
+            continue
+        tool_id = provenance.get('tool_id')
+        if tool_id:
+            dataset_tool_ids[dataset_id] = tool_id
+
+    tool_names = {}
+    for tool_id in set(dataset_tool_ids.values()):
+        local_tool = Tool.objects.filter(
+            galaxy_server=galaxy_server, id_galaxy=tool_id).first()
+        if local_tool:
+            tool_names[tool_id] = local_tool.name
+            continue
+        try:
+            tool = gi.tools.show_tool(tool_id=tool_id)
+            tool_names[tool_id] = tool.get('name')
+        except (ConnectionError, requests.exceptions.RequestException):
+            pass
+
+    return dataset_tool_ids, tool_names
+
+
+def build_citations(dataset_tool_ids):
+    """
+    Citation list for every distinct tool in dataset_tool_ids.values() -
+    shared logic between get_dataset_citations (the standalone AJAX
+    endpoint, kept for any other caller) and HistoryContentRefreshView,
+    which now computes this itself alongside the step chain/table so the
+    history detail page's 10s poll doesn't also re-derive it separately
+    via its own extra Galaxy calls (see resolve_dataset_tools above).
+    """
+    refs = [ngphylo_citation()]
+    for tool_id in set(dataset_tool_ids.values()):
+        try:
+            t = Tool.objects.get(id_galaxy=tool_id)
+            refs.extend(t.citations)
+        except Tool.DoesNotExist:
+            pass
+    return refs
+
+
 class WorkspaceHistoryObjectMixin(SingleObjectMixin):
     model = WorkspaceHistory
     pk_url_kwarg = 'history_id'
@@ -182,6 +257,22 @@ class HistoryContentRefreshView(WorkspaceHistoryObjectMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['staging'] = self.request.GET.get('staging') == '1'
+
+        # Matches the template's own "is there a real step chain/table
+        # yet" condition (workspace/include/history_contents_
+        # refreshable.html's top-level {% if %}) - nothing to resolve in
+        # the "please wait" state, so skip the Galaxy calls entirely
+        # rather than doing pointless work every 10s before a run has
+        # even really started.
+        history_content = self.object.history_content or []
+        if len(history_content) > 1:
+            dataset_ids = [f.get('id') for f in history_content]
+            dataset_tool_ids, tool_names = resolve_dataset_tools(
+                self.request.galaxy, self.request.galaxy_server,
+                self.object.history_info['id'], dataset_ids)
+            context['dataset_tool_ids'] = dataset_tool_ids
+            context['tool_names'] = tool_names
+            context['citations'] = build_citations(dataset_tool_ids)
         return context
 
 

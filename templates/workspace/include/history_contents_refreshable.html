@@ -24,15 +24,22 @@ step chain/table. Unifying both states into this one fragment means the
 real one for free, rather than needing its own separate full-page-reload
 timer - previously the entire reason the two behaved differently.
 
-Building the step chain/table involves several sequential/parallel AJAX
-round trips (tool-name resolution, per dataset and per tool group) and
-can visibly take a moment - too slow to do straight into the live
-region every 10s without a flash of it disappearing and rebuilding.
-Instead: a staged render builds entirely inside the hidden staging
-container ($root, below) and only swaps itself into the live region
-(bottom of this file, staging-only) once everything - including real
-tool names, not just placeholder text - has actually resolved. The live
-region stays exactly as it was, untouched, for the whole build.
+Tool-name resolution (per dataset and per tool group, for the step
+chain, the table, and the citations list) used to be three independent
+rounds of client-side AJAX calls against Galaxy-backed endpoints, every
+10s - slow enough to visibly flash while rebuilding, and (see CLAUDE.md's
+step-chain section) a real contributor to a production incident where
+that call volume, during a Galaxy outage, exhausted the app's own web
+worker pool and got the pod itself killed and restarted. Now resolved
+once, server-side, in workspace.views.HistoryContentRefreshView.
+get_context_data() (dataset_tool_ids/tool_names/citations below) and
+just read directly by the scripts here - no AJAX calls left in this
+fragment at all. A staged render still builds entirely inside the
+hidden staging container ($root, below) and only swaps itself into the
+live region (bottom of this file, staging-only) once done, since
+resolving from already-fetched data is effectively instant but still
+happens inside a script tag executed asynchronously relative to
+`.load()` itself.
 {% endcomment %}
 <script>
     // Scopes every selector below to wherever this particular render
@@ -59,24 +66,26 @@ region stays exactly as it was, untouched, for the whole build.
 <script>
     // References of tools to cite (#pub-container, in the outer shell -
     // not part of $root/duplicated between staging and live, so a plain
-    // global selector is fine here regardless of staging) - re-fetched
-    // on every render, not just the very first one, so it actually picks
-    // up citations from tools that have run since: used to only be
-    // fetched once, from history_contents_provenance_ajax.html's own
-    // $(document).ready, which meant a page loaded before/during the
-    // "please wait" state (see this file's top comment) never got any
-    // citations at all once the run actually started producing them.
+    // global selector is fine here regardless of staging). Computed
+    // server-side (HistoryContentRefreshView.get_context_data, reusing
+    // the same dataset_tool_ids this render already resolves for the
+    // step chain/table below) and just written into the DOM here - no
+    // AJAX call needed. Runs on every render, not just the very first
+    // one, so it still picks up citations from tools that have run
+    // since - this used to be fetched once only, from
+    // history_contents_provenance_ajax.html's own $(document).ready
+    // (missing anything from a page loaded during the "please wait"
+    // state - see this file's top comment), then its own separate
+    // per-poll AJAX call once moved here.
     $(function () {
-	$.getJSON("{% url 'get_dataset_citations' object.history_info.id %}",
-		  function (data) {
-		      var items = [];
-		      $.each(data, function (index, element) {
-			  $.each(element, function (i, citation) {
-			      items.push("<li>" + citation + "</li>");
-			  });
-		      });
-		      $("#pub-container").html(items.join(""));
-		  });
+	var citationItems = [
+	    {% for citation in citations %}
+	    "{{ citation|escapejs }}",
+	    {% endfor %}
+	];
+	$("#pub-container").html(citationItems.map(function (c) {
+	    return "<li>" + c + "</li>";
+	}).join(""));
     });
 </script>
 {% if object.history_content and object.history_content|dictsortreversed:"hid"|length > 1 %}
@@ -84,17 +93,35 @@ region stays exactly as it was, untouched, for the whole build.
     // Graphical step-by-step view of the run, above the detailed table -
     // one box per tool step (consecutive datasets from the same tool
     // collapsed into one, exactly like the table's own Tool column
-    // grouping below - kept as a separate pass rather than sharing that
-    // one's DOM/AJAX calls, so this can't regress the existing table
-    // logic). Independent of it entirely: builds from historySteps
-    // (this run's datasets, oldest first - a left-to-right chain reads
-    // naturally as progress through the pipeline, the reverse of the
-    // table's own newest-first ordering) rather than scraping the table.
+    // grouping below - kept as a separate DOM-building pass, so this
+    // can't regress the existing table logic, but the underlying
+    // dataset->tool_id/tool_id->name data IS now shared between them -
+    // see datasetToolIds/toolNames below, both resolved once server-side
+    // rather than independently re-fetched by each via their own AJAX
+    // calls the way both used to). Builds from historySteps (this run's
+    // datasets, oldest first - a left-to-right chain reads naturally as
+    // progress through the pipeline, the reverse of the table's own
+    // newest-first ordering) rather than scraping the table.
     var historySteps = [
 	{% for file in object.history_content|dictsort:"hid" %}
 	{id: "{{ file.id|escapejs }}", name: "{{ file.name|escapejs }}", state: "{{ file.state|escapejs }}"},
 	{% endfor %}
     ];
+    // {dataset_id: tool_id} / {tool_id: name} - resolved once,
+    // server-side, by HistoryContentRefreshView.get_context_data (see
+    // workspace.views.resolve_dataset_tools) and shared with the table
+    // script below instead of each independently re-deriving the same
+    // data via its own AJAX calls every poll.
+    var datasetToolIds = {
+	{% for dataset_id, tool_id in dataset_tool_ids.items %}
+	"{{ dataset_id|escapejs }}": "{{ tool_id|escapejs }}",
+	{% endfor %}
+    };
+    var toolNames = {
+	{% for tool_id, name in tool_names.items %}
+	"{{ tool_id|escapejs }}": "{{ name|default:""|escapejs }}",
+	{% endfor %}
+    };
 
     $(function () {
 	$root.find('[data-toggle="tooltip"]').tooltip();
@@ -104,135 +131,87 @@ region stays exactly as it was, untouched, for the whole build.
 	    return;
 	}
 
-	var deferreds = $.map(historySteps, function (step) {
-	    return $.post("{% url 'get_dataset_tool' object.history_info.id %}", {
-		'dataset_id': step.id,
-		'csrfmiddlewaretoken': '{{ csrf_token }}'
-	    }, function (response) {
-		step.tool_id = response.tool_id;
-	    });
-	});
-
-	$.when.apply($, deferreds).then(function () {
-	    // Collapse consecutive datasets sharing the same tool_id into
-	    // one step - a tool with multiple outputs (e.g. a log file
-	    // alongside its main result) shouldn't show as multiple steps.
-	    var groups = [];
-	    $.each(historySteps, function (index, step) {
-		var last = groups[groups.length - 1];
-		if (last && last.tool_id === step.tool_id) {
-		    last.states.push(step.state);
-		} else {
-		    groups.push({tool_id: step.tool_id, name: step.name, states: [step.state]});
-		}
-	    });
-
-	    function statusClass(states) {
-		if (states.indexOf('error') !== -1) {
-		    return 'workflow-step-error';
-		}
-		if (states.indexOf('running') !== -1) {
-		    return 'workflow-step-running';
-		}
-		var allOk = $.grep(states, function (s) { return s.indexOf('ok') === -1; }).length === 0;
-		if (allOk) {
-		    return 'workflow-step-finished';
-		}
-		// queued / new / paused / anything else not yet resolved
-		return 'workflow-step-pending';
+	// Collapse consecutive datasets sharing the same tool_id into
+	// one step - a tool with multiple outputs (e.g. a log file
+	// alongside its main result) shouldn't show as multiple steps.
+	var groups = [];
+	$.each(historySteps, function (index, step) {
+	    var toolId = datasetToolIds[step.id];
+	    var last = groups[groups.length - 1];
+	    if (last && last.tool_id === toolId) {
+		last.states.push(step.state);
+	    } else {
+		groups.push({tool_id: toolId, name: step.name, states: [step.state]});
 	    }
-
-	    var $chain = $root.find('#workflow-step-chain');
-	    var nameDeferreds = [];
-	    $.each(groups, function (index, group) {
-		if (index > 0) {
-		    $chain.append($('<div class="workflow-step-connector"></div>'));
-		}
-		var $box = $('<div class="workflow-step-box"></div>')
-		    .addClass(statusClass(group.states))
-		    .text(group.name);
-		$chain.append($('<div class="workflow-step"></div>').append($box));
-
-		// Same tool-name lookup the table below already uses -
-		// starts as the raw dataset/tool_id name, upgraded to the
-		// friendly tool name once resolved. Tracked in
-		// nameDeferreds (not fire-and-forget) so a staging swap
-		// waits for the real name, not just the box's placeholder
-		// text.
-		nameDeferreds.push($.post("{% url 'get_tool_name' %}", {
-		    'tool_id': group.tool_id,
-		    'csrfmiddlewaretoken': '{{ csrf_token }}'
-		}, function (response) {
-		    if (response.name) {
-			$box.text(response.name);
-		    }
-		}));
-	    });
-
-	    $.when.apply($, nameDeferreds).always(function () {
-		window.__historyStepChainReady.resolve();
-	    });
-	}, function () {
-	    // A get_dataset_tool call failed - resolve anyway rather than
-	    // leaving a staging swap waiting on a deferred that can now
-	    // never fire.
-	    window.__historyStepChainReady.resolve();
 	});
+
+	function statusClass(states) {
+	    if (states.indexOf('error') !== -1) {
+		return 'workflow-step-error';
+	    }
+	    if (states.indexOf('running') !== -1) {
+		return 'workflow-step-running';
+	    }
+	    var allOk = $.grep(states, function (s) { return s.indexOf('ok') === -1; }).length === 0;
+	    if (allOk) {
+		return 'workflow-step-finished';
+	    }
+	    // queued / new / paused / anything else not yet resolved
+	    return 'workflow-step-pending';
+	}
+
+	var $chain = $root.find('#workflow-step-chain');
+	$.each(groups, function (index, group) {
+	    if (index > 0) {
+		$chain.append($('<div class="workflow-step-connector"></div>'));
+	    }
+	    // Falls back to the dataset's own name - the same placeholder
+	    // the old AJAX-based version showed before its response came
+	    // back - if the tool couldn't be resolved (a transient Galaxy
+	    // failure - see resolve_dataset_tools).
+	    var label = toolNames[group.tool_id] || group.name;
+	    var $box = $('<div class="workflow-step-box"></div>')
+		.addClass(statusClass(group.states))
+		.text(label);
+	    $chain.append($('<div class="workflow-step"></div>').append($box));
+	});
+
+	window.__historyStepChainReady.resolve();
     });
 </script>
 
 <script>
     $(function () {
-	var deferreds = [];
-	// Loop using .each
-	$root.find("[data]").each(function (index, value) {
-	    var ajax = $.post("{% url 'get_dataset_tool' object.history_info.id %}",
-			      {
-				  'dataset_id': $(this).attr('id'),
-				  'csrfmiddlewaretoken': '{{ csrf_token }}'
-			      },
-			      function (response) {
-				  var result = response;
-				  $root.find('#' + result.dataset_id).attr('data', result.tool_id)
-			      });
-	    // Push promise to 'deferreds' array
-	    deferreds.push(ajax);
+	// Same datasetToolIds/toolNames the step chain above already
+	// embeds - fill in each cell's own data attribute from it instead
+	// of a per-dataset AJAX call.
+	$root.find("[data]").each(function (index, el) {
+	    var toolId = datasetToolIds[$(el).attr('id')];
+	    if (toolId) {
+		$(el).attr('data', toolId);
+	    }
 	});
-        // Use .apply onto array from deferreds
-	$.when.apply($, deferreds).then(function () {
-	    // group dataset by tool
-	    var id_tool = '';
-	    var first_dataset = '';
-	    var cmpt = 1;
-	    var nameDeferreds = [];
 
-	    $root.find("[data]").each(function (index, el) {
-		if (id_tool == $(el).attr('data')) {
-		    cmpt++;
-		    $(el).remove();
-		} else {
-		    cmpt = 1;
-		    first_dataset = $(el).attr('id');
-		    id_tool = $(el).attr('data');
-		    nameDeferreds.push($.post("{% url 'get_tool_name' %}",
-			   {
-			       'tool_id': $(this).attr('data'),
-			       'csrfmiddlewaretoken': '{{ csrf_token }}'
-			   },
-			   function (response) {
-			       var result = response;
-			       $(el).text(result.name);
-			   }));
-		}
-		$root.find('#' + first_dataset).attr('rowspan', cmpt);
-	    });
+	// group dataset by tool
+	var id_tool = '';
+	var first_dataset = '';
+	var cmpt = 1;
 
-	    $.when.apply($, nameDeferreds).always(function () {
-		window.__historyTableReady.resolve();
-	    });
-	}, function () {
-	    window.__historyTableReady.resolve();
+	$root.find("[data]").each(function (index, el) {
+	    var toolId = $(el).attr('data');
+	    if (id_tool == toolId) {
+		cmpt++;
+		$(el).remove();
+	    } else {
+		cmpt = 1;
+		first_dataset = $(el).attr('id');
+		id_tool = toolId;
+		$(el).text(toolNames[toolId] || '');
+	    }
+	    $root.find('#' + first_dataset).attr('rowspan', cmpt);
 	});
+
+	window.__historyTableReady.resolve();
     });
 </script>
 {% else %}
