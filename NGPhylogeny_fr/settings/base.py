@@ -251,6 +251,17 @@ NGPHYLO_REPORT_RECIPIENTS = [
 NGPHYLO_REPORT_FROM_EMAIL = os.environ.get(
     'NGPHYLO_REPORT_FROM_EMAIL', 'ngphylogeny@pasteur.fr')
 
+# Contact form (surveys.views.FeedbackCreateView) - comma-separated
+# recipient list, same shape/empty-means-no-op convention as
+# NGPHYLO_REPORT_RECIPIENTS above. Left unset, a submitted Feedback row
+# is still saved to the DB as usual; no email is sent, nothing else is
+# affected.
+NGPHYLO_CONTACT_FORM_RECIPIENTS = [
+    r.strip() for r in
+    os.environ.get('NGPHYLO_CONTACT_FORM_RECIPIENTS', '').split(',')
+    if r.strip()
+]
+
 # CELERY SETTINGS
 #
 # Celery >=4.0 also accepts the unprefixed names below (BROKER_URL,

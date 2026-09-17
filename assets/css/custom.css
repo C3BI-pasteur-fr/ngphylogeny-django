@@ -171,6 +171,8 @@ header.pagehead h1 {
 .pagehead-logo {
     height: 44px;
     width: auto;
+    max-width: 160px;
+    max-height: 44px;
     display: block;
 }
 

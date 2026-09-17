@@ -180,7 +180,11 @@ build:
 #     scope) for the `registry-gitlab` imagePullSecret.
 #   - Plain (unmasked) values, envsubst'd straight into manifest.yaml:
 #     GALAXY_URL, ADMIN_USER, ADMIN_EMAIL, EMAIL_HOST, EMAIL_PORT,
-#     EMAIL_HOST_USER, EMAIL_USE_TLS, REPORT_RECIPIENTS, REPORT_FROM_EMAIL.
+#     EMAIL_HOST_USER, EMAIL_USE_TLS, REPORT_RECIPIENTS, REPORT_FROM_EMAIL,
+#     CONTACT_FORM_RECIPIENTS (comma-separated addresses the contact form
+#     - surveys.views.FeedbackCreateView - notifies in addition to saving
+#     the Feedback row; left unset, no email is sent, same no-op
+#     convention as REPORT_RECIPIENTS above).
 #   - GALAXY_WORKFLOW_IDS (plain, optional): comma-separated known Galaxy
 #     workflow ids for the init Job's importworkflows --wfids call - skips
 #     GALAXY_URL's /api/workflows/ listing entirely and imports exactly

@@ -13,6 +13,14 @@ x-django-env: &django-env
   # server to submit workflows to yet.
   NGPHYLO_GALAXY_URL: "${NGPHYLO_GALAXY_URL:-}"
   NGPHYLO_GALAXY_KEY: "${NGPHYLO_GALAXY_KEY:-}"
+  # Precise/fast workflow-import path (docker/init.sh) - fetches these
+  # specific ids directly instead of listing/name-filtering the target
+  # Galaxy's whole /api/workflows/ collection. Only meaningful when that
+  # collection already has known, stable base-workflow ids (e.g.
+  # galaxy.pasteur.fr - see CLAUDE.md's "Kubernetes deployment" section);
+  # leave unset for a freshly-created Galaxy instance, which won't have
+  # them yet.
+  NGPHYLO_GALAXY_WORKFLOW_IDS: "${NGPHYLO_GALAXY_WORKFLOW_IDS:-}"
   NGPHYLO_ADMIN_USER: "${NGPHYLO_ADMIN_USER:-admin}"
   NGPHYLO_ADMIN_EMAIL: "${NGPHYLO_ADMIN_EMAIL:-admin@example.org}"
   NGPHYLO_ADMIN_PASSWORD: "${NGPHYLO_ADMIN_PASSWORD:-password}"
@@ -29,6 +37,10 @@ x-django-env: &django-env
   # Comma-separated recipient list for the daily workflow report.
   NGPHYLO_REPORT_RECIPIENTS: "${NGPHYLO_REPORT_RECIPIENTS:-}"
   NGPHYLO_REPORT_FROM_EMAIL: "${NGPHYLO_REPORT_FROM_EMAIL:-ngphylogeny@pasteur.fr}"
+  # Comma-separated recipient list the contact form (surveys app) notifies
+  # in addition to saving the submitted Feedback row - same no-op-if-unset
+  # convention as NGPHYLO_REPORT_RECIPIENTS above.
+  NGPHYLO_CONTACT_FORM_RECIPIENTS: "${NGPHYLO_CONTACT_FORM_RECIPIENTS:-}"
   # "True" serves templates/maintenance.html (503) for every request
   # instead of routing normally - see NGPhylogeny_fr/middleware.py.
   NGPHYLO_MAINTENANCE_MODE: "${NGPHYLO_MAINTENANCE_MODE:-False}"
