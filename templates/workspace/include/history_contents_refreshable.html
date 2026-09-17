@@ -279,127 +279,124 @@ happens inside a script tag executed asynchronously relative to
 </div>
 <div class="row">
   <div class="col-md-12">
-    <table id="myTable" class="table table-striped ">
-      <thead>
-        <th style="width: 10%;">Tool</th>
-        <th>Step</th>
-        <th style="width: 40%;">File Name</th>
-        <th>Status</th>
-        <th></th>
-      </thead>
-      <tbody>
-        <tr></tr>
-
-        {% for file in object.history_content|dictsortreversed:"hid" %}
-        <tr {% if not file.visible %}class='hidden' {% endif %}>
-          <td id="{{ file.id }}" data=''></td>
-          <td>{{ file.hid }}.</td>
-          <td>{{ file.name }}</td>
-          <td id="state_{{ file.id }}">
-            {% if 'ok' in file.state %}
-            <span class="glyphicon glyphicon-ok  text-success"
-                  data-toggle="tooltip" data-placement="right"
-                  title="Success!">
-            </span>
-            {% elif 'queued' in file.state or 'new' in file.state %}
-            <span class="loading-dot"
-                  data-toggle="tooltip" data-placement="right"
-                  title="Waiting to be launch">
-              <span class="h2 loader-dot">.</span>
-              <span class="h2 loader-dot">.</span>
-              <span class="h2 loader-dot">.</span>
-            </span>
-            {% elif "running" in file.state %}
-            <span class="glyphicon glyphicon-refresh spin"
-                  data-toggle="tooltip" data-placement="right"
-                  title="Your job is running">
-            </span>
-            {% else %}
-            <span class="glyphicon glyphicon-remove text-danger"
-                  data-toggle="tooltip" data-placement="right"
-                  title="Your job fail">
-            </span>
-            {% endif %}
-          </td>
-          <td id="action_{{ file.id }}">
-            {% if 'ok' in file.state %}
-            {# <a class="btn btn-default btn-sm" title="Export big data in your personal outputs folder" #}
-                  {# href="{% url 'export_file' file.id %}"> #}
-              {# <span class="glyphicon glyphicon-export text-primary" aria-hidden="true"></span></a>#}
-	    {% if file.id in request.session.files %}
-            <a class="btn btn-default btn-sm" title="Remove file from session"
-               data-toggle="tooltip" data-placement="right"
-               href="{% url 'remove_file_from_session' file.id %}">
-              <span class="glyphicon glyphicon-minus text-primary"></span></a>
-	    {% else %}
-            <a class="btn btn-default btn-sm" title="Add file to session to use it as input of another tool or workflow"
-               data-toggle="tooltip" data-placement="right"
-               href="{% url 'add_file_to_session' file.id %}">
-              <span class="glyphicon glyphicon-plus text-primary"></span></a>
-	    {% endif %}
-            <a class="btn btn-default btn-sm" title="Run parameters"
-               data-toggle="tooltip" data-placement="right"
-               href="{% url 'display_params' file.id %}">
-              <span class="glyphicon glyphicon-cog text-primary"></span></a>
-	    <a class="btn btn-default btn-sm"
-	       data-toggle="tooltip" data-placement="right"
-	       title="Show stdout"
-	       href="{% url 'galaxy_error_url' file.id %}">
-	      <span class="glyphicon glyphicon-chevron-right text-primary"></span>
-	    </a>
-            <a class="btn btn-default btn-sm" title="Dowload the file"
-               data-toggle="tooltip" data-placement="right"
-               href="{% url 'download_file' file.id %}">
-              <span class="glyphicon glyphicon-download-alt text-primary"></span></a>
-            <a class="btn btn-default btn-sm"
-               href="{% url 'display_file' file.id %}"
-               data-toggle="tooltip" data-placement="right"
-               title="Display this file in your web browser">
-              {% if file.extension in "svg" %}
-              <span class="glyphicon glyphicon-picture"></span>.svg
+    <div class="history-table-card">
+      <table id="myTable" class="history-table">
+        <colgroup>
+          <col style="width: 15%;">
+          <col style="width: 6%;">
+          <col style="width: 44%;">
+          <col style="width: 13%;">
+          <col style="width: 22%;">
+        </colgroup>
+        <thead>
+          <tr>
+            <th>Tool</th>
+            <th>Step</th>
+            <th>File name</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for file in object.history_content|dictsortreversed:"hid" %}
+          <tr {% if not file.visible %}class='hidden' {% endif %}>
+            <td id="{{ file.id }}" class="col-tool" data=''></td>
+            <td class="col-step">{{ file.hid }}</td>
+            <td class="col-filename" title="{{ file.name }}">{{ file.name }}</td>
+            <td id="state_{{ file.id }}">
+              {% if 'ok' in file.state %}
+              <span class="status-pill status-pill-ok" data-toggle="tooltip" data-placement="right" title="Success!">
+                <span class="dot"></span>Done
+              </span>
+              {% elif 'queued' in file.state or 'new' in file.state %}
+              <span class="status-pill status-pill-pending" data-toggle="tooltip" data-placement="right" title="Waiting to be launch">
+                <span class="dot"></span>Waiting
+              </span>
+              {% elif "running" in file.state %}
+              <span class="status-pill status-pill-running" data-toggle="tooltip" data-placement="right" title="Your job is running">
+                <span class="dot"></span>Running
+              </span>
               {% else %}
-              <span class="glyphicon glyphicon-eye-open text-primary"></span>.{{ file.extension }}
-	      {% endif %}
-	    </a>
-	    {% if file.extension in "nhx,nwk" %}
-	    <a class="btn btn-success btn-sm" title="Open Interactive Tree visualisation"
-	       href="{% url 'display_tree' file.id %}"
-	       data-toggle="tooltip" data-placement="right">
-	      <span class="glyphicon text-success" aria-hidden="true">
-		<img src="{% static 'images/ptree.svg' %}">
-	      </span>
-	      Viewer
-	    </a>
-	    <a class="btn btn-warning btn-sm" title="Export tree to iTOL: Interactive Tree Of Life"
-	       href="{% url 'export_to_itol' file.id %}" target="_blank"
-	       data-toggle="tooltip" data-placement="right"
-	       title="Export your newick tree into iTol, external tree viewer">
-	      <span class="glyphicon glyphicon-export" aria-hidden="true"> </span>
-	      iTol
-	    </a>
-	    {% endif %}
-	    {% if file.extension in "fasta,fsa,msa,fna" %}
-	    <a class="btn btn-info btn-sm" title="MSAViewer"
-	       href="{% url 'display_msa' file.id %}"
-	       data-toggle="tooltip" data-placement="right"
-	       title="Multipe sequences viewer">
-	      <span class="glyphicon glyphicon-align-justify" aria-hidden="true"></span>
-	      MSAViewer
-	    </a>
-	    {% endif %}
-	    {% elif 'error' in file.state %}
-	    <a class="btn btn-default btn-sm"
-	       href="{% url 'galaxy_error_url' file.id %}"
-	      data-toggle="tooltip" data-placement="right"
-	      title="Show messages">
-	      <span class="glyphicon glyphicon-exclamation-sign text-danger"></span>
-	    </a>
-	    {% endif %}
-	  </td>
-	</tr>
-	{% endfor %}
-      </tbody>
-    </table>
+              <span class="status-pill status-pill-error" data-toggle="tooltip" data-placement="right" title="Your job fail">
+                <span class="dot"></span>Error
+              </span>
+              {% endif %}
+            </td>
+            <td id="action_{{ file.id }}" class="actions">
+              {% if 'ok' in file.state %}
+              {% if file.id in request.session.files %}
+              <a class="icon-btn" title="Remove file from session" data-toggle="tooltip" data-placement="left"
+                 href="{% url 'remove_file_from_session' file.id %}">&#8722;</a>
+              {% else %}
+              <a class="icon-btn" title="Add file to session to use it as input of another tool or workflow" data-toggle="tooltip" data-placement="left"
+                 href="{% url 'add_file_to_session' file.id %}">&#43;</a>
+              {% endif %}
+              <a class="icon-btn" title="Run parameters" data-toggle="tooltip" data-placement="left"
+                 href="{% url 'display_params' file.id %}">&#9881;</a>
+              <a class="icon-btn" title="Show stdout" data-toggle="tooltip" data-placement="left"
+                 href="{% url 'galaxy_error_url' file.id %}">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
+              </a>
+              <a class="icon-btn primary" title="Download the file" data-toggle="tooltip" data-placement="left"
+                 href="{% url 'download_file' file.id %}">&#8681;</a>
+              <a class="icon-btn viewer" title="Display this file in your web browser" data-toggle="tooltip" data-placement="left"
+                 href="{% url 'display_file' file.id %}">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/>
+                </svg>
+              </a>
+              {% if file.extension in "nhx,nwk" %}
+              <a class="icon-btn viewer" title="Open Interactive Tree visualisation" data-toggle="tooltip" data-placement="left"
+                 href="{% url 'display_tree' file.id %}">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+                  <line x1="3" y1="12" x2="7" y2="12"/><line x1="7" y1="5" x2="7" y2="19"/>
+                  <line x1="7" y1="5" x2="11" y2="5"/><line x1="7" y1="19" x2="11" y2="19"/>
+                  <line x1="11" y1="2" x2="11" y2="8"/><line x1="11" y1="16" x2="11" y2="22"/>
+                  <line x1="11" y1="2" x2="21" y2="2"/><line x1="11" y1="8" x2="21" y2="8"/>
+                  <line x1="11" y1="16" x2="21" y2="16"/><line x1="11" y1="22" x2="21" y2="22"/>
+                </svg>
+              </a>
+              <a class="icon-btn warn itol-badge" title="Export your newick tree into iTOL, external tree viewer" target="_blank"
+                 data-toggle="tooltip" data-placement="left" href="{% url 'export_to_itol' file.id %}">
+                <svg viewBox="0 0 34 34" width="22" height="22">
+                  <circle cx="17" cy="17" r="12" fill="none" stroke="currentColor" stroke-width="1.4"/>
+                  <g stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+                    <line x1="17" y1="2.5" x2="17" y2="5.5"/><line x1="27.6" y1="6.4" x2="25.4" y2="8.6"/>
+                    <line x1="31.5" y1="17" x2="28.5" y2="17"/><line x1="27.6" y1="27.6" x2="25.4" y2="25.4"/>
+                    <line x1="17" y1="31.5" x2="17" y2="28.5"/><line x1="6.4" y1="27.6" x2="8.6" y2="25.4"/>
+                    <line x1="2.5" y1="17" x2="5.5" y2="17"/><line x1="6.4" y1="6.4" x2="8.6" y2="8.6"/>
+                  </g>
+                  <text x="17" y="20.5" text-anchor="middle" font-size="8.5" font-weight="700" fill="currentColor" font-family="Arial, Helvetica, sans-serif" stroke="none">iTOL</text>
+                </svg>
+              </a>
+              {% elif file.extension in "fasta,fsa,msa,fna" %}
+              <a class="icon-btn viewer" title="Multiple sequences viewer" data-toggle="tooltip" data-placement="left"
+                 href="{% url 'display_msa' file.id %}">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+                  <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="17" y2="12"/><line x1="3" y1="18" x2="19" y2="18"/>
+                </svg>
+              </a>
+              <span class="action-slot wide"></span>
+              {% else %}
+              <span class="action-slot"></span>
+              <span class="action-slot wide"></span>
+              {% endif %}
+              {% elif 'error' in file.state %}
+              <span class="action-slot"></span>
+              <span class="action-slot"></span>
+              <a class="icon-btn danger" title="Show messages" data-toggle="tooltip" data-placement="left"
+                 href="{% url 'galaxy_error_url' file.id %}">&#9888;</a>
+              <span class="action-slot"></span>
+              <span class="action-slot"></span>
+              <span class="action-slot"></span>
+              <span class="action-slot wide"></span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 {% else %}
