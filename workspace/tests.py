@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 
 import requests
 from django.contrib.auth.models import User
-from django.core import mail
+from django.core import mail, signing
 from django.core.cache import cache
 from django.template.loader import render_to_string
 from django.test import RequestFactory, TestCase, override_settings
@@ -24,7 +24,7 @@ from workspace.reports import (WEEKLY_TO_MONTHLY_SPAN_DAYS,
                                 gather_period_totals, render_report_html)
 from workspace.tasks import (deleteoldgalaxyhistory, send_daily_report,
                               updateworkspacestatus)
-from workspace.views import build_citations, resolve_dataset_tools
+from workspace.views import PERMALINK_SALT, build_citations, resolve_dataset_tools
 
 
 class DeleteOldGalaxyHistoryTest(TestCase):
@@ -1427,3 +1427,87 @@ class HistoryContentRefreshViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
         prov.assert_not_called()
         self.assertIn('Analysis is being initialized', response.content.decode())
+
+
+class WorkspacePermalinkTest(TestCase):
+    """
+    Tests for the workspace/histories permalink feature -
+    PreviousHistoryListView.get_context_data()'s permalink_url and
+    WorkspacePermalinkView (/workspace/permalink/<token>). The whole
+    point: "Workspace" (previous_analyses) only ever shows what's in the
+    *current* browser session's 'histories' list - this is the
+    session-independent way back to that same list (a different
+    browser, a cleared session, or a link handed to a collaborator).
+    """
+
+    def setUp(self):
+        with patch('galaxy.models.requests.get',
+                   return_value=Mock(status_code=200,
+                                      json=lambda: {'version_major': '25.1'})):
+            self.server = Server.objects.create(
+                url='http://fake-galaxy.example.org', current=True)
+        user = User.objects.create_user('admin')
+        GalaxyUser.objects.create(
+            user=user, galaxy_server=self.server, api_key='fakekey',
+            anonymous=True)
+        self.history = WorkspaceHistory.objects.create(
+            history='hist1', name='Test run', email='', monitored=True,
+            finished=True, deleted=False, source_ip='127.0.0.1',
+            workflow_category='OneClick', workflow_steps='',
+            galaxy_server=self.server)
+
+    def _set_session_histories(self, history_ids):
+        session = self.client.session
+        session['histories'] = history_ids
+        session.save()
+
+    def test_previous_analyses_has_no_permalink_with_an_empty_session(self):
+        response = self.client.get(reverse('previous_analyses'))
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.context['permalink_url'])
+
+    def test_previous_analyses_shows_a_permalink_url(self):
+        self._set_session_histories(['hist1'])
+        response = self.client.get(reverse('previous_analyses'))
+        permalink_url = response.context['permalink_url']
+        self.assertIsNotNone(permalink_url)
+        self.assertIn('/workspace/permalink/', permalink_url)
+        self.assertContains(response, 'permalink-url')
+
+    def test_following_the_permalink_restores_the_list_in_a_fresh_session(self):
+        token = signing.dumps(['hist1'], salt=PERMALINK_SALT)
+
+        # A brand new client - no cookies/session shared with whatever
+        # session originally ran 'hist1' - is exactly the scenario this
+        # feature exists for.
+        from django.test import Client
+        fresh_client = Client()
+        response = fresh_client.get(
+            reverse('workspace_permalink', kwargs={'token': token}),
+            follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(fresh_client.session['histories'], ['hist1'])
+        self.assertContains(response, 'Test run')
+
+    def test_following_the_permalink_merges_with_existing_session_histories(self):
+        WorkspaceHistory.objects.create(
+            history='hist2', name='Second run', email='', monitored=True,
+            finished=True, deleted=False, source_ip='127.0.0.1',
+            workflow_category='OneClick', workflow_steps='',
+            galaxy_server=self.server)
+        self._set_session_histories(['hist2'])
+        token = signing.dumps(['hist1'], salt=PERMALINK_SALT)
+
+        self.client.get(
+            reverse('workspace_permalink', kwargs={'token': token}))
+
+        self.assertEqual(
+            set(self.client.session['histories']), {'hist1', 'hist2'})
+
+    def test_tampered_token_redirects_with_an_error_instead_of_crashing(self):
+        response = self.client.get(
+            reverse('workspace_permalink', kwargs={'token': 'not-a-real-token'}),
+            follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'invalid')
