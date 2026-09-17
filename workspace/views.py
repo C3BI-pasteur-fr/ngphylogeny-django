@@ -240,7 +240,25 @@ class WorkspaceHistoryObjectMixin(SingleObjectMixin):
         # really started.
         history_content = self.object.history_content or []
         if len(history_content) > 1:
-            dataset_ids = [f.get('id') for f in history_content]
+            # Real production crash: history_content is only ever
+            # dict-shaped in the *normal* case - a genuinely malformed/
+            # unexpected history_content_json (seen live: a plain list
+            # of strings) crashed this with AttributeError: 'str' object
+            # has no attribute 'get', 500ing the whole page. Hit right on
+            # a new workflow submission - Galaxy is at its busiest
+            # scheduling many jobs at once right then, a plausible moment
+            # for show_history(contents=True) to transiently return
+            # something other than its usual dataset list (workspace.
+            # tasks.initializeworkspacejob/updateworkspacestatus store
+            # whatever it returns verbatim, with no validation). The
+            # template rendering this exact same data
+            # (dictsortreversed:"hid" etc.) never crashed on it, since
+            # Django's template engine fails a bad attribute lookup
+            # silently rather than raising - this filters out anything
+            # that isn't actually dict-shaped (or has no 'id') to match
+            # that same tolerance, rather than assuming the shape.
+            dataset_ids = [f.get('id') for f in history_content
+                           if isinstance(f, dict) and f.get('id')]
             dataset_tool_ids, tool_names = resolve_dataset_tools(
                 self.request.galaxy, self.request.galaxy_server,
                 self.object.history_info['id'], dataset_ids)
