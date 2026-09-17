@@ -757,6 +757,25 @@ trailing empty action slots so alignment holds; an `error` row gets a
 button) - rendered directly via `render_to_string`, the same
 no-view-mock pattern as this section's other template tests.
 
+**The Actions column's initial percentage width (22%) clipped the last
+icon(s) - iTOL first, being rightmost - on real deployments.** Caught
+live (`curl`-fetched the actual page and confirmed the button really
+was present in the server-rendered HTML - a CSS layout bug, not a
+missing-button one) once real data was viewed at real page widths.
+`table-layout: fixed` locks a percentage column to exactly that share of
+the table's width regardless of content, and 7 icon slots (up to 36px
+each, the `.itol-badge`) need roughly 270px+ - on any page width where
+22% comes out narrower than that, the overflow got clipped by
+`.history-table-card`'s own `overflow: hidden` (needed for the rounded
+corners). Fixed by giving Actions (and Tool/Step/Status) fixed pixel
+widths in the `<colgroup>` (140px/50px/-/90px/280px) instead of
+percentages, and leaving File name's own `<col>` with no explicit width
+at all - in `table-layout: fixed`, a column with no specified width
+takes whatever's left after the fixed-width columns are subtracted, so
+Actions is now guaranteed enough room regardless of table width, at the
+cost of File name shrinking (it already truncates with an ellipsis + a
+tooltip) on narrow pages instead.
+
 ### Daily workflow-usage report
 
 `workspace.tasks.send_daily_report` (`CELERY_BEAT_SCHEDULE`, 8am UTC) emails
