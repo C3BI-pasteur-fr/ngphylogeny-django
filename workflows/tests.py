@@ -1,9 +1,11 @@
 from datetime import timedelta
 from unittest.mock import Mock, patch
 
+from bioblend.galaxy.client import ConnectionError
 from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.test import TestCase
+from django.urls import reverse
 from django.utils import timezone
 
 from galaxy.models import GalaxyUser, Server
@@ -265,3 +267,73 @@ class ProcessFileToUploadTest(TestCase):
             fasta, "pasted.fasta")
         self.assertEqual(nseq, 4)
         self.assertEqual(length, 4)
+
+
+class GalaxyUnavailableTest(TestCase):
+    """
+    Regression test: a Galaxy outage (e.g. Galaxy's own maintenance
+    mode, returning a 503) used to 500 every workflow list/form page -
+    WorkflowListView.workflow_list, WorkflowFormView.get_context_data()
+    and WorkflowAdvancedFormView.get_context_data() all called
+    bioblend's show_workflow() with nothing catching a connection
+    failure. Real traceback this reproduces: bioblend.ConnectionError
+    ("Site Maintenance") raised straight out of workflows/models.py's
+    fetch_details(), from a plain GET /workflows/advanced/. All three
+    pages should now render workflows/galaxy_unavailable.html with a
+    503 instead of Django's generic 500 page.
+    """
+
+    def setUp(self):
+        user = User.objects.create_user('admin')
+        # Server.save() itself pings <url>/api/version on creation.
+        with patch('galaxy.models.requests.get',
+                   return_value=Mock(status_code=200,
+                                      json=lambda: {'version_major': '25.1'})):
+            self.server = Server.objects.create(
+                url='http://fake-galaxy.example.org', current=True)
+        GalaxyUser.objects.create(
+            user=user, galaxy_server=self.server, api_key='fakekey',
+            anonymous=True)
+        self.workflow = Workflow.objects.create(
+            galaxy_server=self.server, id_galaxy='galaxyid1',
+            name='PhyML OneClick', category='base', description='d',
+            slug='phyml-oneclick')
+
+    @staticmethod
+    def _galaxy_unreachable():
+        return patch(
+            'bioblend.galaxy.workflows.WorkflowClient.show_workflow',
+            side_effect=ConnectionError(
+                "GET: error 503: b'Site Maintenance'", status_code=503))
+
+    def test_oneclick_list_view_returns_503_not_500(self):
+        with self._galaxy_unreachable():
+            response = self.client.get(reverse('workflow_oneclick_list'))
+        self.assertEqual(response.status_code, 503)
+        self.assertTemplateUsed(
+            response, 'workflows/galaxy_unavailable.html')
+
+    def test_advanced_list_view_returns_503_not_500(self):
+        with self._galaxy_unreachable():
+            response = self.client.get(reverse('workflows_advanced'))
+        self.assertEqual(response.status_code, 503)
+        self.assertTemplateUsed(
+            response, 'workflows/galaxy_unavailable.html')
+
+    def test_oneclick_form_view_returns_503_not_500(self):
+        with self._galaxy_unreachable():
+            response = self.client.get(reverse(
+                'workflow_oneclick_form',
+                kwargs={'slug': self.workflow.slug}))
+        self.assertEqual(response.status_code, 503)
+        self.assertTemplateUsed(
+            response, 'workflows/galaxy_unavailable.html')
+
+    def test_advanced_form_view_returns_503_not_500(self):
+        with self._galaxy_unreachable():
+            response = self.client.get(reverse(
+                'workflows_advanced_fullsteps',
+                kwargs={'slug': self.workflow.slug}))
+        self.assertEqual(response.status_code, 503)
+        self.assertTemplateUsed(
+            response, 'workflows/galaxy_unavailable.html')

@@ -1,0 +1,12 @@
+{% extends "error.html" %}
+{% block code-error %}
+    <h1>503</h1>
+{% endblock %}
+{% block message-error %}
+    <h4>The analysis server is temporarily unavailable</h4>
+    <p>
+        NGPhylogeny.fr couldn't reach the Galaxy server that actually runs
+        the analyses. This is usually a temporary issue on the Galaxy
+        side - please try again in a few minutes.
+    </p>
+{% endblock %}

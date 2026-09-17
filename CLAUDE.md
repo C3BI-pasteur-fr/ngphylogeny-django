@@ -1678,3 +1678,65 @@ bug (also incidentally prevents layout shift). `.pagehead-logo` in
 `assets/css/custom.css` additionally got `max-width: 160px; max-height:
 44px;` as a belt-and-braces cap, in case anything else about the sizing
 ever regresses again.
+
+### Workflow list/form pages 500'd when Galaxy itself is unreachable
+
+A real production incident: `galaxy.pasteur.fr` went into its own
+maintenance mode (a plain 503 HTML page, not a Galaxy-shaped error) while
+NGPhylogeny.fr was still up, and every workflow list/form page - OneClick
+and Advanced both - 500'd instead of degrading gracefully. Real
+traceback: `bioblend.ConnectionError: GET: error 503: ...Site
+Maintenance...` raised straight out of `workflows/models.py`'s
+`Workflow.fetch_details()` (`galaxyinstance.workflows.show_workflow(...)`),
+via `workflows/views/generic.py`'s `WorkflowListView.workflow_list`
+(a `cached_property` that calls `fetch_details()` once per base
+workflow, completely uncaught) from a plain `GET /workflows/advanced/`.
+Same uncaught call, same crash shape, in two more places reachable by
+just browsing (not submitting anything): `WorkflowFormView.
+get_context_data()` (the single-workflow OneClick page,
+`workflow_oneclick_form`) and `WorkflowAdvancedFormView.
+get_context_data()` (`workflows/views/wkadvanced.py`, the single-workflow
+Advanced page, `workflows_advanced_fullsteps`). Since this app does no
+computation of its own and only orchestrates Galaxy (see "What this is"),
+a real Galaxy outage genuinely means these three pages can't be shown -
+the fix isn't to route around Galaxy, just to fail predictably with a
+clear message instead of Django's generic 500.
+
+`workflows/views/generic.py` now defines `GALAXY_UNREACHABLE_EXCEPTIONS`
+(`bioblend.galaxy.client.ConnectionError` + `requests.exceptions.
+RequestException` - the same broadened pair already used throughout
+`workspace/views.py`, see the "pod restart" section above for why
+`ConnectionError` alone isn't enough - a `ReadTimeout` from
+`GalaxyUser.GALAXY_REQUEST_TIMEOUT` is a `requests.exceptions.Timeout`
+subclass, not a `ConnectionError` subclass) and
+`galaxy_unavailable_response(request)`, which logs a warning and renders
+the new `templates/workflows/galaxy_unavailable.html` (extends the
+existing `error.html` shell - same pattern as `404.html`/`500.html` - with
+a 503 status) instead. `WorkflowListView.get()` and `WorkflowFormView.
+get()` (both in `generic.py`, covering OneClick+Advanced's list pages and
+OneClick's single-workflow page) and `WorkflowAdvancedFormView.get()`
+(`wkadvanced.py`, imports the same two names) each just wrap their
+existing `super().get(...)`/`self.get_context_data(...)` call in a
+`try/except GALAXY_UNREACHABLE_EXCEPTIONS` and delegate to the shared
+helper - no other behavior changed.
+
+**Deliberately not extended to every other Galaxy call site in this
+app** (the workflow-maker form, rerun, the A La Carte POST path, actual
+job submission) - those are either POST-triggered (a user actively
+submitting work already expects some risk of failure, a materially
+different situation from just browsing a list) or weren't part of the
+reported/reproduced failure, and blanket-wrapping every Galaxy call
+across the app was out of scope for this fix. `workflows_alacarte_build`
+specifically wasn't touched because its own `GET` (the actual "A La
+Carte" page load) doesn't call Galaxy at all - only building/submitting
+a custom workflow on `POST` does.
+
+Regression tests: `workflows.tests.GalaxyUnavailableTest` - real
+`Server`/anonymous `GalaxyUser` DB fixture (the established
+`connection_galaxy`-decorated-view test pattern, see the pod-restart
+section above), `bioblend.galaxy.workflows.WorkflowClient.show_workflow`
+patched to raise a real `ConnectionError` shaped like the actual incident
+("Site Maintenance", `status_code=503`), asserting all four affected URLs
+(`workflow_oneclick_list`, `workflows_advanced`, `workflow_oneclick_form`,
+`workflows_advanced_fullsteps`) return `503` and render
+`workflows/galaxy_unavailable.html` rather than raising.

@@ -1,5 +1,10 @@
+import logging
+
+import requests
+from bioblend.galaxy.client import ConnectionError
 from django.urls import reverse_lazy
 from django.http import HttpResponseRedirect
+from django.shortcuts import render
 from django.utils.decorators import method_decorator
 from django.utils.functional import cached_property
 from django.views.generic import ListView, DetailView
@@ -19,6 +24,36 @@ import tempfile
 from io import StringIO
 
 from utils import biofile
+
+logger = logging.getLogger(__name__)
+
+# Raised by bioblend itself (ConnectionError, once its own retries are
+# exhausted) or by the underlying requests call (e.g. a ReadTimeout -
+# see GalaxyUser.GALAXY_REQUEST_TIMEOUT in galaxy/models.py) whenever
+# the configured Galaxy server can't actually be reached (e.g. Galaxy's
+# own maintenance mode, a 503) - same broadened pair used throughout
+# workspace/views.py for the same reason, see CLAUDE.md's "pod restart"
+# section for why ConnectionError alone isn't enough.
+GALAXY_UNREACHABLE_EXCEPTIONS = (
+    ConnectionError, requests.exceptions.RequestException)
+
+
+def galaxy_unavailable_response(request):
+    """
+    A plain, friendly 503 page instead of a 500 - see the workflow list/
+    form views below, which call this whenever a page load's own direct
+    Galaxy call(s) fail with GALAXY_UNREACHABLE_EXCEPTIONS. NGPhylogeny.fr
+    does no computation of its own (see CLAUDE.md's "What this is") - a
+    Galaxy outage genuinely means these pages can't be shown at all, so
+    this isn't a bug to recover from, just a clearer response than the
+    generic templates/500.html for a case that's expected to happen and
+    resolve on its own.
+    """
+    logger.warning(
+        "Galaxy server unreachable while serving %s", request.path)
+    return render(
+        request, 'workflows/galaxy_unavailable.html', status=503)
+
 
 @method_decorator(connection_galaxy, name="dispatch")
 class WorkflowListView(ListView):
@@ -40,7 +75,13 @@ class WorkflowListView(ListView):
         return workflow_queryset
 
     def get_queryset(self):
-        return self.workflow_list    
+        return self.workflow_list
+
+    def get(self, request, *args, **kwargs):
+        try:
+            return super().get(request, *args, **kwargs)
+        except GALAXY_UNREACHABLE_EXCEPTIONS:
+            return galaxy_unavailable_response(request)
 
 @method_decorator(connection_galaxy, name="dispatch")
 class WorkflowFormView(UploadView, DetailView):
@@ -51,7 +92,12 @@ class WorkflowFormView(UploadView, DetailView):
     template_name = 'workflows/workflows_form.html'
     restricted_toolset = None
 
-  
+    def get(self, request, *args, **kwargs):
+        try:
+            return super().get(request, *args, **kwargs)
+        except GALAXY_UNREACHABLE_EXCEPTIONS:
+            return galaxy_unavailable_response(request)
+
     def get_context_data(self, **kwargs):
         gi = self.request.galaxy
         context = super(WorkflowFormView, self).get_context_data(**kwargs)

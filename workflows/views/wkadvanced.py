@@ -14,7 +14,9 @@ from tools.models import Tool
 from tools.models import ToolFieldWhiteList
 from tools.forms import ToolForm
 from workspace.views import create_history, delete_history
-from workflows.views.generic import WorkflowListView
+from workflows.views.generic import (
+    GALAXY_UNREACHABLE_EXCEPTIONS, WorkflowListView,
+    galaxy_unavailable_response)
 from workflows.exceptions import WorkflowInvalidFormError
 from workflows.models import Workflow
 from workflows.exceptions import WorkflowInputFileFormatError
@@ -88,7 +90,10 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
     restricted_toolset = Tool.objects.filter(toolflag__name=WORKFLOW_ADV_FLAG)
 
     def get(self, request, *args, **kwargs):
-        context = self.get_context_data(object=self.object)
+        try:
+            context = self.get_context_data(object=self.object)
+        except GALAXY_UNREACHABLE_EXCEPTIONS:
+            return galaxy_unavailable_response(request)
         return render(request, self.template_name, context)
 
 
