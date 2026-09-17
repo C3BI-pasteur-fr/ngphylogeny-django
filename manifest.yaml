@@ -151,6 +151,8 @@ spec:
               value: "${REPORT_RECIPIENTS}"
             - name: NGPHYLO_REPORT_FROM_EMAIL
               value: "${REPORT_FROM_EMAIL}"
+            - name: NGPHYLO_CONTACT_FORM_RECIPIENTS
+              value: "${CONTACT_FORM_RECIPIENTS}"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -292,6 +294,8 @@ spec:
               value: "${REPORT_RECIPIENTS}"
             - name: NGPHYLO_REPORT_FROM_EMAIL
               value: "${REPORT_FROM_EMAIL}"
+            - name: NGPHYLO_CONTACT_FORM_RECIPIENTS
+              value: "${CONTACT_FORM_RECIPIENTS}"
           resources:
             requests:
               memory: "512Mi"
@@ -451,6 +455,8 @@ spec:
               value: "${REPORT_RECIPIENTS}"
             - name: NGPHYLO_REPORT_FROM_EMAIL
               value: "${REPORT_FROM_EMAIL}"
+            - name: NGPHYLO_CONTACT_FORM_RECIPIENTS
+              value: "${CONTACT_FORM_RECIPIENTS}"
           resources:
             requests:
               memory: "384Mi"
@@ -566,6 +572,8 @@ spec:
               value: "${REPORT_RECIPIENTS}"
             - name: NGPHYLO_REPORT_FROM_EMAIL
               value: "${REPORT_FROM_EMAIL}"
+            - name: NGPHYLO_CONTACT_FORM_RECIPIENTS
+              value: "${CONTACT_FORM_RECIPIENTS}"
           resources:
             requests:
               memory: "128Mi"

@@ -185,6 +185,12 @@ does nothing, so it's safe to leave the periodic task enabled on
 deployments that don't want the report. `NGPHYLO_REPORT_FROM_EMAIL`
 overrides the sender address (defaults to `ngphylogeny@pasteur.fr`).
 
+The contact form (`surveys` app) similarly needs
+`NGPHYLO_CONTACT_FORM_RECIPIENTS` (comma-separated) set to also email a
+submitted message to staff, in addition to saving it as a `Feedback` row -
+left unset, only the DB row is saved, same no-op-by-default convention as
+the daily report above.
+
 ## Standalone (Django + Galaxy, all in one)
 
 `docker-compose.yml` above needs a Galaxy server to already be running

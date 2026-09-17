@@ -1600,3 +1600,81 @@ turned up:
   `.dockerignore` changes, the `addgalaxykey.py` get-or-create dedup, a
   couple of dependabot bumps) was superseded by this branch's own
   independent fixes, or made moot by the docker-compose rewrite.
+
+### Contact form now also emails staff, not just the DB row
+
+`surveys.views.FeedbackCreateView.form_valid()` (previously the plain,
+unmodified `CreateView.form_valid()` — no hook existed here at all)
+now also sends a plain-text notification to
+`settings.NGPHYLO_CONTACT_FORM_RECIPIENTS` (comma-separated, envsubst'd
+from the `CONTACT_FORM_RECIPIENTS` GitLab CI/CD variable — see
+`.gitlab-ci.yml`'s `.deploy` comment and `manifest.yaml`) *in addition to*
+saving the `Feedback` row — the DB save was and remains the primary,
+unconditional effect. Left unset (the default), `surveys/emails.py`'s
+`send_feedback_notification_email()` no-ops before building anything,
+same "safe to leave enabled everywhere" convention as
+`NGPHYLO_REPORT_RECIPIENTS`/`send_daily_report` (see "Daily
+workflow-usage report" above) — this setting is genuinely independent
+of that one (a separate GitLab variable, a separate recipient list),
+just following the same shape.
+
+Deliberately plain text via a bare `EmailMessage`, not
+`workspace/emails.py`'s branded `build_branded_html_email()` template
+(unlike every other notification in this codebase — job completion,
+BLAST completion): those exist to look good to an *end user* clicking
+through to their results; this is an internal operational notice to
+staff, carrying the submitter's own message verbatim, with `reply_to`
+set to the submitter's email so a staff member can just hit reply
+instead of copy-pasting their address out of the body — no logo/CID
+MIME wiring needed for that.
+
+Sending is wrapped in the exact same `try/except SMTPException` /
+`except Exception` / `logging.warning` pattern already used by
+`workspace.tasks.updateworkspacestatus` and `blast/tasks.py`'s own
+completion-email sends — but for a different reason: those run inside a
+Celery task, where a swallowed failure only affects that one async job.
+This one runs inline in the submitter's own request/response cycle, so
+without the same swallowing, an SMTP hiccup would turn an
+already-successful submission (the `Feedback` row is saved *before* the
+send is attempted, via `super().form_valid(form)`) into a 500 error page
+for someone who just successfully contacted support.
+
+`docker-compose.yml`/`docker-compose.standalone.yml` pass
+`NGPHYLO_CONTACT_FORM_RECIPIENTS` through with the same
+`${VAR:-}`-empty-default convention as every other optional email
+setting; README.md's "Email" section and `manifest.yaml`'s three
+container env blocks (`init`/`web`/`celery-worker`/`celery-beat` — added
+to all four for consistency with `NGPHYLO_REPORT_RECIPIENTS`, even
+though this send currently only ever happens on `web`, which is the one
+that actually serves `FeedbackCreateView`) were updated to match.
+Regression tests: `surveys.tests.FeedbackNotificationEmailTest` (email
+content/recipients/no-op-when-unset, mirroring
+`workspace.tests.JobCompletionEmailTest`'s style) and
+`FeedbackCreateViewTest` (the view saves the row and calls the send
+exactly once, and a raised `SMTPException` from the send doesn't
+propagate — both driven through `form_valid()` directly with a mocked
+form, not a real captcha-validated POST, since nothing in this codebase
+has a pattern for bypassing django-simple-captcha in a test post; see
+`data.tests.StaticPagesSmokeTest` for the existing real-render coverage
+of that part of the form instead).
+
+### Header Pasteur logo rendering full-size in Safari
+
+`.pagehead-logo` (see "Can you add the white pasteur logo..." above) was
+only constrained via CSS (`height: 44px; width: auto`) - no size hint
+existed anywhere in the actual HTML. The source image
+(`logo_institut_pasteur_white.png`) is 1793x661px; reported in Safari as
+the logo rendering at roughly that native size, overwhelming the page -
+Safari is known to be more visibly aggressive than Chrome/Firefox about
+briefly (or, in some caching/load-ordering edge case) rendering an `img`
+at its intrinsic size before/without the constraining stylesheet taking
+effect, since nothing gave it an explicit box to reserve. Fixed by adding
+real `width="119" height="44"` HTML attributes directly on the `<img>`
+tag in `templates/base.html` (119 = the actual 1793:661 aspect ratio at
+44px tall, computed via Pillow, not guessed) - HTML width/height
+attributes are honored by every browser immediately, independent of
+whether/when CSS has loaded, which is the standard fix for this class of
+bug (also incidentally prevents layout shift). `.pagehead-logo` in
+`assets/css/custom.css` additionally got `max-width: 160px; max-height:
+44px;` as a belt-and-braces cap, in case anything else about the sizing
+ever regresses again.
