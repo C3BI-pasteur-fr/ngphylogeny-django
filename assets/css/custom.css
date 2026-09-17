@@ -146,6 +146,7 @@ header.pagehead {
     width: 100%;
     height:80px;
     text-align: center;
+    position: relative;
 }
 
 header.pagehead h1 {
@@ -153,6 +154,24 @@ header.pagehead h1 {
     line-height:80px;
     margin:0px;
     padding:0px;
+}
+
+/* Absolutely positioned (not part of the centered-title flow) so it
+   sits at the left edge of the bar regardless of how wide the centered
+   h1 ends up - white logo, matches the dark header background (the
+   footer's own Institut Pasteur logo, logo_institut_pasteur.png, is the
+   full-color version, meant for a light background). */
+.pagehead-logo-link {
+    position: absolute;
+    left: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.pagehead-logo {
+    height: 44px;
+    width: auto;
+    display: block;
 }
 
 .row-eq-height {
