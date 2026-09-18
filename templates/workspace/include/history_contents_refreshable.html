@@ -292,8 +292,9 @@ happens inside a script tag executed asynchronously relative to
 	// relocate the persistent, already-built preview into it - a plain
 	// reparent of the existing SVG/d3 tree, not a rebuild (see
 	// maybeBuildTreePreview above). A no-op if nothing's been built yet
-	// (window.treePreviewDatasetId still unset) - picked up on a later
-	// poll instead, once the fetch this render kicked off resolves.
+	// (window.treePreviewRendered still false) - retried on a later
+	// poll instead, once a fetch this render or a later one kicks off
+	// actually succeeds.
 	window.placeTreePreviewIntoLiveRegion();
 	if (window.historyRefreshWatchdog) {
 	    clearTimeout(window.historyRefreshWatchdog);

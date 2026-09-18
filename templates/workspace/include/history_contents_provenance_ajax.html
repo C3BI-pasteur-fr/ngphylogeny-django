@@ -240,9 +240,23 @@
     // retrying a few times (setTimeout, not requestAnimationFrame - the
     // latter can be suspended indefinitely for a backgrounded/minimized
     // tab, which a retry meant to survive a real page's own load timing
-    // shouldn't depend on) before giving up for this poll - the next
-    // poll's placeTreePreviewIntoLiveRegion call tries the whole thing
-    // again regardless.
+    // shouldn't depend on) before giving up for this poll.
+    //
+    // (3) A third real bug, found live right after (2) shipped: the fetch
+    // itself came back with a falsy/empty body on the very first, real
+    // page-load attempt (confirmed live again - a manual replay of the
+    // exact same request a few seconds later, in that same tab, returned
+    // the real newick just fine), and maybeBuildTreePreview marked that
+    // datasetId as "handled" regardless, so nothing ever retried it - on
+    // an already-*finished* history (page polling stops after the very
+    // first render, see history_contents_refreshable.html's own
+    // "object.finished" conditional block) that meant no tree ever
+    // appeared at all, permanently, not even the panel/heading.
+    // maybeBuildTreePreview now
+    // only ever stops on a genuinely successful build
+    // (window.treePreviewRendered), and retries itself independently of
+    // page polling via its own setTimeout loop - so a finished history
+    // isn't left with no way to ever retry a one-off failure.
     window.placeTreePreviewIntoLiveRegion = function () {
 	if (!window.treePreviewRendered) {
 	    // Nothing built yet - if a fetch already resolved on an
@@ -304,15 +318,49 @@
 	// tries the whole sequence again from a clean slate.
     };
 
-    window.maybeBuildTreePreview = function (datasetId, url) {
-	if (!datasetId || window.treePreviewDatasetId === datasetId || window.treePreviewFetching) {
+    window.maybeBuildTreePreview = function (datasetId, url, attempt) {
+	attempt = attempt || 0;
+	// Gated on treePreviewRendered (only ever true once the tree has
+	// actually, successfully built - see renderPendingTreePreview)
+	// rather than "have we already fetched this datasetId" - a real
+	// bug found live right after the fix above shipped: the previous
+	// version marked a datasetId as handled the instant .done() fired
+	// at all, even when the response body came back empty/falsy (seen
+	// live - the fetch's own success callback ran with a falsy
+	// newick, for reasons never pinned down further), which then
+	// permanently blocked every later *poll* from ever retrying the
+	// fetch again.
+	if (!datasetId || window.treePreviewRendered || window.treePreviewFetching) {
 	    return;
 	}
 	window.treePreviewFetching = true;
+	function retryOrGiveUp() {
+	    // A *finished* history clears window.historyRefreshTimer on its
+	    // very first render (history_contents_refreshable.html's own
+	    // "object.finished" conditional block) - no poll ever fires
+	    // again to retry this from, which is exactly the case a real
+	    // empty/failed first fetch was reported live against. So this
+	    // retries itself via a plain setTimeout, entirely independently
+	    // of page polling - a handful of attempts a couple of seconds
+	    // apart is
+	    // enough to ride out a one-off transient failure without hammering
+	    // anything, and any *later* real poll (a still-running history)
+	    // can still short-circuit this early by succeeding first.
+	    if (attempt < 5) {
+		setTimeout(function () {
+		    window.maybeBuildTreePreview(datasetId, url, attempt + 1);
+		}, 2000);
+	    }
+	}
 	$.ajax({url: url, dataType: 'text'}).done(function (newick) {
-	    window.treePreviewDatasetId = datasetId;
-	    window.treePreviewPendingNewick = newick;
-	    window.renderPendingTreePreview();
+	    if (newick) {
+		window.treePreviewPendingNewick = newick;
+		window.renderPendingTreePreview();
+	    } else {
+		retryOrGiveUp();
+	    }
+	}).fail(function () {
+	    retryOrGiveUp();
 	}).always(function () {
 	    window.treePreviewFetching = false;
 	});
