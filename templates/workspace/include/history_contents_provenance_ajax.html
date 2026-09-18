@@ -211,7 +211,7 @@
 	}
 	var $anchor = $('#history-refreshable-region').find('#tree-preview-anchor');
 	if ($anchor.length) {
-	    $anchor.replaceWith($('#tree-preview-wrapper').show());
+	    $anchor.replaceWith($('#tree-preview-wrapper').removeClass('sr-only'));
 	}
     };
 
@@ -233,7 +233,17 @@
     };
 </script>
 
-<div id="tree-preview-wrapper" class="panel panel-default" style="display:none;">
+<!-- Bootstrap's own .sr-only (position:absolute + clip, never display:none)
+     instead of an inline display:none - phylotree.js's own .layout() calls
+     the SVG's getBBox()/getComputedTextLength() to size/place nodes and
+     labels, which return zero (or throw) for anything inside a
+     display:none ancestor, since that removes it from the render tree
+     entirely. A real display:none wrapper here produced a genuinely empty
+     tree the very first time this was deployed - .sr-only keeps the SVG
+     laid out (measurable) the whole time, including for the very first
+     build below, while still being invisible and out of document flow
+     until placeTreePreviewIntoLiveRegion() removes the class. -->
+<div id="tree-preview-wrapper" class="panel panel-default sr-only">
   <div class="panel-heading">Phylogenetic tree preview</div>
   <div class="panel-body">
     <svg id="tree-preview-svg" width="800" height="420"></svg>
