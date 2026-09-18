@@ -1916,3 +1916,49 @@ every page already, via `base.html`'s Bootstrap 3 CDN link, so no new
 dependency) and swapping `.show()` for `.removeClass('sr-only')`.
 Regression test: `workspace.tests.TreePreviewTest.
 test_wrapper_hidden_via_sr_only_not_display_none`.
+
+**That `.sr-only` fix alone wasn't enough - the tree still rendered
+empty on the next real report against the same URL, still with no
+thrown exception anywhere.** Debugged directly against the live
+deploy-dev page (not guessed): headless Chrome (`--headless=new
+--dump-dom`, and separately driven live over the DevTools Protocol -
+`websocket-client` in the `ngphylo-py38` env, `Runtime.evaluate`/
+`Network.*` events) confirmed the newick fetch itself succeeded (a
+direct `curl` to the embedded `treePreviewUrl` also returned a real,
+well-formed newick string) and that `#tree-preview-wrapper` really did
+get its `sr-only` class removed and get moved into the table's anchor
+position - i.e. the fetch/placement machinery all worked - yet
+`#tree-preview-svg` still had zero children: `.layout()` was still
+being called *before* that removal/move, while the SVG sat inside
+`.sr-only`'s 1x1px clip box. Oddly, replaying the exact same
+fetch-then-layout sequence a few seconds later in that same live tab's
+own console (once the initial page-load moment had passed) built the
+tree correctly - and so did two separate offline reproductions of that
+same "layout while still sr-only" sequence (one with a minimal
+jQuery+d3+phylotree.js page, one loading this app's *entire* real
+script/CSS list from the live deploy-dev static host) - neither could
+reproduce the empty result outside that one specific real-page moment.
+Rather than keep chasing what's likely a narrow, hard-to-isolate
+browser layout-timing gap around phylotree.js's own measurement calls
+during a real, busier page load, `renderPendingTreePreview()`
+(`history_contents_provenance_ajax.html`) now (a) always reparents the
+wrapper out of `.sr-only` and into the live anchor *before* ever calling
+`.layout()` (previously still done after, despite the comment above
+saying otherwise - that gap between comment and code was itself real
+and is what let this second bug through), and (b) defensively verifies
+`#tree-preview-svg` actually gained real children afterward, retrying
+up to 5 times (plain `setTimeout`, not `requestAnimationFrame` - the
+latter can be suspended indefinitely for a backgrounded/minimized tab,
+which a retry meant to survive a real page's own load timing shouldn't
+depend on) before giving up *for that poll* - `window.
+treePreviewPendingNewick` is left set on a full give-up, so the next
+10s poll's own `placeTreePreviewIntoLiveRegion()` call retries the
+whole sequence again from a clean slate regardless. Existing tests
+(`workspace.tests.TreePreviewTest`) still cover the server-rendered
+side of this (dataset detection, ordering, `.sr-only` markup) unchanged
+- the retry/verify logic itself is pure client-side JS with no Python
+test harness in this codebase to drive it through a real browser (see
+CLAUDE.md's own notes elsewhere on `connection_galaxy`-decorated views
+having no such pattern); verified instead via the headless-Chrome
+harnesses described above, run directly against this app's real
+vendored static assets.
