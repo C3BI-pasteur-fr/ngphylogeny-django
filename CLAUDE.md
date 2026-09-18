@@ -1890,3 +1890,29 @@ dataset is both `nhx`/`nwk` *and* `'ok'` (a still-`running` one doesn't
 count), and that `#tree-preview-anchor` sits between
 `#workflow-step-chain` and `#myTable` in the rendered HTML - the actual
 ordering requirement, not just presence.
+
+**Real bug on the first `deploy-dev` rollout of this feature: the tree
+rendered genuinely empty.** Confirmed live (`curl`-fetched the actual
+deployed page and its `treePreviewUrl` directly) that detection and
+data fetching both worked correctly - `treePreviewDatasetId`/
+`treePreviewUrl` were populated with the real dataset id, and that URL
+returned a valid, real newick string - so the bug was specifically in
+the client-side rendering, not the server-side wiring. Cause:
+`#tree-preview-wrapper` started out `style="display:none"`, toggled via
+jQuery's `.show()` once built. `maybeBuildTreePreview`'s very first
+build (`d3.layout.phylotree()...layout()`) always runs while the
+wrapper is still in that initial hidden state (placement into the
+visible page only happens *after* building - see this section's own
+description of the placement/build split above) - and phylotree.js's
+`.layout()` measures the SVG via `getBBox()`/`getComputedTextLength()`
+to size and place nodes/branch labels, both of which return zero (or
+throw) for anything inside a `display:none` ancestor, since that
+removes the element from the render tree entirely, not just from view
+- unlike, say, `visibility:hidden` or an off-screen `position:absolute`,
+which stay part of the render tree and remain genuinely measurable.
+Fixed by hiding the wrapper with Bootstrap's own `.sr-only` class
+instead (`position:absolute` + `clip`, never `display:none` - loaded on
+every page already, via `base.html`'s Bootstrap 3 CDN link, so no new
+dependency) and swapping `.show()` for `.removeClass('sr-only')`.
+Regression test: `workspace.tests.TreePreviewTest.
+test_wrapper_hidden_via_sr_only_not_display_none`.

@@ -1512,6 +1512,43 @@ class TreePreviewTest(TestCase):
         self.assertIn('var treePreviewDatasetId = "";', html)
         self.assertIn('id="tree-preview-anchor"', html)
 
+    def test_wrapper_hidden_via_sr_only_not_display_none(self):
+        """
+        Regression test for a real bug hit on the first deploy-dev
+        rollout of this feature: #tree-preview-wrapper started out
+        `style="display:none"`, hidden and shown via jQuery's
+        .show()/.hide(). phylotree.js's own .layout() measures the SVG
+        via getBBox()/getComputedTextLength() to size and place nodes/
+        labels - both return zero (or throw) for anything inside a
+        display:none ancestor, since that removes it from the render
+        tree entirely, not just from view. The very first build (see
+        maybeBuildTreePreview in history_contents_provenance_ajax.html)
+        always runs while the wrapper is still in its initial hidden
+        state, so a display:none wrapper produced a genuinely empty
+        tree on the real deployed page (confirmed live: treePreviewUrl
+        resolved and returned a valid newick string, but the rendered
+        <svg> stayed empty). Fixed by hiding it with Bootstrap's own
+        .sr-only (position:absolute + clip, loaded on every page via
+        base.html's Bootstrap 3 CDN link) instead - keeps the SVG
+        genuinely laid out (measurable) at all times, including before
+        it's ever moved into the visible page.
+        """
+        self._make_history([
+            {'id': 'd1', 'hid': 1, 'name': 'input.fasta', 'state': 'ok',
+             'visible': True, 'extension': 'fasta'},
+            {'id': 'd2', 'hid': 2, 'name': 'tree.nhx', 'state': 'ok',
+             'visible': True, 'extension': 'nhx'},
+        ])
+        with patch('bioblend.galaxy.histories.HistoryClient.show_dataset_provenance',
+                   return_value={'tool_id': 'mafft'}), \
+             patch('workspace.views.updateworkspacestatus.delay'):
+            response = self.client.get(
+                reverse('history_detail', kwargs={'history_id': 'hist1'}))
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode()
+        self.assertIn('id="tree-preview-wrapper" class="panel panel-default sr-only"', html)
+        self.assertNotIn('<div id="tree-preview-wrapper" class="panel panel-default" style="display:none;">', html)
+
 
 class WorkspacePermalinkTest(TestCase):
     """
