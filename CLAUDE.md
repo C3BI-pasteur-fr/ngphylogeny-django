@@ -1962,3 +1962,50 @@ CLAUDE.md's own notes elsewhere on `connection_galaxy`-decorated views
 having no such pattern); verified instead via the headless-Chrome
 harnesses described above, run directly against this app's real
 vendored static assets.
+
+**Still not enough - the very next live report was "no panel at all",
+not just an empty one.** Same debugging approach (headless Chrome,
+`Runtime.evaluate`/`Network.*` over the DevTools Protocol against the
+real deploy-dev URL): the fetch to `treePreviewUrl` had, on the real
+page's own very first automatic attempt, resolved with a falsy/empty
+body - confirmed live again by manually replaying the *exact same*
+request a few seconds later in that same tab's console, which returned
+the real 789-byte newick with no trouble at all. `maybeBuildTreePreview`
+at the time keyed its "already handled this dataset" guard off having
+merely *attempted* the fetch (`window.treePreviewDatasetId = datasetId`
+was set unconditionally inside `.done()`, regardless of whether the body
+was actually usable) - so that one bad attempt permanently blocked ever
+retrying it again. On a *finished* history specifically (this exact
+history's tree was already `'ok'`, meaning `object.finished` was almost
+certainly true), `history_contents_refreshable.html`'s own `{% if
+object.finished %}` block clears `window.historyRefreshTimer` on the
+very first render - no poll ever fires again to retry from - so the
+panel/heading themselves never even appeared, not just an empty tree.
+Editing this comment block itself hit a real, separate gotcha: an
+earlier draft literally wrote `{% if object.finished %}` inside a plain
+JS `//` comment to explain this - Django's template lexer has no idea
+it's inside a JS comment and tried to parse it as a real template tag,
+raising `TemplateSyntaxError: Unclosed tag` and breaking the *entire*
+page (caught by `manage.py test` before ever being pushed, not live) -
+worth remembering for any future comment in this file that needs to
+reference a `{% %}`/`{{ }}` construct by name: paraphrase it instead
+("the object.finished conditional block"), never spell out the literal
+tag syntax.
+
+Fixed by decoupling both the "should we even try" guard and the retry
+mechanism from page polling entirely: `maybeBuildTreePreview` now only
+ever stops for good once `window.treePreviewRendered` is genuinely
+true (set by `renderPendingTreePreview` only on real success - see
+above), and on a falsy body or an outright AJAX failure it retries
+*itself*, via its own `setTimeout` loop (a handful of attempts a couple
+of seconds apart), entirely independently of `window.
+historyRefreshTimer`/`refresh()` - so a finished history's one-shot
+render still gets several independent chances to recover from a
+one-off transient failure, not just the one. A later real poll (a
+still-running history) can still short-circuit this early by
+succeeding first, same as before. Verified end to end offline (headless
+Chrome again, this app's real vendored static assets, `$.ajax`
+temporarily replaced with a fake that returns an empty body twice then
+the real newick on the third call, mirroring the actual observed
+failure) - confirmed the tree renders correctly on that third,
+self-triggered retry with no poll involved at all.
