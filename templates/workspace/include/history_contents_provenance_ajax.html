@@ -192,27 +192,116 @@
 </script>
 
 <script>
-    // Inline phylotree.js tree preview - built (fetched + laid out) at
-    // most once per history, the first time a finished nhx/nwk dataset
-    // shows up (see workspace.views.WorkspaceHistoryObjectMixin.
-    // get_context_data's tree_preview_dataset_id/tree_preview_url and
+    // Inline phylotree.js tree preview - fetched at most once per
+    // history, the first time a finished nhx/nwk dataset shows up (see
+    // workspace.views.WorkspaceHistoryObjectMixin.get_context_data's
+    // tree_preview_dataset_id/tree_preview_url and
     // history_contents_refreshable.html's own per-render script, which
-    // calls these two functions). #tree-preview-wrapper itself lives
-    // here, outside #history-refreshable-region/#history-refreshable-
-    // staging, specifically so it's never touched by either container's
-    // own staged-rebuild - only *moved* (a plain DOM reparent, which
-    // doesn't affect its already-rendered SVG/d3 state at all) into
-    // whatever fresh #tree-preview-anchor placeholder the latest poll
-    // put in the live region, once per poll - never rebuilt from the
-    // newick again after the first time.
+    // calls maybeBuildTreePreview/placeTreePreviewIntoLiveRegion below).
+    // #tree-preview-wrapper itself lives here, outside
+    // #history-refreshable-region/#history-refreshable-staging,
+    // specifically so it's never touched by either container's own
+    // staged-rebuild - only *moved* (a plain DOM reparent, which doesn't
+    // affect its already-rendered SVG/d3 state at all) into whatever
+    // fresh #tree-preview-anchor placeholder the latest poll put in the
+    // live region, once per poll - never rebuilt from the newick again
+    // after the first time.
+    //
+    // The actual d3.layout.phylotree().layout() call (see
+    // renderPendingTreePreview below) is deliberately deferred until
+    // *after* the wrapper has already been reparented into the live
+    // region, in normal (non-sr-only) flow - not run against the
+    // freshly-fetched newick straight away. Two real bugs hit in a row on
+    // deploy-dev, both producing a genuinely empty <svg>, neither ever
+    // throwing (so the rest of each poll's script kept running fine):
+    // (1) the wrapper was hidden via a plain style="display:none" -
+    // phylotree.js needs the SVG to already be laid out/measurable to
+    // size and place nodes/labels, which display:none prevents entirely.
+    // Fixed by switching to Bootstrap's own .sr-only (position:absolute +
+    // clip, never display:none - loaded on every page via base.html's
+    // Bootstrap CDN link already, no new dependency).
+    // (2) even after that fix, .layout() was still called *before*
+    // .sr-only was removed / the wrapper reparented - confirmed still
+    // producing an empty <svg> live (headless Chrome --dump-dom against
+    // the real deploy-dev URL: sr-only correctly removed, wrapper
+    // correctly moved into the table's anchor position - proving fetch/
+    // placement worked - yet #tree-preview-svg had zero children), even
+    // though the exact same fetch+layout sequence replayed a few seconds
+    // later in that same live tab's console (once nothing else was mid-
+    // flight) built the tree correctly every time, and both a minimal
+    // and a full-script-list offline reproduction of the exact same
+    // "build while still sr-only" sequence rendered fine too - a narrow,
+    // real-page-only timing gap around phylotree.js's own layout
+    // measurement that a fresh, all-libraries-loaded reproduction outside
+    // that exact busy moment couldn't pin down further. Rather than chase
+    // that further, renderPendingTreePreview below now (a) always
+    // reparents out of .sr-only *before* calling .layout(), and (b)
+    // defensively verifies the SVG actually got real content afterward,
+    // retrying a few times (setTimeout, not requestAnimationFrame - the
+    // latter can be suspended indefinitely for a backgrounded/minimized
+    // tab, which a retry meant to survive a real page's own load timing
+    // shouldn't depend on) before giving up for this poll - the next
+    // poll's placeTreePreviewIntoLiveRegion call tries the whole thing
+    // again regardless.
     window.placeTreePreviewIntoLiveRegion = function () {
-	if (!window.treePreviewDatasetId) {
+	if (!window.treePreviewRendered) {
+	    // Nothing built yet - if a fetch already resolved on an
+	    // earlier poll but couldn't find a live anchor to build into
+	    // at the time, or the build itself never produced real
+	    // content (see renderPendingTreePreview's own retry/give-up
+	    // below), this is what retries the whole thing on every later
+	    // poll.
+	    window.renderPendingTreePreview();
 	    return;
 	}
 	var $anchor = $('#history-refreshable-region').find('#tree-preview-anchor');
 	if ($anchor.length) {
+	    $anchor.replaceWith($('#tree-preview-wrapper'));
+	}
+    };
+
+    window.renderPendingTreePreview = function (attempt) {
+	attempt = attempt || 0;
+	if (window.treePreviewRendered || !window.treePreviewPendingNewick) {
+	    return;
+	}
+	var $anchor = $('#history-refreshable-region').find('#tree-preview-anchor');
+	if (!$anchor.length) {
+	    // The live region doesn't have a real step-chain/table (and
+	    // therefore no anchor) yet - e.g. this fetch resolved for a
+	    // poll that's crossing over from the "please wait" state in
+	    // the very same tick. Leave the fetched newick in place and
+	    // try again on the next poll's placeTreePreviewIntoLiveRegion
+	    // call, once a real anchor exists to build into.
+	    return;
+	}
+	if (attempt === 0) {
 	    $anchor.replaceWith($('#tree-preview-wrapper').removeClass('sr-only'));
 	}
+	var $svg = $('#tree-preview-svg');
+	// Force the browser to commit the reparent/class removal above to
+	// a real layout before phylotree.js measures anything off of it -
+	// cheap, and the whole point of the retry below is exactly this
+	// class of "measured before the browser actually laid it out yet"
+	// gap, so don't rely on that alone.
+	$svg[0].getBoundingClientRect();
+	$svg.empty();
+	var tree = d3.layout.phylotree().svg(d3.select('#tree-preview-svg'));
+	tree.align_tips(false);
+	tree.spacing_y(18, true);
+	tree(window.treePreviewPendingNewick).layout();
+	if ($svg[0].childNodes.length > 0) {
+	    window.treePreviewRendered = true;
+	    window.treePreviewPendingNewick = null;
+	} else if (attempt < 5) {
+	    setTimeout(function () {
+		window.renderPendingTreePreview(attempt + 1);
+	    }, 50);
+	}
+	// Past 5 attempts: give up for this poll rather than retry
+	// forever - window.treePreviewPendingNewick stays set, so the
+	// next poll's placeTreePreviewIntoLiveRegion call (10s later)
+	// tries the whole sequence again from a clean slate.
     };
 
     window.maybeBuildTreePreview = function (datasetId, url) {
@@ -221,28 +310,23 @@
 	}
 	window.treePreviewFetching = true;
 	$.ajax({url: url, dataType: 'text'}).done(function (newick) {
-	    var tree = d3.layout.phylotree().svg(d3.select('#tree-preview-svg'));
-	    tree.align_tips(false);
-	    tree.spacing_y(18, true);
-	    tree(newick).layout();
 	    window.treePreviewDatasetId = datasetId;
-	    window.placeTreePreviewIntoLiveRegion();
+	    window.treePreviewPendingNewick = newick;
+	    window.renderPendingTreePreview();
 	}).always(function () {
 	    window.treePreviewFetching = false;
 	});
     };
 </script>
 
-<!-- Bootstrap's own .sr-only (position:absolute + clip, never display:none)
-     instead of an inline display:none - phylotree.js's own .layout() calls
-     the SVG's getBBox()/getComputedTextLength() to size/place nodes and
-     labels, which return zero (or throw) for anything inside a
-     display:none ancestor, since that removes it from the render tree
-     entirely. A real display:none wrapper here produced a genuinely empty
-     tree the very first time this was deployed - .sr-only keeps the SVG
-     laid out (measurable) the whole time, including for the very first
-     build below, while still being invisible and out of document flow
-     until placeTreePreviewIntoLiveRegion() removes the class. -->
+<!-- Hidden via Bootstrap's own .sr-only (position:absolute + clip) rather
+     than display:none until it's actually moved into place - see the
+     script above for why display:none broke phylotree.js's own layout
+     entirely. It's only ever laid out (d3.layout.phylotree()...layout(),
+     in renderPendingTreePreview above) once .sr-only has already been
+     removed and it's sitting in its real, normal-flow position - not
+     while still constrained to sr-only's 1x1px clip box either, which
+     turned out to break the same way. -->
 <div id="tree-preview-wrapper" class="panel panel-default sr-only">
   <div class="panel-heading">Phylogenetic tree preview</div>
   <div class="panel-body">
