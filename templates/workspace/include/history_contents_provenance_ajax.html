@@ -4,7 +4,25 @@
 <script src="https://cdn.datatables.net/1.10.16/js/dataTables.bootstrap.min.js"></script>
 <link rel="stylesheet" type="text/css" href="{% static 'css/biblio.css' %}"/>
 <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.16/css/dataTables.bootstrap.min.css">
+<!-- Same minimal d3.layout.phylotree() embedded-preview pattern already
+     used by templates/blast/result.html's own "Quick (and inaccurate)
+     tree" (a plain #tree_display <svg>, no toolbar) - reused here for
+     the inline tree preview built by history_contents_refreshable.html.
+     underscore.js is a real runtime dependency of phylotree.js-0.1.9
+     itself (_.each/_.pluck/_.findWhere/etc., verified directly in that
+     vendored file, not assumed) - blast/result.html loads it for the
+     exact same reason, from the same CDN. -->
+<script src="{% static 'presto/d3.v3.min.js' %}"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.8.3/underscore-min.js"></script>
+<link rel="stylesheet" type="text/css" href="{% static 'phylotree.js-0.1.9/phylotree.css' %}"/>
+<script src="{% static 'phylotree.js-0.1.9/phylotree.js' %}"></script>
 <style>
+  #tree-preview-wrapper .panel-heading {
+    font-weight: 600;
+  }
+  #tree-preview-wrapper .panel-body {
+    overflow-x: auto;
+  }
   /* Workflow step chain (workspace/include/history_contents_refreshable.html)
      - one box per tool step (consecutive datasets from the same tool
      collapsed into one, same grouping the table there already does via
@@ -172,6 +190,55 @@
 	    );
   }
 </script>
+
+<script>
+    // Inline phylotree.js tree preview - built (fetched + laid out) at
+    // most once per history, the first time a finished nhx/nwk dataset
+    // shows up (see workspace.views.WorkspaceHistoryObjectMixin.
+    // get_context_data's tree_preview_dataset_id/tree_preview_url and
+    // history_contents_refreshable.html's own per-render script, which
+    // calls these two functions). #tree-preview-wrapper itself lives
+    // here, outside #history-refreshable-region/#history-refreshable-
+    // staging, specifically so it's never touched by either container's
+    // own staged-rebuild - only *moved* (a plain DOM reparent, which
+    // doesn't affect its already-rendered SVG/d3 state at all) into
+    // whatever fresh #tree-preview-anchor placeholder the latest poll
+    // put in the live region, once per poll - never rebuilt from the
+    // newick again after the first time.
+    window.placeTreePreviewIntoLiveRegion = function () {
+	if (!window.treePreviewDatasetId) {
+	    return;
+	}
+	var $anchor = $('#history-refreshable-region').find('#tree-preview-anchor');
+	if ($anchor.length) {
+	    $anchor.replaceWith($('#tree-preview-wrapper').show());
+	}
+    };
+
+    window.maybeBuildTreePreview = function (datasetId, url) {
+	if (!datasetId || window.treePreviewDatasetId === datasetId || window.treePreviewFetching) {
+	    return;
+	}
+	window.treePreviewFetching = true;
+	$.ajax({url: url, dataType: 'text'}).done(function (newick) {
+	    var tree = d3.layout.phylotree().svg(d3.select('#tree-preview-svg'));
+	    tree.align_tips(false);
+	    tree.spacing_y(18, true);
+	    tree(newick).layout();
+	    window.treePreviewDatasetId = datasetId;
+	    window.placeTreePreviewIntoLiveRegion();
+	}).always(function () {
+	    window.treePreviewFetching = false;
+	});
+    };
+</script>
+
+<div id="tree-preview-wrapper" class="panel panel-default" style="display:none;">
+  <div class="panel-heading">Phylogenetic tree preview</div>
+  <div class="panel-body">
+    <svg id="tree-preview-svg" width="800" height="420"></svg>
+  </div>
+</div>
 
 <div class="row">
   <div class="col-md-10">

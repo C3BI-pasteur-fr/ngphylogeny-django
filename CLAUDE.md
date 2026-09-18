@@ -1811,3 +1811,82 @@ the right history list and renders that history's name; following it
 when the current session already has a *different* history merges
 rather than replaces; a garbage token redirects with the error message
 instead of raising.
+
+### Inline phylotree.js tree preview on the history detail page
+
+As soon as a run produces a finished newick/nhx dataset - the same file
+the dataset table's own `{% if file.extension in "nhx,nwk" %}` branch
+shows the "Interactive Tree visualisation"/iTOL buttons for (see the
+step-chain section above) - a small tree rendering now appears between
+the workflow step chain and the dataset table, without waiting for a
+full page reload. Reuses the exact same minimal `d3.layout.phylotree()`
+pattern `templates/blast/result.html`'s own "Quick (and inaccurate)
+tree" already established (a plain `<svg>`, no toolbar - unlike
+`templates/treeviz/tree.html`'s full PRESTO-branded, toolbar-driven
+viewer behind the "Interactive Tree visualisation" button, which stays
+untouched): `phylotree.js-0.1.9` + `d3.v3.min.js`, both already vendored
+under `assets/`, no new dependency added.
+
+`WorkspaceHistoryObjectMixin.get_context_data()` (`workspace/views.py`)
+picks the first dataset in `history_content` with `extension` in
+`('nhx', 'nwk')` and `'ok'` in `state` - read straight off the
+already-fetched `history_content`, no extra Galaxy call - and exposes
+`tree_preview_dataset_id`/`tree_preview_url` (the latter a
+`reverse('display_raw', ...)` URL for that one dataset's raw content).
+Both are empty strings once there's no such dataset yet, same "always
+present but empty" convention `dataset_tool_ids`/`tool_names` used
+before this.
+
+**The actual requirement - "should not be refreshed at every refresh
+event" - takes real care given how this page already works.**
+`history_contents_refreshable.html` (chain + table) is entirely
+rebuilt/reloaded every 10s (see that section above) - a naive tree
+preview living inside that same fragment would refetch the newick and
+rebuild the whole d3 layout (losing any pan/zoom) on every single poll,
+for a tree that never changes once it exists. Fixed by keeping the
+*actual* rendered tree - `#tree-preview-wrapper` (holding `#tree-preview-
+svg`) - entirely outside `#history-refreshable-region`/`#history-
+refreshable-staging`, in the fixed outer shell
+(`history_contents_provenance_ajax.html`, the one part of this page
+never rebuilt by a poll): `window.maybeBuildTreePreview(datasetId, url)`
+fetches+lays out the tree via `d3.layout.phylotree().svg(...)` **at most
+once ever** per history (guarded by `window.treePreviewDatasetId`, only
+set after a successful build - a failed fetch leaves it unset so a
+later poll can still retry, rather than a transient Galaxy hiccup
+permanently giving up on the preview for the rest of the session).
+
+Positioning it correctly - "below the workflow preview, above the
+table" - without rebuilding it is the other half of the problem, since
+both the step chain and the table (and the space between them) live
+inside the auto-rebuilt fragment. `history_contents_refreshable.html`
+emits nothing but an empty `#tree-preview-anchor` placeholder div at
+exactly that spot, regenerated fresh on every render like the rest of
+that fragment; `window.placeTreePreviewIntoLiveRegion()` then
+*reparents* the persistent `#tree-preview-wrapper` (a plain DOM move,
+which - unlike innerHTML replacement - carries over its already-
+rendered SVG and any d3-bound zoom/pan state untouched) into whatever
+anchor is currently sitting in the **live** `#history-refreshable-region`
+- never into the hidden staging container mid-build, which would
+otherwise rip the visible tree out of the page for however long that
+poll's staged build takes, then flash it back in on swap. Call sites,
+matching this file's existing staged-vs-direct rendering split:
+non-staged (the very first render, direct `{% include %}`) places it
+immediately, since there's no staging step to race; a staged poll
+defers the move to the exact same instant
+`history_contents_refreshable.html`'s own swap script already moves the
+rest of the freshly-built content into the live region
+(`$('#history-refreshable-region').empty().append($root.contents())`) -
+one atomic-looking update, not two. The fetch's own `.done()` callback
+also calls the same placement function unconditionally (targeting the
+live region directly, not `$root`), covering the case where the very
+first fetch resolves after that poll's swap already happened.
+
+Regression tests: `workspace.tests.TreePreviewTest` - reuses
+`HistoryContentRefreshViewTest`'s own Server/GalaxyUser/local-Tool
+fixture pattern, going through the real decorated
+`history_content_refresh` view. Asserts `tree_preview_dataset_id`/
+`tree_preview_url` are only wired into the rendered fragment once a
+dataset is both `nhx`/`nwk` *and* `'ok'` (a still-`running` one doesn't
+count), and that `#tree-preview-anchor` sits between
+`#workflow-step-chain` and `#myTable` in the rendered HTML - the actual
+ordering requirement, not just presence.

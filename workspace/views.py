@@ -354,6 +354,24 @@ class WorkspaceHistoryObjectMixin(SingleObjectMixin):
             context['dataset_tool_ids'] = dataset_tool_ids
             context['tool_names'] = tool_names
             context['citations'] = build_citations(dataset_tool_ids)
+
+        # First finished newick/nhx dataset in the history, if any - the
+        # same file the table's own {% if file.extension in "nhx,nwk" %}
+        # branch shows the "Interactive Tree visualisation"/iTOL buttons
+        # for (see history_contents_refreshable.html). Read straight off
+        # history_content, already fetched above with no extra Galaxy
+        # call - this is what history_contents_refreshable.html's inline
+        # phylotree.js preview fetches (via display_raw) and renders,
+        # once, the first time it appears.
+        tree_dataset = next(
+            (f for f in history_content
+             if isinstance(f, dict) and f.get('extension') in ('nhx', 'nwk')
+             and 'ok' in (f.get('state') or '')),
+            None)
+        if tree_dataset and tree_dataset.get('id'):
+            context['tree_preview_dataset_id'] = tree_dataset['id']
+            context['tree_preview_url'] = reverse(
+                'display_raw', kwargs={'file_id': tree_dataset['id']})
         return context
 
 
