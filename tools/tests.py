@@ -289,6 +289,62 @@ class CitationLatexArtifactsTest(TestCase):
         self.assertNotIn('{PhyML}', text)
 
 
+class CitationMalformedBibtexTest(TestCase):
+    """
+    Regression test: a real citation hit live with an unquoted, non-
+    standard month value ("month = june," rather than either the 3-letter
+    "jun" bibtexparser's common-strings table resolves, or a quoted/braced
+    string) - bibtexparser interprets a bare word like that as a
+    reference to a @string macro, and since no such macro is defined,
+    raises bibtexparser.bibdatabase.UndefinedString. Uncaught, this
+    500'd workspace.views.HistoryDetailView (via Tool.citations ->
+    Citation.format()) over a single malformed citation on one tool.
+    format()/txt() now catch any bibtexparser parse failure and degrade
+    to no citation text for that one entry, rather than crash the page.
+    """
+
+    def setUp(self):
+        with patch('galaxy.models.requests.get',
+                   return_value=Mock(status_code=200,
+                                      json=lambda: {'version_major': '25.1'})):
+            server = Server.objects.create(
+                url='http://fake-galaxy.example.org', current=True)
+        tool_id = 'toolshed.example.org/repos/x/y/badmonth/1.0'
+        with patch('tools.models.requests.get',
+                   return_value=Mock(status_code=200, json=lambda: {
+                       'id': tool_id, 'name': 'BadMonth', 'version': '1.0',
+                       'inputs': [], 'outputs': [],
+                   })):
+            tool = Tool.objects.create(
+                galaxy_server=server, id_galaxy=tool_id,
+                name='BadMonth', description='A tool', version='1.0')
+        self.citation = Citation.objects.create(
+            tool=tool,
+            reference=(
+                '@article{test2020,'
+                'author={Doe, John},'
+                'title={A Test Paper},'
+                'journal={Journal of Testing},'
+                'year={2020},'
+                'month=june,'
+                'volume={1},'
+                'pages={1-2},'
+                'doi={10.1/test}'
+                '}'
+            ))
+
+    def test_format_degrades_to_empty_list_instead_of_raising(self):
+        self.assertEqual(self.citation.format(), [])
+
+    def test_txt_degrades_to_empty_string_instead_of_raising(self):
+        self.assertEqual(self.citation.txt(), "")
+
+    def test_tool_citations_property_does_not_raise(self):
+        # The actual path workspace.views.HistoryDetailView goes through
+        # (Tool.citations -> Citation.format() for every citation).
+        self.assertEqual(self.citation.tool.citations, [])
+
+
 class GetToolNameViewTest(TestCase):
     """
     Regression test: get_tool_name (used by AJAX from the history

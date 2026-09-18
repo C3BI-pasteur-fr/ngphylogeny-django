@@ -1,4 +1,5 @@
 import ast
+import logging
 import requests
 import bibtexparser
 from bibtexparser.bparser import BibTexParser
@@ -11,6 +12,8 @@ from django.utils.translation import gettext as _
 
 from data.models import ExampleFile
 from galaxy.models import Server
+
+logger = logging.getLogger(__name__)
 
 
 class Tool(models.Model):
@@ -466,7 +469,25 @@ class Citation(models.Model):
 
     def format(self):
         reference = self._resolve_latex_escapes(self.reference)
-        bib_database = bibtexparser.loads(reference, parser=self._bibtex_parser())
+        try:
+            bib_database = bibtexparser.loads(reference, parser=self._bibtex_parser())
+        except Exception:
+            # Raw BibTeX straight from Galaxy's /api/tools/{id}/citations
+            # (see the reference field's own docstring) - a real one hit
+            # live: a bare, non-standard month value ("month = june,"
+            # rather than the 3-letter "jun" bibtexparser's common-strings
+            # table actually knows, or a quoted/braced string) makes
+            # bibtexparser try to resolve it as a @string macro reference
+            # and raise bibtexparser.bibdatabase.UndefinedString - which,
+            # unhandled, 500'd the entire history detail page over one
+            # malformed citation on one tool. Caught broadly (not just
+            # UndefinedString) since this is arbitrary external BibTeX
+            # text with no schema guarantee - any other parse failure
+            # shouldn't crash the page either.
+            logger.warning(
+                "Could not parse BibTeX citation %s for tool %s",
+                self.pk, self.tool_id, exc_info=True)
+            return []
         f = []
         for k, v in bib_database.entries_dict.items():
             journal = self._strip_scp_tags(v.get('journal',''))
@@ -491,7 +512,14 @@ class Citation(models.Model):
 
     def txt(self):
         reference = self._resolve_latex_escapes(self.reference)
-        bib_database = bibtexparser.loads(reference, parser=self._bibtex_parser())
+        try:
+            bib_database = bibtexparser.loads(reference, parser=self._bibtex_parser())
+        except Exception:
+            # Same malformed-BibTeX defense as format() above.
+            logger.warning(
+                "Could not parse BibTeX citation %s for tool %s",
+                self.pk, self.tool_id, exc_info=True)
+            return ""
         f = ""
         for k, v in bib_database.entries_dict.items():
             journal = self._strip_scp_tags(v.get('journal',''))
