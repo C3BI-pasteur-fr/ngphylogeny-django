@@ -122,9 +122,33 @@ happens inside a script tag executed asynchronously relative to
 	"{{ tool_id|escapejs }}": "{{ name|default:""|escapejs }}",
 	{% endfor %}
     };
+    // First finished nhx/nwk dataset in this history, if any - same
+    // dataset the table's iTOL/"Interactive Tree visualisation" buttons
+    // below appear for (workspace.views.WorkspaceHistoryObjectMixin.
+    // get_context_data). Building (fetch + d3 layout) happens at most
+    // once per history - see maybeBuildTreePreview/
+    // placeTreePreviewIntoLiveRegion in history_contents_provenance_
+    // ajax.html, the outer shell #tree-preview-wrapper actually lives
+    // in.
+    var treePreviewDatasetId = "{{ tree_preview_dataset_id|default:""|escapejs }}";
+    var treePreviewUrl = "{{ tree_preview_url|default:""|escapejs }}";
 
     $(function () {
 	$root.find('[data-toggle="tooltip"]').tooltip();
+
+	window.maybeBuildTreePreview(treePreviewDatasetId, treePreviewUrl);
+	// Only relocate the (possibly already-built, from an earlier poll)
+	// preview into this render's own anchor when it's landed in the
+	// live DOM already - i.e. not for a staged build, which is still
+	// sitting hidden in #history-refreshable-staging at this point.
+	// Moving the wrapper here for a staged render would rip it out of
+	// the still-visible live region early, flashing it away for
+	// however long staging takes - the swap script at the bottom of
+	// this file does the equivalent move instead, at the same instant
+	// the rest of the staged content actually goes live.
+	{% if not staging %}
+	window.placeTreePreviewIntoLiveRegion();
+	{% endif %}
 
 	if (historySteps.length === 0) {
 	    window.__historyStepChainReady.resolve();
@@ -263,6 +287,14 @@ happens inside a script tag executed asynchronously relative to
     // moves the already-finished nodes over wholesale.
     $.when(window.__historyStepChainReady, window.__historyTableReady).done(function () {
 	$('#history-refreshable-region').empty().append($root.contents());
+	// Now that the fresh #tree-preview-anchor placeholder (part of the
+	// content just appended above) actually exists in the live region,
+	// relocate the persistent, already-built preview into it - a plain
+	// reparent of the existing SVG/d3 tree, not a rebuild (see
+	// maybeBuildTreePreview above). A no-op if nothing's been built yet
+	// (window.treePreviewDatasetId still unset) - picked up on a later
+	// poll instead, once the fetch this render kicked off resolves.
+	window.placeTreePreviewIntoLiveRegion();
 	if (window.historyRefreshWatchdog) {
 	    clearTimeout(window.historyRefreshWatchdog);
 	}
@@ -275,6 +307,16 @@ happens inside a script tag executed asynchronously relative to
 <div class="row">
   <div class="col-md-12">
     <div id="workflow-step-chain" class="workflow-step-chain"></div>
+  </div>
+</div>
+<div class="row">
+  <div class="col-md-12">
+    <!-- Placeholder only - the actual tree preview (#tree-preview-wrapper,
+         built at most once, see maybeBuildTreePreview above) lives outside
+         this auto-refreshed fragment and is moved in here on each render
+         that already has it built, rather than being rebuilt from this
+         markup every poll. -->
+    <div id="tree-preview-anchor"></div>
   </div>
 </div>
 <div class="row">

@@ -1429,6 +1429,90 @@ class HistoryContentRefreshViewTest(TestCase):
         self.assertIn('Analysis is being initialized', response.content.decode())
 
 
+class TreePreviewTest(TestCase):
+    """
+    Regression tests for the inline phylotree.js tree preview
+    (history_contents_refreshable.html, built by workspace.views.
+    WorkspaceHistoryObjectMixin.get_context_data's tree_preview_dataset_id/
+    tree_preview_url) - shown above the dataset table, below the
+    workflow step chain, as soon as a finished nhx/nwk dataset exists in
+    the history. Same setUp fixture as HistoryContentRefreshViewTest.
+    """
+
+    def setUp(self):
+        with patch('galaxy.models.requests.get',
+                   return_value=Mock(status_code=200,
+                                      json=lambda: {'version_major': '25.1'})):
+            self.server = Server.objects.create(
+                url='http://fake-galaxy.example.org', current=True)
+        user = User.objects.create_user('admin')
+        GalaxyUser.objects.create(
+            user=user, galaxy_server=self.server, api_key='fakekey',
+            anonymous=True)
+        # Resolves locally (Tool.objects...) rather than falling back to
+        # a real Galaxy API call - same reasoning as
+        # HistoryContentRefreshViewTest's own fixture: this test only
+        # cares about the tree-preview wiring, not tool-name resolution,
+        # so avoid a real outbound HTTP attempt to fake-galaxy.example.org.
+        with patch('tools.models.requests.get',
+                   return_value=Mock(status_code=200, json=lambda: {
+                       'id': 'mafft', 'name': 'ignored', 'version': '1.0',
+                       'inputs': [], 'outputs': [],
+                   })):
+            Tool.objects.create(
+                galaxy_server=self.server, id_galaxy='mafft',
+                name='MAFFT', description='Alignment', version='1.0')
+
+    def _make_history(self, history_content):
+        return WorkspaceHistory.objects.create(
+            history='hist1', name='Test run', email='', monitored=True,
+            finished=False, source_ip='127.0.0.1',
+            workflow_category='OneClick', workflow_steps='',
+            galaxy_server=self.server,
+            history_content_json=json.dumps(history_content),
+            history_info_json=json.dumps({'id': 'hist1', 'name': 'Test run'}))
+
+    def test_tree_preview_wired_up_once_a_finished_tree_dataset_exists(self):
+        self._make_history([
+            {'id': 'd1', 'hid': 1, 'name': 'input.fasta', 'state': 'ok',
+             'visible': True, 'extension': 'fasta'},
+            {'id': 'd2', 'hid': 2, 'name': 'tree.nhx', 'state': 'ok',
+             'visible': True, 'extension': 'nhx'},
+        ])
+        with patch('bioblend.galaxy.histories.HistoryClient.show_dataset_provenance',
+                   return_value={'tool_id': 'mafft'}), \
+             patch('workspace.views.updateworkspacestatus.delay'):
+            response = self.client.get(
+                reverse('history_content_refresh', kwargs={'history_id': 'hist1'}))
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode()
+        self.assertIn('var treePreviewDatasetId = "d2";', html)
+        self.assertIn(reverse('display_raw', kwargs={'file_id': 'd2'}), html)
+        self.assertIn('id="tree-preview-anchor"', html)
+        # Positioned below the step chain, above the dataset table.
+        self.assertLess(html.index('id="workflow-step-chain"'),
+                         html.index('id="tree-preview-anchor"'))
+        self.assertLess(html.index('id="tree-preview-anchor"'),
+                         html.index('id="myTable"'))
+
+    def test_no_tree_preview_wiring_without_a_finished_tree_dataset(self):
+        self._make_history([
+            {'id': 'd1', 'hid': 1, 'name': 'input.fasta', 'state': 'ok',
+             'visible': True, 'extension': 'fasta'},
+            {'id': 'd2', 'hid': 2, 'name': 'tree.nhx', 'state': 'running',
+             'visible': True, 'extension': 'nhx'},
+        ])
+        with patch('bioblend.galaxy.histories.HistoryClient.show_dataset_provenance',
+                   return_value={'tool_id': 'mafft'}), \
+             patch('workspace.views.updateworkspacestatus.delay'):
+            response = self.client.get(
+                reverse('history_content_refresh', kwargs={'history_id': 'hist1'}))
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode()
+        self.assertIn('var treePreviewDatasetId = "";', html)
+        self.assertIn('id="tree-preview-anchor"', html)
+
+
 class WorkspacePermalinkTest(TestCase):
     """
     Tests for the workspace/histories permalink feature -
