@@ -2009,3 +2009,585 @@ temporarily replaced with a fake that returns an empty body twice then
 the real newick on the third call, mirroring the actual observed
 failure) - confirmed the tree renders correctly on that third,
 self-triggered retry with no poll involved at all.
+
+### Upgrading both tree-visualization surfaces to a modern phylotree.js
+
+Both remaining consumers of the ancient, vendored `phylotree.js-0.1.9`
+(2016-era bundled build) - the inline preview above and the full
+"Interactive Tree visualisation" page (`templates/treeviz/tree.html`,
+`data.views.tree_visualization`) - were moved to the actively-maintained
+npm `phylotree` package (2.6.0, current at the time this was written).
+It's the *same* upstream project (`veg/phylotree.js`), just years newer:
+D3 v7 core, TypeScript, real tagged releases, none of the ad hoc bundled
+concatenation the old vendored file had. `templates/blast/result.html`'s
+own "Quick (and inaccurate) tree" was deliberately left on the old
+0.1.9 version - out of scope for this change, and not worth touching
+opportunistically.
+
+**No build tooling exists in this project (no node, no webpack/esbuild),
+so "upgrade the library" meant finding a genuinely CDN-servable browser
+bundle, not just an npm package.** Confirmed directly (not assumed):
+`phylotree`'s own `package.json` `unpkg`/`jsdelivr` fields point at
+`dist/phylotree.js`, a real pre-built UMD bundle - vendored locally
+under `assets/phylotree-2.6.0/` (`phylotree.js`, `phylotree.min.js`,
+`phylotree.css`, and `phylotree-menus.css` - the last one is a separate
+file the npm package ships under `src/render/styles/`, not bundled into
+`dist/phylotree.css`, needed for the library's own built-in right-click
+context menus to render at all).
+
+**A real bug in that UMD bundle itself, found by actually reading the
+unminified output, not assumed:** it declares both `underscore` and
+`lodash` as external browser globals, but its own rollup build config
+never gave them distinct global names - both defaulted to the
+conventional `_`, and rollup only avoided a *local parameter name*
+clash inside its own factory function by suffixing the second one to
+`_$1`. That's purely an internal variable name; the bundle's actual UMD
+header (verified in the unminified `dist/phylotree.js`) reads
+`factory(global.phylotree = ..., global._, global._$1)` - i.e. it
+genuinely expects a global literally named `_$1` for lodash, which
+nothing ever defines on its own. Worked around with
+`assets/phylotree-2.6.0/underscore-lodash-shim.js`: load underscore,
+capture it (`window.__phylotreeUnderscore = window._`), load lodash
+(which overwrites `window._`), then the shim swaps them into the two
+slots the bundle actually reads
+(`window._$1 = window._; window._ = window.__phylotreeUnderscore;`).
+Verified this whole chain works in headless Chrome before writing it
+into either template, both against a minimal page and against this
+app's *entire* real script/CSS list served from a local instance - it
+does.
+
+**API differences from the old vendored version, also verified directly
+rather than assumed from the (incomplete) upstream README/API docs:**
+- Construction: `new window.phylotree.phylotree(newickString)` (the
+  UMD global's own `phylotree` property is the class - confirmed by
+  reading the bundle's own `exports.phylotree = Phylotree` line), not
+  the old `d3.layout.phylotree()` factory function chain.
+- Rendering targets a **container `<div>`**, not a d3 selection of an
+  already-existing `<svg>` - `tree.render({container: "#id"|domNode,
+  width, height, ...options})` builds the SVG internally. Critically,
+  `render()` alone does **not** insert anything into the page - it
+  returns a `TreeRender` object; the actual `<svg>` DOM node only comes
+  from calling `.show()` on that object, which still has to be
+  `appendChild`'d into the container by hand. This isn't documented
+  anywhere in the README/API.md fetched during this work - found by
+  reading `render()`'s own source and a helper call site
+  (`select(rendered_tree.container).node().appendChild(rendered_tree.show())`)
+  elsewhere in the bundle, then confirmed empirically (a
+  `render()`-only call left the container empty; adding
+  `.appendChild(display.show())` produced real content).
+- Most option key *names* carried over unchanged from the old version
+  (`align-tips`, `show-scale`, `selectable`, `collapsible`,
+  `restricted-selectable`, `reroot`, `hide`, `brush`, `zoom`,
+  `left-right-spacing`, etc.) - same project, same option vocabulary,
+  confirmed by diffing the old vendored file's own internal defaults
+  object against the new one's behavior, not by guessing from the name
+  similarity alone.
+
+**The inline preview** (`history_contents_provenance_ajax.html`)
+follows the exact same build-once/retry/reparent architecture documented
+above - only `renderPendingTreePreview`'s actual rendering call changed
+(the old `d3.layout.phylotree().svg(d3.select(...))...layout()` become
+`new phylotree.phylotree(newick).render({container: $container[0], ...})`
+followed by `$container.append(display.show())`), and the retry-on-empty
+check now looks for a real `<svg>` inside the container instead of
+child nodes of the `<svg>` itself (since the container is a plain `<div>`
+now - `#tree-preview-svg` in the markup, kept as-is despite no longer
+literally being an `<svg>` tag, to avoid unrelated churn). Nothing about
+upgrading the library explains *why* the earlier empty-container timing
+bug happened in the first place, so the same defensive retry stayed.
+
+**The full interactive viewer** (`templates/treeviz/tree.html`) is where
+the real design decision was: rather than reverse-engineer every one of
+the old PRESTO control panel's bespoke controls (phylogram/dendrogram
+toggle, linear/radial/slanted layout, ladderizing sort buttons,
+bootstrap/branch-length text toggles, tip alignment, manual zoom
+buttons, a node-name search/highlight box - all hand-wired in the now-
+deleted `assets/presto/load_tree.js` against the old library's API) one
+by one against a different, only partially-documented modern API, the
+whole bespoke panel was dropped in favor of the new library's own
+built-in interaction system (right-click context menus, selection,
+zoom/brush) - an explicit choice made with the user rather than
+assumed. The page is now just a container `<div>` plus one `render()`
+call with `selectable`/`collapsible`/`reroot`/`hide`/`brush`/`zoom`/
+`show-scale` all enabled, and a one-line hint below the heading. The
+"PRESTO" branding (a name for the old bespoke implementation
+specifically) was dropped along with it, in favor of a plain
+"Phylogenetic tree viewer" heading - keeping that name on a page that no
+longer runs the actual PRESTO code would have been misleading. The
+`assets/presto/` directory (d3 v3, `load_tree.js`, the old vendored
+`phylotree.js`/`phylotree.css`, bundled font-awesome) is deleted
+outright, not left around unreferenced - confirmed nothing else in the
+codebase (`grep`'d templates and static references, not assumed) still
+pointed at it once this page stopped using it.
+
+**Verified directly, not assumed:** rendering (real SVG with the
+correct node/branch counts, no exceptions) for both surfaces, in
+headless Chrome, against this app's real vendored static assets served
+from a local `docker compose -f docker-compose.standalone.yml -f
+docker-compose.dev.yml` instance. This section originally also flagged
+the built-in menu as "not verified" - a synthetic `contextmenu` event
+never triggered it in headless Chrome - and guessed (wrongly) that this
+was just a synthetic-event limitation, writing a "right-click a node"
+hint into the page on that assumption. It's actually much simpler: the
+menu is wired to a plain `"click"` handler in the library's own source
+(`handle_node_click`, called from every node's circle/label click
+listener - confirmed by reading it directly, not the incomplete docs),
+never `"contextmenu"` at all - so the synthetic `contextmenu` dispatch
+was testing an event the library never listens for in the first place,
+and the real, live behavior (a real user right-clicking, expecting a
+menu per that hint text, and getting the browser's own native menu
+instead, since nothing here ever suppresses it) is exactly what got
+reported live. Fixed by correcting the hint text to say "click", not
+"right-click" - see the toolbar section below for where this surfaced
+and how it was actually confirmed working (a real left-click, via
+`elementFromPoint` + dispatched mouse events, does open
+`.phylotree-context-menu` with real content).
+No new Python-level tests were added for either template - both are
+pure client-side rendering with no server-side logic change beyond
+what `data.tests.TreeVisualizationTest`/`workspace.tests.TreePreviewTest`
+already cover (context variables, markup positioning), which still
+pass unchanged.
+
+### A real toolbar was added back on top of the built-in UI, on both surfaces
+
+The "lean on built-in UI" decision above still left both tree panels
+with no *visible* controls at all - right-click-only discovery, plus
+whatever the mouse/scroll gestures happen to be, isn't obviously
+findable. A small toolbar was added back to both surfaces (built fresh
+against phylotree.js 2.6's own real API, not a port of the old PRESTO
+panel's code) rather than reintroducing the old bespoke controls
+wholesale - the built-in interaction system (collapse, hide, reroot,
+selection) is kept for everything not covered by an explicit button.
+
+Both surfaces share the same shape: a small state object
+(`treeOptions`/`window.treePreviewOptions`) plus a `showBranchLengths`
+flag, and every control just flips one field and calls a shared rebuild
+function - either a full `tree.render(treeOptions)` (layout/align-tips/
+support-values - simplest and most reliable given phylotree.js 2.x
+*does* expose live accessors for these, see below, but a fresh render is
+still what the library's own internal reroot-handling code does
+whenever anything changes, verified directly in the vendored bundle)
+or, for the branch-length toggle specifically, `display.layout()` on
+the *existing* render (keeps the current pan/zoom, since nothing about
+that toggle needs a fresh tree). Buttons: a layout (linear/radial)
+toggle, align-tips, show-support-values, show-branch-lengths, zoom in/
+out, and reset-view (a full rebuild, which conveniently also clears the
+zoom transform back to its initial state).
+
+**Verified directly against the vendored bundle, not assumed from the
+(incomplete) README/API docs, since the option-name-carried-over
+assumption elsewhere in this section turned out right but this needed
+checking too:**
+- `radial(attr)`/`alignTips(attr)`/`internalNames(attr)` are real, live
+  getter/setter methods on the `TreeRender` (`display`) object -
+  `display.radial(true).layout()` (matching the *old* API's own
+  `tree.radial(!tree.radial()).placenodes().update()` idiom almost
+  exactly) re-lays-out in place without needing a fresh `render()` call
+  at all. Used for the full-viewer toolbar's own toggles; the inline
+  preview's toolbar still does a full rebuild for these three instead,
+  for consistency with its own already-established
+  `rebuildTreePreviewSvg()`/`treePreviewBranchLengthStyler` split rather
+  than mixing two different update strategies in the smaller surface.
+- Toggling "show support values" is `internalNames(true)` - internal
+  node *names* are what a real newick file's own bootstrap/support
+  values usually are, and this option is literally "show internal node
+  names as labels" (confirmed by tracing `showInternalName()`'s own
+  source, not the option's name alone) - there's no separate
+  "bootstrap" boolean that does anything (present in the options
+  defaults object but never read anywhere else in the bundle - checked
+  directly, a dead/vestigial key in this version).
+- There's no built-in option at all for showing branch-length *text*
+  labels (only the "branches"/"scaling" options controlling whether
+  branch length *proportionally sizes* the drawn geometry, which was
+  already the default behavior regardless of this toolbar) - though the
+  library does already show a native SVG `<title>` hover tooltip
+  ("Length = ...") on every edge, found while tracing this, independent
+  of anything added here. The toolbar's own visible text label is a
+  small custom `style_edges` callback instead, using
+  `this.phylotree.branch_length_accessor(edgeDatum.target)` - the
+  library's own accessor (matching how it computes that hover tooltip
+  value) - rather than reading the parsed newick's raw `attribute`
+  field by hand.
+- **A real bug in this library version's `refresh()`**, found by hitting
+  it directly (a synthetic reproduction, not a docs warning): its
+  edge-styling loop calls the configured `style_edges` callback via
+  `edges.each(d => { this.edge_styler(select(this), d); })` - an *arrow*
+  function, so `this` inside stays bound to the `TreeRender` instance
+  (from `refresh()`'s own enclosing scope) instead of d3's usual
+  per-element `this` rebinding for `.each()` callbacks, meaning
+  `select(this)` selects the `TreeRender` object, not a DOM node -
+  `element.selectAll(...)` inside the callback then throws
+  `this.querySelectorAll is not a function`. `layout()`/`update()` call
+  the *same* styler through a different, unaffected code path (a plain
+  function, not an arrow function, at a different call site - checked
+  directly) where `container` is already a proper d3 selection - so the
+  branch-length toggle calls `display.layout()`, never `display.refresh()`,
+  specifically to avoid this.
+
+Verified end to end in headless Chrome (this app's real vendored static
+assets): every toggle on both surfaces, in combination, including that
+the inline preview's toolbar survives a simulated poll (the wrapper
+gets reparented into a fresh anchor, same as `placeTreePreviewIntoLiveRegion`
+already did before this) without losing its already-built tree. No new
+Python tests - same reasoning as the section above, this is pure
+client-side behavior with no server-side/context-variable change.
+
+### Three real bugs found from actually using the toolbar work above
+
+All three reported live, against a real tree on a real local instance -
+none of them were caught by the harness-based verification the toolbar
+work above relied on, since none of them are exceptions or missing
+DOM nodes; they're all "the thing technically works, but behaves badly
+in a way only a real user actually interacting with it would notice."
+
+- **Text far too large relative to the tree in the small inline
+  preview.** Confirmed directly (headless Chrome, a real container
+  narrower than the SVG's own 800-unit logical width, matching a
+  realistic preview panel): phylotree.js 2.x's "responsive" mode does
+  scale the tree's *geometry* (nodes, branches) down to fit a smaller
+  container via `viewBox` + CSS width, but does **not** scale the text
+  down along with it - a node label's `getComputedStyle().fontSize`
+  and rendered `getBoundingClientRect().height` both stayed at the
+  raw, unscaled `"font-size"` option value (14, the library's own
+  default) regardless of how much smaller the SVG was actually
+  displayed. In the full-page viewer (plenty of room, no `responsive`
+  scaling in play) this never showed up. Fixed by giving the inline
+  preview's own `window.treePreviewOptions` a smaller
+  `'font-size': 9` - the full viewer's `treeOptions` is untouched,
+  since it isn't the "small" one.
+- **Click-and-drag getting stuck in "some kind of selection mode."**
+  Both `brush` (click-and-drag to rubber-band-select a clade) and
+  `zoom` (click-and-drag to pan) were enabled together, on both
+  surfaces - the library's own default for `brush` is `true`, which
+  this toolbar work had (silently, via not overriding it) inherited.
+  The two features bind to the exact same plain-drag gesture, and nothing
+  about a brush selection offers a way to back out of it - which is
+  exactly the "stuck" feeling reported live. Fixed by setting
+  `brush: false` on both `treeOptions` and `window.treePreviewOptions`
+  - a drag is now unambiguously "pan," a plain click is unambiguously
+  "select/open this node's menu." Verified directly (headless Chrome,
+  dispatched a real mousedown/mousemove/mouseup drag sequence): with
+  `brush: false`, no `.tree-selection-brush` element exists at all, and
+  the same drag correctly updates `display.currentZoomTransform` (a
+  clean pan) instead.
+- **Left-click on a node did nothing in the small preview, but worked
+  in the full viewer - and right-click, which this page's own hint text
+  suggested, just opened the browser's native menu.** The second half
+  turned out to be a documentation bug in this codebase, not a library
+  bug - see this section's own "Verified directly, not assumed"
+  paragraph above for the fix (the menu is genuinely wired to plain
+  `"click"`, never `"contextmenu"`, confirmed directly in the vendored
+  source). The first half was never conclusively separated from the
+  `brush`/`zoom` gesture conflict above - a drag-vs-click
+  disambiguation problem (which the browser resolves by movement
+  distance/timing) is a very plausible explanation for "clicking felt
+  like it did nothing" on a small, densely-packed preview where a real
+  mouse is more likely to move a pixel or two between mousedown and
+  mouseup than on a large, spaced-out tree - and disabling `brush`
+  removes the competing gesture entirely. Verified directly (headless
+  Chrome, `elementFromPoint` at a node's real on-screen center plus a
+  dispatched mousedown/mouseup/click sequence) that a left-click,
+  post-fix, correctly opens `.phylotree-context-menu` with real content
+  ("Collapse Subtree," a selection-toggle section, etc.) on the full
+  viewer - this was, at the time, only actually checked on that one
+  surface, not the inline preview too (see immediately below for why
+  that gap mattered).
+
+No new Python tests - all three are pure client-side interaction
+behavior with no server-side/context-variable change, same reasoning as
+the sections above.
+
+### A fourth bug, found immediately after: left-click still did nothing on the inline preview specifically
+
+Reported live right after the three fixes above shipped - the built-in
+menu now genuinely opened on the full viewer (confirmed above) but
+still silently did nothing on the inline preview, on the same real
+tree. Root cause was a real bug in phylotree.js 2.6.0 itself, found by
+reading `nodeDropdownMenu`'s own source line by line rather than
+guessing: every other DOM lookup in that function correctly uses
+`select(container)` (d3's own helper, which accepts a CSS selector
+string, a raw DOM node, or an existing d3 selection interchangeably) -
+except the one line that actually makes the menu visible, which instead
+calls `document.querySelector(container)` directly:
+
+```js
+let tree_container = document.querySelector(container); // eslint-disable-line
+let rect = tree_container.getBoundingClientRect();
+menu_object.style("position", "absolute")....style("display", "block");
+```
+
+`document.querySelector()` only ever accepts a selector **string** -
+the inline preview's own `rebuildTreePreviewSvg()` was passing
+`container: $container[0]` (the actual `<div>` element, not a
+selector), which the full viewer's `render({container: "#tree_container", ...})`
+never did. Passed a raw DOM element, `document.querySelector()` throws
+(the element coerces to the string `"[object HTMLDivElement]"`, not a
+valid selector) - an uncaught exception inside a plain d3 `.on("click", ...)`
+handler, with nothing higher up the call chain to catch it, silently
+aborting `nodeDropdownMenu` on the line *before* `.style("display",
+"block")` ever runs. The menu `<div>` itself still gets created earlier
+in the same function (a different code path, using the tolerant
+`select(container)`), which is exactly why it showed up as "the menu
+element exists in the DOM but stays display:none forever" when this
+was actually diagnosed (headless Chrome: dispatched a real click at a
+node's `elementFromPoint` target, then inspected
+`.phylotree-context-menu`'s own computed `display` and
+`getBoundingClientRect()` directly, rather than assuming from the
+click alone) - not "nothing happens at all" the way it reads from the
+outside.
+
+Fixed by passing `container: '#tree-preview-svg'` (a plain selector
+string, matching the full viewer's own convention) instead of the raw
+element - `#tree-preview-svg` is a unique id in the outer,
+never-duplicated shell (see this file's earlier tree-preview sections
+for why that's safe), so a string selector is unambiguous here.
+Verified directly, the same way the bug itself was found: after the
+fix, the same dispatched click makes `.phylotree-context-menu` compute
+to `display: block` with a real, correctly-positioned `getBoundingClientRect()`,
+on the inline preview specifically. The full toolbar regression (every
+toggle, in combination, plus the poll-reparent survival check) was
+re-run afterward too, to confirm this one-line change didn't disturb
+anything else already verified.
+
+### Copy selected tip names, and export the tree as SVG/PNG
+
+Two more toolbar buttons, on both surfaces: "Copy selected tip names"
+and "Export SVG"/"Export PNG". Selection itself is entirely the
+library's own existing mechanism (a click on a node opens its menu -
+"All terminal nodes"/"Incident branch"/"Path to root" under "Toggle
+Selection" already call `display.modifySelection(...)` internally, from
+the toolbar work above) - nothing new was built for *making* a
+selection, only for *reading it back*.
+
+- **Copy tip names** reads `display.getSelection()` (a real method,
+  confirmed directly in the vendored bundle - returns every currently-
+  selected node, leaf or internal) and expands any selected *internal*
+  node to its own leaf descendants via `display.phylotree.
+  selectAllDescendants(node, true, false)`, so selecting a clade's root
+  from the menu and selecting its tips one by one both copy the same
+  tip name list. Copies via `navigator.clipboard.writeText()`, with a
+  fallback (and a fallback-on-*rejection*, not just on the API being
+  entirely absent) to the same temporary-textarea-plus-`execCommand`
+  approach the Workspace permalink button already uses elsewhere in
+  this codebase, for consistency.
+- **SVG/PNG export** clones the live `display.svg.node()`, sets explicit
+  `width`/`height`/`viewBox` on the clone (needed for the inline
+  preview specifically, which renders "responsive" - no fixed
+  width/height attributes on the live SVG to begin with), and - the one
+  non-obvious part - embeds `phylotree.css`'s own text inside a
+  `<style>` element in the exported SVG. Without this, an exported file
+  would come out unstyled (plain black shapes, no node colors) - a
+  serialized SVG fragment doesn't carry the *page's* external
+  stylesheet with it. Fetched once (same-origin, so no CORS concern in
+  real use) and cached rather than hand-copied into these templates, so
+  it can't drift out of sync with whatever's actually vendored. PNG
+  export then rasterizes that exported SVG onto a `<canvas>` (2x scale
+  for a sharper export) and calls `canvas.toBlob(..., 'image/png')` -
+  the `<img>` used to draw onto the canvas is loaded from a base64
+  `data:` URI, not a `URL.createObjectURL()` blob: URL, specifically to
+  avoid a known class of browser bug where a blob: URL can leave the
+  canvas "tainted" (blocking `toBlob()`) even for same-document,
+  same-origin SVG content that a data: URI doesn't hit.
+
+**A second real bug found while building this, more serious than the
+branch-length-toggle-specific one already documented above:**
+`display.modifySelection()` - the library's *own* selection mechanism,
+called internally by the built-in menu's "All terminal nodes"/etc.
+actions, i.e. the exact feature "copy tip names" depends on - also
+calls the same buggy `refresh()` internally. Since this toolbar's own
+`branchLengthStyler`/`treePreviewBranchLengthStyler` is registered via
+`style_edges()` unconditionally (not just while the branch-length
+toggle is on - the callback runs on every edge regardless, and checks
+the toggle itself as its first real line of logic), simply *having*
+that toggle installed was enough to make selecting anything via the
+built-in menu throw and break, independent of whether branch lengths
+were ever shown at all. Caught live, building this exact feature - not
+by the earlier toolbar verification, since that never exercised
+`modifySelection()` (only this toolbar's own `.layout()`-based toggle,
+which was already known to avoid `refresh()`).
+
+Fixing this took two attempts: the first guard checked
+`typeof element.selectAll !== 'function'`, which still threw -
+`select()` (d3's own selection constructor) always returns a full
+Selection object with every method present, *regardless* of what it's
+actually wrapping, so `element.selectAll` is a function either way; it
+only throws **inside** `selectAll()`, once it tries to call
+`querySelectorAll` on the underlying wrapped object. The working guard
+instead checks the *wrapped node itself* -
+`element.node() && typeof element.node().querySelectorAll ===
+'function'` - which correctly distinguishes a real DOM-wrapping
+selection from `refresh()`'s broken one (wrapping the `TreeRender`
+instance). Applied to both `branchLengthStyler` (full viewer) and
+`treePreviewBranchLengthStyler` (inline preview) identically. Verified
+directly (headless Chrome): a real `display.modifySelection(tips)`
+call, mirroring exactly what the built-in menu's "All terminal nodes"
+action does, no longer throws, and `getSelection()` correctly reflects
+the selection afterward - on both surfaces.
+
+Verified end to end (headless Chrome, this app's real vendored static
+assets, the real vendored `phylotree.css` content - not a stand-in
+string - fetched once via `curl` and mocked into `$.get` since a
+`file://` test page can't itself cross-origin-fetch it the way a real
+same-origin deployment does): a real clade selection, its tip names
+correctly extracted (including the internal-node-selection expansion
+case), a captured SVG export blob containing both real tree markup and
+the embedded CSS, and a captured PNG export blob with a real, non-trivial
+size and no canvas-tainting error - on both surfaces, plus the full
+existing toggle regression re-run afterward to confirm nothing else
+regressed. **Not verified** (a real limitation of headless/synthetic-
+click automation, not a known bug): whether `navigator.clipboard.
+writeText()` itself actually places text on a real system clipboard -
+`navigator.clipboard` is a read-only browser property that can't be
+mocked by simple assignment, and a script-triggered synthetic click
+doesn't carry the "real user gesture" credit the Clipboard API
+requires, so the write silently no-ops in this exact test setup
+regardless of whether the underlying code is correct. Worth a real
+manual click to confirm.
+
+### A third layout: "unrooted" (distinct from the existing "circular"/radial one)
+
+The toolbar's layout control was a 2-way `is-radial` toggle
+("Linear"/"Radial"). Requested: a third, genuinely different "unrooted"
+layout - the name is a real source of confusion here, since an
+equal-angle unrooted layout is itself sometimes informally called
+"radial" too, easy to conflate with phylotree.js's own `is-radial`
+option (a circular layout rooted at the center - a different algorithm
+entirely). Confirmed directly against the vendored bundle (not assumed
+from the name alone) that the library has a real, separate, working
+third option for exactly this: `is-unrooted` / the `unrooted()`
+accessor, genuinely read in several real layout-computation code paths
+(`showInternalName`-adjacent direction logic, the core layout function,
+etc.) - not a vestigial/unused option the way `bootstrap` turned out to
+be earlier in this file. Verified empirically too: rendering the same
+tree with `is-radial` vs `is-unrooted` produces different node
+transform coordinates, not the same layout under two names.
+
+The old "Linear"/"Radial" 2-button group became a 3-button
+"Linear"/"Circular"/"Unrooted" group on both surfaces (renaming
+"Radial" to "Circular" specifically to stop colliding with the new
+"Unrooted" button's own informal "radial" nickname) - `is-radial` and
+`is-unrooted` are never both true at once (nothing in the library
+enforces that itself; `setLayout()`/`setTreePreviewLayout()` always set
+both flags together, one true and one false, whichever button was
+clicked). Same rebuild-from-scratch pattern as every other layout-
+affecting toggle already in this toolbar. Also added proper `active`-
+class tracking to the full viewer's layout buttons for the first time
+(the inline preview's other toggle buttons already did this; the full
+viewer's plain Linear/Radial pair never had it, since with only two
+mutually exclusive states the default/non-default one was implied -
+worth doing properly now that there are three).
+
+Verified in headless Chrome (both surfaces): clicking each of the three
+layout buttons in sequence correctly sets exactly one of
+`is-radial`/`is-unrooted` and clears the other, moves the `active` CSS
+class to the clicked button and off the other two, and the rest of the
+existing toggle regression (align tips, support values, branch lengths,
+zoom, reset, the inline preview's poll-reparent survival) still passes
+unchanged afterward.
+
+### A negative branch length breaks the new unrooted layout specifically
+
+Reported live against a real tree with `Tant_cDNA:-0.00007` - a small
+negative branch length, the kind of numerical-correction artifact some
+phylogenetic methods leave near true zero (not a data error to reject,
+just not physically meaningful as a length). In the unrooted layout
+specifically, that one branch rendered roughly **800 SVG units long**,
+against a tree where the next-longest real branch was ~230 units and
+most branches were single digits - a real, large visual defect, not a
+subtle one. Linear and circular layouts were unaffected - specific to
+unrooted's own equal-angle direction-vector math.
+
+Root cause, found by measuring actual rendered edge lengths and
+`branch_length_accessor()`'s return value directly against the real
+tree (not guessed): `branch_length_accessor` clamps a negative length to
+exactly `0` - and it's that **zero**, not the negative sign itself, that
+degenerates the unrooted layout's per-edge direction vector (confirmed
+by testing a tiny *positive* epsilon in place of `0`, which did **not**
+fix it, before finding what does). What actually fixes it: stripping
+just the minus sign and keeping the branch's original magnitude
+(`-0.00007` -> `0.00007`) - verified directly, both offline and against
+the real live page (headless Chrome, clicking the real "Unrooted"
+toolbar button and re-measuring: the tree's longest edge afterward was
+~313 units, matching its real longest branch, with no ~800-unit
+outlier).
+
+Fixed by sanitizing the newick string itself, once, right where each
+surface first receives it - `templates/treeviz/tree.html`'s `var
+newick = "...".replace(/:-(?=[\d.])/g, ':')`, and the inline preview's
+equivalent applied once when `window.treePreviewPendingNewick` is first
+set (not repeated on every `rebuildTree()`/`rebuildTreePreviewSvg()`
+call) - rather than relying on phylotree.js's own clamping, which by
+the time it runs has already fed the broken zero into the layout math.
+Applied unconditionally (not just when the unrooted layout is active) -
+a negative branch length isn't meaningful in the *other* two layouts
+either, even though they happen to tolerate it without visibly
+breaking; sanitizing once regardless of which layout is currently
+selected is simpler than trying to apply it only when needed.
+
+No new Python tests - this is a pure client-side newick string
+transform with no server-side/context-variable change, same reasoning
+as this file's other tree-toolbar sections. Verified end to end
+(headless Chrome): the full existing toggle regression (layout
+switching between all three, align tips, support values, branch
+lengths, zoom, reset) still passes unchanged with the sanitizing in
+place, on both surfaces.
+
+### Tip label font size +/- controls
+
+Two more buttons, both surfaces: increase/decrease the tip label font
+size (2px per click, clamped to [6, 40]). Straightforward-looking, but
+the actual mechanism needed real investigation, not just passing a
+bigger number to an obvious option:
+
+- **The library's own `font_size()` accessor method is completely
+  unreachable.** Confirmed directly (not guessed): the `TreeRender`
+  constructor sets `this.font_size = this.options["font-size"]` - a
+  plain instance property - which permanently shadows the same-named
+  prototype method mixed in elsewhere in the bundle. `display.
+  font_size(20)` throws `"display.font_size is not a function"`,
+  because property lookup finds the instance's own number (14) long
+  before it would ever reach the prototype's method.
+- **Setting the `"font-size"` render option alone doesn't make an
+  *increase* visible either.** Confirmed empirically: rendering with
+  `"font-size": 24` still measured a computed tip-label font-size of
+  14px. The actual rendered size
+  (`this.shown_font_size`) is computed as `Math.min(this.font_size,
+  this.scales[0])`, and under this library's default spacing mode
+  ("fixed-step"), `this.scales[0]` is just `this.fixed_width[0]` -
+  hardcoded to `14` in the constructor, entirely independent of the
+  "font-size" option. A *decrease* (e.g. `"font-size": 8`) still worked
+  fine on its own, since 8 is already below that same 14 cap either way
+  - which is what made the bug easy to miss testing only in one
+  direction.
+- **The real lever is the library's own live `spacing_x()` accessor**
+  (unaffected by the `font_size()` shadowing bug - nothing sets
+  `this.spacing_x` as an instance property) - it maps directly onto
+  `fixed_width[0]`, i.e. the same value that caps `shown_font_size`.
+  Raising it past the desired font size unlocks that size. Its own
+  built-in re-render (calling `this.placenodes()` when set) wasn't
+  enough on its own to recompute `shown_font_size` either, confirmed by
+  testing - only a full explicit `.layout()` call afterward actually
+  did. `applyTipFontSize()` (full viewer) /
+  the inline preview's equivalent block in `rebuildTreePreviewSvg()`
+  both: set `treeOptions["font-size"]`, do the normal full rebuild, then
+  call `display.spacing_x(fontSize, true)` + `display.layout()` only
+  when the current `spacing_x()` is smaller than the new font size (a
+  no-op skip on a pure decrease, since a bigger spacing_x left over from
+  an earlier increase is harmless - `shown_font_size`'s own `Math.min`
+  already caps it back down correctly via the smaller "font-size" value
+  itself).
+- Raising `spacing_x` also means more vertical space between sibling
+  tips generally, not just a bigger font cap - an intentional,
+  reasonable side effect (bigger text needs more room to avoid
+  overlapping labels), not a workaround for something unwanted.
+
+Verified end to end (headless Chrome, both surfaces): clicking increase
+three times then decrease four times from the same starting point
+produced the expected net-one-decrement font size at every step (14 ->
+16 -> 20 -> 12 on the full viewer; 9 -> 11 -> 15 -> 7 on the inline
+preview, matching its own smaller default), each time reading the
+*actual computed* CSS font-size off a real rendered tip label, not just
+trusting the option value was set. The full existing toggle regression
+was re-run afterward on both surfaces too. No new Python tests - same
+reasoning as this file's other tree-toolbar sections, pure client-side
+behavior with no server-side/context-variable change.

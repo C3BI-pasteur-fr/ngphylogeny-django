@@ -4,24 +4,46 @@
 <script src="https://cdn.datatables.net/1.10.16/js/dataTables.bootstrap.min.js"></script>
 <link rel="stylesheet" type="text/css" href="{% static 'css/biblio.css' %}"/>
 <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.16/css/dataTables.bootstrap.min.css">
-<!-- Same minimal d3.layout.phylotree() embedded-preview pattern already
-     used by templates/blast/result.html's own "Quick (and inaccurate)
-     tree" (a plain #tree_display <svg>, no toolbar) - reused here for
-     the inline tree preview built by history_contents_refreshable.html.
-     underscore.js is a real runtime dependency of phylotree.js-0.1.9
-     itself (_.each/_.pluck/_.findWhere/etc., verified directly in that
-     vendored file, not assumed) - blast/result.html loads it for the
-     exact same reason, from the same CDN. -->
-<script src="{% static 'presto/d3.v3.min.js' %}"></script>
+<!-- Modern, actively-maintained phylotree.js (npm "phylotree" 2.6.0 - the
+     same "veg/phylotree.js" project as the older vendored
+     phylotree.js-0.1.9 still used by templates/blast/result.html/
+     templates/treeviz/tree.html, just years newer: D3 v7 bundled in,
+     TypeScript, real releases) - used here for the inline tree preview
+     built by history_contents_refreshable.html. Bundles d3 itself, but
+     still needs underscore AND lodash loaded as separate globals first -
+     see underscore-lodash-shim.js for why both, in that order, are
+     required (a real bug in this package's own UMD build, not a choice
+     made here). -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.8.3/underscore-min.js"></script>
-<link rel="stylesheet" type="text/css" href="{% static 'phylotree.js-0.1.9/phylotree.css' %}"/>
-<script src="{% static 'phylotree.js-0.1.9/phylotree.js' %}"></script>
+<script>window.__phylotreeUnderscore = window._;</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js"></script>
+<script src="{% static 'phylotree-2.6.0/underscore-lodash-shim.js' %}"></script>
+<link rel="stylesheet" type="text/css" href="{% static 'phylotree-2.6.0/phylotree.css' %}"/>
+<link rel="stylesheet" type="text/css" href="{% static 'phylotree-2.6.0/phylotree-menus.css' %}"/>
+<script src="{% static 'phylotree-2.6.0/phylotree.js' %}"></script>
 <style>
   #tree-preview-wrapper .panel-heading {
     font-weight: 600;
   }
   #tree-preview-wrapper .panel-body {
     overflow-x: auto;
+  }
+  .tree-preview-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .tree-preview-toolbar {
+    display: flex;
+    gap: 4px;
+    font-weight: normal;
+  }
+  .tree-preview-toolbar .btn.active {
+    background: #446cb3;
+    color: #fff;
+    border-color: #446cb3;
   }
   /* Workflow step chain (workspace/include/history_contents_refreshable.html)
      - one box per tool step (consecutive datasets from the same tool
@@ -257,6 +279,141 @@
     // (window.treePreviewRendered), and retries itself independently of
     // page polling via its own setTimeout loop - so a finished history
     // isn't left with no way to ever retry a one-off failure.
+    //
+    // Upgraded from d3.layout.phylotree() (the ancient bundled
+    // phylotree.js-0.1.9) to the actively-maintained npm "phylotree"
+    // 2.6.0 - same project, modern D3 v7 core. Its API is a container
+    // *div* (it builds its own <svg> internally), not a d3 selection of
+    // an existing <svg> - #tree-preview-svg below is a <div> now, not a
+    // literal <svg> tag; `tree.render({...}).show()` returns the actual
+    // <svg> DOM node, which still has to be appended into that container
+    // by hand (render() alone only builds it, it doesn't insert
+    // anything into the page - verified directly, not assumed, since
+    // this isn't documented anywhere in the library's own README/API
+    // docs). The retry-on-empty-result defense from bug (2) above is
+    // kept as-is (now checking for a real <svg> inside the container
+    // rather than child nodes of the <svg> itself) since nothing about
+    // upgrading the library addresses *why* that gap happened in the
+    // first place - it was never conclusively pinned down.
+    // Toolbar state (below, the small toolbar attached to the panel
+    // heading) and the shared rebuild routine both toggle handlers and
+    // renderPendingTreePreview's own first build use - mirrors templates/
+    // treeviz/tree.html's rebuildTree()/branchLengthStyler exactly, same
+    // reasoning throughout (re-render from scratch on every option
+    // change rather than patch the existing render in place - see that
+    // template's own comments for why, including the real refresh()
+    // arrow-function bug in this library version that rules it out for
+    // the branch-length toggle specifically).
+    window.treePreviewOptions = {
+	width: 800,
+	height: 420,
+	responsive: true,
+	zoom: true,
+	// See templates/treeviz/tree.html's own treeOptions for why this is
+	// false, unlike the library's own default - brush (drag-to-select)
+	// and zoom (drag-to-pan) compete for the same gesture, which is
+	// exactly the "stuck in some kind of selection mode" behavior
+	// reported live against this exact preview.
+	brush: false,
+	'show-scale': true,
+	// Smaller than the library's own 14px default - confirmed directly
+	// (headless Chrome, a real container narrower than this SVG's own
+	// 800-unit logical width) that phylotree.js 2.x's text does *not*
+	// visually shrink along with the rest of the tree when "responsive"
+	// scales the whole SVG down to fit a smaller container - only the
+	// geometry (nodes, branches) does. In this compact preview (unlike
+	// the full-page viewer, which has room to spare) that left 14px
+	// text looking oversized relative to the rest of the drawing,
+	// reported live.
+	'font-size': 9,
+	'align-tips': false,
+	// See templates/treeviz/tree.html's own treeOptions for why both
+	// exist as separate, mutually-exclusive flags - "is-unrooted" is a
+	// genuinely different, real layout (equal-angle unrooted), not an
+	// alias for "is-radial", confirmed directly against the vendored
+	// bundle.
+	'is-radial': false,
+	'is-unrooted': false,
+	'internal-names': false
+    };
+    window.treePreviewShowBranchLengths = false;
+
+    function treePreviewBranchLengthStyler(element, edgeDatum) {
+	// See templates/treeviz/tree.html's own branchLengthStyler for why
+	// this guard exists: display.refresh() isn't only called from
+	// code this toolbar controls - the library's own modifySelection()
+	// (used internally by the built-in node menu's selection actions)
+	// calls refresh() too, and refresh() has a real bug in this
+	// library version (an arrow function loses `this`) that passes a
+	// broken, non-selection `element` here - without this guard, that
+	// broke node selection entirely, not just the branch-length toggle.
+	// element.selectAll() alone can't tell a broken invocation apart
+	// from a real one - select() always returns a full Selection
+	// object with every method present regardless of what it's
+	// wrapping, and only throws *inside* selectAll() once it tries to
+	// actually use the wrapped non-DOM object - confirmed live, a
+	// first attempt at this guard checked `typeof element.selectAll`
+	// and still threw.
+	var node = element && element.node && element.node();
+	if (!node || typeof node.querySelectorAll !== 'function') {
+	    return;
+	}
+	element.selectAll('.branch-length-label').remove();
+	var length = this.phylotree.branch_length_accessor(edgeDatum.target);
+	if (window.treePreviewShowBranchLengths && length !== undefined) {
+	    element.append('text')
+		.attr('class', 'branch-length-label')
+		.attr('x', (edgeDatum.source.y + edgeDatum.target.y) / 2)
+		.attr('y', (edgeDatum.source.x + edgeDatum.target.x) / 2 - 3)
+		.text(parseFloat(length).toFixed(3));
+	}
+    }
+
+    window.rebuildTreePreviewSvg = function () {
+	if (!window.treePreviewPendingNewick) {
+	    return;
+	}
+	var $container = $('#tree-preview-svg');
+	$container.empty();
+	var tree = new window.phylotree.phylotree(window.treePreviewPendingNewick);
+	// container as a CSS selector *string* ('#tree-preview-svg', a
+	// unique id in this outer, never-duplicated shell - never the
+	// element itself), unlike an earlier version of this code - a real
+	// bug in phylotree.js 2.6.0 itself, found live: its own built-in
+	// context-menu positioning code
+	// (nodeDropdownMenu, `let tree_container =
+	// document.querySelector(container)`) calls the raw DOM
+	// document.querySelector() directly on whatever `container` was
+	// originally passed to render(), instead of using the same
+	// select(container) (d3's own, string-or-node-or-selection-
+	// tolerant helper) it uses everywhere else in that same function.
+	// document.querySelector() only accepts a selector *string* -
+	// passing the element itself made it throw
+	// (coerced to "[object HTMLDivElement]", not a valid selector),
+	// silently aborting nodeDropdownMenu before it ever reached the
+	// line that actually makes the menu visible
+	// (`menu_object.style("display", "block")`) - so the menu element
+	// existed in the DOM (created earlier in the same function) but
+	// stayed display:none forever, making a real left-click on a node
+	// look like it did nothing. templates/treeviz/tree.html's own
+	// render() call already used a string selector for other reasons
+	// and never hit this.
+	window.treePreviewDisplay = tree.render(
+	    $.extend({container: '#tree-preview-svg'}, window.treePreviewOptions));
+	window.treePreviewDisplay.style_edges(treePreviewBranchLengthStyler);
+	$container.append(window.treePreviewDisplay.show());
+	// See templates/treeviz/tree.html's own applyTipFontSize for why -
+	// the "font-size" option alone doesn't make an *increase* visible,
+	// since the actually-rendered size is capped by spacing_x()
+	// (defaults to 14, independent of "font-size") under this library's
+	// default spacing mode - confirmed directly, not assumed.
+	var fontSize = window.treePreviewOptions['font-size'];
+	if (window.treePreviewDisplay.spacing_x() < fontSize) {
+	    window.treePreviewDisplay.spacing_x(fontSize, true);
+	    window.treePreviewDisplay.layout();
+	}
+    };
+
     window.placeTreePreviewIntoLiveRegion = function () {
 	if (!window.treePreviewRendered) {
 	    // Nothing built yet - if a fetch already resolved on an
@@ -292,21 +449,29 @@
 	if (attempt === 0) {
 	    $anchor.replaceWith($('#tree-preview-wrapper').removeClass('sr-only'));
 	}
-	var $svg = $('#tree-preview-svg');
+	var $container = $('#tree-preview-svg');
 	// Force the browser to commit the reparent/class removal above to
 	// a real layout before phylotree.js measures anything off of it -
 	// cheap, and the whole point of the retry below is exactly this
 	// class of "measured before the browser actually laid it out yet"
 	// gap, so don't rely on that alone.
-	$svg[0].getBoundingClientRect();
-	$svg.empty();
-	var tree = d3.layout.phylotree().svg(d3.select('#tree-preview-svg'));
-	tree.align_tips(false);
-	tree.spacing_y(18, true);
-	tree(window.treePreviewPendingNewick).layout();
-	if ($svg[0].childNodes.length > 0) {
+	$container[0].getBoundingClientRect();
+	try {
+	    window.rebuildTreePreviewSvg();
+	} catch (e) {
+	    // Fall through to the same retry-or-give-up handling as an
+	    // empty result below - a transient failure here isn't
+	    // meaningfully different from one that leaves the container
+	    // empty (see bug (2)'s own history above).
+	}
+	if ($container.find('svg').length > 0) {
 	    window.treePreviewRendered = true;
-	    window.treePreviewPendingNewick = null;
+	    // window.treePreviewPendingNewick is deliberately kept (not
+	    // nulled out) - the toolbar's toggle handlers below rebuild
+	    // from it again on every layout/align-tips/support-values
+	    // change, same as templates/treeviz/tree.html's own
+	    // rebuildTree(). Only window.treePreviewRendered gates
+	    // whether maybeBuildTreePreview ever fetches again.
 	} else if (attempt < 5) {
 	    setTimeout(function () {
 		window.renderPendingTreePreview(attempt + 1);
@@ -354,7 +519,16 @@
 	}
 	$.ajax({url: url, dataType: 'text'}).done(function (newick) {
 	    if (newick) {
-		window.treePreviewPendingNewick = newick;
+		// See templates/treeviz/tree.html's own newick sanitizing for
+		// why - a negative branch length (a numerical-correction
+		// artifact some phylogenetic methods leave near true zero)
+		// confirmed live to break the unrooted layout specifically,
+		// rendering that one branch ~800 SVG units long. Stripping
+		// just the minus sign (keeping the original magnitude, not
+		// clamping to 0 or an arbitrary epsilon - both were tried and
+		// only this actually fixed it) here, once, rather than on
+		// every rebuildTreePreviewSvg() call.
+		window.treePreviewPendingNewick = newick.replace(/:-(?=[\d.])/g, ':');
 		window.renderPendingTreePreview();
 	    } else {
 		retryOrGiveUp();
@@ -370,17 +544,271 @@
 <!-- Hidden via Bootstrap's own .sr-only (position:absolute + clip) rather
      than display:none until it's actually moved into place - see the
      script above for why display:none broke phylotree.js's own layout
-     entirely. It's only ever laid out (d3.layout.phylotree()...layout(),
+     entirely. It's only ever laid out (new Phylotree(...).render(...),
      in renderPendingTreePreview above) once .sr-only has already been
      removed and it's sitting in its real, normal-flow position - not
      while still constrained to sr-only's 1x1px clip box either, which
-     turned out to break the same way. -->
+     turned out to break the same way. #tree-preview-svg is a plain
+     container <div>, not a literal <svg> - phylotree.js 2.x builds its
+     own <svg> inside whatever container element it's given, unlike the
+     old 0.1.9 API this replaced (which rendered into a d3 selection of
+     an already-existing <svg> tag). -->
 <div id="tree-preview-wrapper" class="panel panel-default sr-only">
-  <div class="panel-heading">Phylogenetic tree preview</div>
+  <div class="panel-heading tree-preview-heading">
+    <span>Phylogenetic tree preview</span>
+    <div class="tree-preview-toolbar">
+      <button type="button" class="btn btn-default btn-xs active" id="tp_layout_linear" title="Linear layout">Lin</button>
+      <button type="button" class="btn btn-default btn-xs" id="tp_layout_circular" title="Radial layout, rooted at the center">Circ</button>
+      <button type="button" class="btn btn-default btn-xs" id="tp_layout_unrooted" title="Equal-angle unrooted layout (sometimes itself also called &quot;radial&quot;)">Unr</button>
+      <button type="button" class="btn btn-default btn-xs" id="tp_align_tips" title="Align tips">Align</button>
+      <button type="button" class="btn btn-default btn-xs" id="tp_support_values" title="Show support values">Support</button>
+      <button type="button" class="btn btn-default btn-xs" id="tp_branch_lengths" title="Show branch lengths">Lengths</button>
+      <button type="button" class="btn btn-default btn-xs" id="tp_zoom_out" title="Zoom out">
+        <span class="glyphicon glyphicon-zoom-out"></span>
+      </button>
+      <button type="button" class="btn btn-default btn-xs" id="tp_zoom_in" title="Zoom in">
+        <span class="glyphicon glyphicon-zoom-in"></span>
+      </button>
+      <button type="button" class="btn btn-default btn-xs" id="tp_zoom_reset" title="Reset view">
+        <span class="glyphicon glyphicon-refresh"></span>
+      </button>
+      <button type="button" class="btn btn-default btn-xs" id="tp_font_size_decrease" title="Smaller tip labels">
+        <span class="glyphicon glyphicon-minus"></span>
+      </button>
+      <button type="button" class="btn btn-default btn-xs" id="tp_font_size_increase" title="Larger tip labels">
+        <span class="glyphicon glyphicon-plus"></span>
+      </button>
+      <button type="button" class="btn btn-default btn-xs" id="tp_copy_tip_names" title="Copy the selected clade's tip names to the clipboard">Copy tips</button>
+      <button type="button" class="btn btn-default btn-xs" id="tp_export_svg" title="Export the tree as an SVG image">SVG</button>
+      <button type="button" class="btn btn-default btn-xs" id="tp_export_png" title="Export the tree as a PNG image">PNG</button>
+    </div>
+  </div>
   <div class="panel-body">
-    <svg id="tree-preview-svg" width="800" height="420"></svg>
+    <div id="tree-preview-svg"></div>
   </div>
 </div>
+<script>
+    // Wired up once, at page load, against the persistent
+    // #tree-preview-wrapper (never recreated - see this file's own
+    // comments above on why it lives outside the auto-refreshed
+    // region), rather than re-bound on every poll. Each handler just
+    // flips one flag/option and rebuilds - same pattern, and the same
+    // window.rebuildTreePreviewSvg()/treePreviewBranchLengthStyler
+    // helpers, as templates/treeviz/tree.html's own toolbar. A no-op
+    // (via rebuildTreePreviewSvg's own guard) if clicked before any
+    // tree has actually been fetched yet.
+    $(function () {
+	function setTreePreviewLayout($button, isRadial, isUnrooted) {
+	    window.treePreviewOptions['is-radial'] = isRadial;
+	    window.treePreviewOptions['is-unrooted'] = isUnrooted;
+	    $('#tp_layout_linear, #tp_layout_circular, #tp_layout_unrooted').removeClass('active');
+	    $button.addClass('active');
+	    window.rebuildTreePreviewSvg();
+	}
+	$('#tp_layout_linear').on('click', function () {
+	    setTreePreviewLayout($(this), false, false);
+	});
+	$('#tp_layout_circular').on('click', function () {
+	    setTreePreviewLayout($(this), true, false);
+	});
+	$('#tp_layout_unrooted').on('click', function () {
+	    setTreePreviewLayout($(this), false, true);
+	});
+	$('#tp_align_tips').on('click', function () {
+	    window.treePreviewOptions['align-tips'] = !window.treePreviewOptions['align-tips'];
+	    $(this).toggleClass('active', window.treePreviewOptions['align-tips']);
+	    window.rebuildTreePreviewSvg();
+	});
+	$('#tp_support_values').on('click', function () {
+	    window.treePreviewOptions['internal-names'] = !window.treePreviewOptions['internal-names'];
+	    $(this).toggleClass('active', window.treePreviewOptions['internal-names']);
+	    window.rebuildTreePreviewSvg();
+	});
+	$('#tp_branch_lengths').on('click', function () {
+	    window.treePreviewShowBranchLengths = !window.treePreviewShowBranchLengths;
+	    $(this).toggleClass('active', window.treePreviewShowBranchLengths);
+	    // Not a full rebuild - .layout() alone re-applies the edge
+	    // styler through a code path in this library version that
+	    // actually works (see treePreviewBranchLengthStyler's own
+	    // comment in the script above for the refresh() bug this
+	    // avoids), without losing the current pan/zoom.
+	    if (window.treePreviewDisplay) {
+		window.treePreviewDisplay.layout();
+	    }
+	});
+	$('#tp_zoom_in').on('click', function () {
+	    if (window.treePreviewDisplay) {
+		window.treePreviewDisplay.zoomBehavior.scaleBy(window.treePreviewDisplay.svg, 1.3);
+	    }
+	});
+	$('#tp_zoom_out').on('click', function () {
+	    if (window.treePreviewDisplay) {
+		window.treePreviewDisplay.zoomBehavior.scaleBy(window.treePreviewDisplay.svg, 1 / 1.3);
+	    }
+	});
+	$('#tp_zoom_reset').on('click', function () {
+	    window.rebuildTreePreviewSvg();
+	});
+	$('#tp_font_size_increase').on('click', function () {
+	    window.treePreviewOptions['font-size'] = Math.min(window.treePreviewOptions['font-size'] + 2, 40);
+	    window.rebuildTreePreviewSvg();
+	});
+	$('#tp_font_size_decrease').on('click', function () {
+	    window.treePreviewOptions['font-size'] = Math.max(window.treePreviewOptions['font-size'] - 2, 6);
+	    window.rebuildTreePreviewSvg();
+	});
+
+	// Selection/copy/export - same logic as templates/treeviz/tree.html's
+	// own toolbar (see that file's own comments for why each piece is
+	// shaped the way it is: getSelection()/isLeafNode()/
+	// selectAllDescendants() for expanding a selected clade to its tips,
+	// the Clipboard-API-with-execCommand-fallback for copying, and the
+	// embedded-CSS clone-the-svg approach for both exports) - duplicated
+	// here rather than shared, matching this project's existing
+	// convention of not having a shared JS module system across
+	// templates.
+	function getSelectedTipNames() {
+	    var display = window.treePreviewDisplay;
+	    if (!display) {
+		return [];
+	    }
+	    var selected = display.getSelection();
+	    var names = [];
+	    selected.forEach(function (node) {
+		if (display.phylotree.isLeafNode(node)) {
+		    names.push(node.data.name);
+		} else {
+		    display.phylotree.selectAllDescendants(node, true, false)
+			.forEach(function (leaf) { names.push(leaf.data.name); });
+		}
+	    });
+	    return names.filter(function (name, i) { return names.indexOf(name) === i; });
+	}
+
+	function copyViaExecCommand(text) {
+	    var $textarea = $('<textarea readonly></textarea>')
+		.css({position: 'fixed', top: '-1000px', left: '-1000px'})
+		.val(text);
+	    $('body').append($textarea);
+	    $textarea[0].select();
+	    document.execCommand('copy');
+	    $textarea.remove();
+	}
+
+	function copyTextToClipboard(text) {
+	    if (navigator.clipboard && navigator.clipboard.writeText) {
+		return navigator.clipboard.writeText(text).catch(function () {
+		    copyViaExecCommand(text);
+		});
+	    }
+	    copyViaExecCommand(text);
+	    return $.Deferred().resolve().promise();
+	}
+
+	function flashButtonText($button, text) {
+	    var original = $button.data('original-text');
+	    if (original === undefined) {
+		original = $button.text();
+		$button.data('original-text', original);
+	    }
+	    $button.text(text);
+	    clearTimeout($button.data('flash-timer'));
+	    $button.data('flash-timer', setTimeout(function () {
+		$button.text($button.data('original-text'));
+	    }, 1500));
+	}
+
+	$('#tp_copy_tip_names').on('click', function () {
+	    var $button = $(this);
+	    var names = getSelectedTipNames();
+	    if (names.length === 0) {
+		flashButtonText($button, 'None selected');
+		return;
+	    }
+	    copyTextToClipboard(names.join('\n')).then(function () {
+		flashButtonText($button, '+' + names.length + '!');
+	    });
+	});
+
+	var treePreviewExportCssCache = null;
+	function getTreePreviewExportCss(callback) {
+	    if (treePreviewExportCssCache !== null) {
+		callback(treePreviewExportCssCache);
+		return;
+	    }
+	    $.get("{% static 'phylotree-2.6.0/phylotree.css' %}", function (css) {
+		treePreviewExportCssCache = css;
+		callback(css);
+	    }).fail(function () {
+		treePreviewExportCssCache = '';
+		callback('');
+	    });
+	}
+
+	function buildTreePreviewExportableSvg(css) {
+	    var clone = window.treePreviewDisplay.svg.node().cloneNode(true);
+	    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+	    var width = window.treePreviewOptions.width;
+	    var height = window.treePreviewOptions.height;
+	    clone.setAttribute('width', width);
+	    clone.setAttribute('height', height);
+	    if (!clone.getAttribute('viewBox')) {
+		clone.setAttribute('viewBox', '0 0 ' + width + ' ' + height);
+	    }
+	    var styleEl = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+	    styleEl.textContent = css;
+	    clone.insertBefore(styleEl, clone.firstChild);
+	    return clone;
+	}
+
+	function downloadTreePreviewBlob(blob, filename) {
+	    var url = URL.createObjectURL(blob);
+	    var $link = $('<a></a>').attr({href: url, download: filename}).appendTo('body');
+	    $link[0].click();
+	    $link.remove();
+	    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+	}
+
+	$('#tp_export_svg').on('click', function () {
+	    if (!window.treePreviewDisplay) {
+		return;
+	    }
+	    getTreePreviewExportCss(function (css) {
+		var svgString = new XMLSerializer().serializeToString(buildTreePreviewExportableSvg(css));
+		downloadTreePreviewBlob(new Blob([svgString], {type: 'image/svg+xml'}), 'tree.svg');
+	    });
+	});
+
+	$('#tp_export_png').on('click', function () {
+	    if (!window.treePreviewDisplay) {
+		return;
+	    }
+	    getTreePreviewExportCss(function (css) {
+		var svgString = new XMLSerializer().serializeToString(buildTreePreviewExportableSvg(css));
+		var dataUrl = 'data:image/svg+xml;base64,' +
+		    btoa(unescape(encodeURIComponent(svgString)));
+		var img = new Image();
+		img.onload = function () {
+		    var scale = 2;
+		    var width = window.treePreviewOptions.width;
+		    var height = window.treePreviewOptions.height;
+		    var canvas = document.createElement('canvas');
+		    canvas.width = width * scale;
+		    canvas.height = height * scale;
+		    var ctx = canvas.getContext('2d');
+		    ctx.fillStyle = '#fff';
+		    ctx.fillRect(0, 0, canvas.width, canvas.height);
+		    ctx.scale(scale, scale);
+		    ctx.drawImage(img, 0, 0, width, height);
+		    canvas.toBlob(function (blob) {
+			downloadTreePreviewBlob(blob, 'tree.png');
+		    }, 'image/png');
+		};
+		img.src = dataUrl;
+	    });
+	});
+    });
+</script>
 
 <div class="row">
   <div class="col-md-10">
