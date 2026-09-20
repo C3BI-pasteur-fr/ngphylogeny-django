@@ -2591,3 +2591,230 @@ trusting the option value was set. The full existing toggle regression
 was re-run afterward on both surfaces too. No new Python tests - same
 reasoning as this file's other tree-toolbar sections, pure client-side
 behavior with no server-side/context-variable change.
+
+### Width/height range sliders - and a real architectural finding they forced
+
+Two `<input type="range">` controls, both surfaces, for the tree's own
+`width`/`height` render options. Sounds like it should be as simple as
+wiring two sliders to `treeOptions.width`/`.height` and rebuilding - it
+wasn't, because of a real, significant finding about how this library
+actually sizes a tree:
+
+**Under phylotree.js 2.x's own *default* spacing mode
+("left-right-spacing"/"top-bottom-spacing": "fixed-step"), the
+"width"/"height" render options are completely ignored for layout
+sizing.** Confirmed by reading `do_lr()`'s and the equivalent
+top-bottom logic directly: under fixed-step, `this.size[0]` (leaf/
+vertical extent) is computed as `this._extents[0][1] *
+this.fixed_width[0]` and `this.size[1]` (depth/horizontal extent) as
+`this.max_depth * this.fixed_width[1]` - both driven purely by the
+tree's own shape (leaf count, depth) and `fixed_width`
+(`spacing_x()`/`spacing_y()`, the same accessors the tip-font-size
+feature above already uses), **never** by `this.width`/`this.height`.
+Verified empirically too: doubling both `width`/`height` options and
+rebuilding left the tree's own rendered extent (measured directly off
+node transform coordinates) completely unchanged. Only the *other*
+branch of that same logic - `"fit-to-size"` mode, which computes
+`this.scales[0]`/`[1]` from `(this.size[0/1] - padding) /
+extent[0/1]`, i.e. actually starting from the width/height option - ties
+rendered size to those options at all.
+
+Both `treeOptions`/`window.treePreviewOptions` were switched to
+`"left-right-spacing": "fit-to-size", "top-bottom-spacing":
+"fit-to-size"` for this reason - not something the width/height
+sliders opt into per-use, a permanent mode change, since there's no
+sane way to offer working sliders without it. Verified this doesn't
+change the *rendered look* of a normally-sized tree in any of the three
+layouts, only how its size responds to width/height.
+
+**Genuinely nice side effect: this made the tip-font-size feature
+simpler.** The `spacing_x()`-bumping workaround `applyTipFontSize()`
+needed (see the section above) was specifically compensating for
+fixed-step mode's `scales[0] = fixed_width[0]` cap - under
+`fit-to-size`, `scales[0]` comes from the width/height option instead,
+which for any reasonably-sized canvas is comfortably larger than a
+normal tip font size. Confirmed empirically: `"font-size": 24` alone,
+with no `spacing_x()` involvement at all, now measures as a real 24px
+computed font-size. `applyTipFontSize()`/the inline preview's
+equivalent were simplified accordingly - the workaround is gone
+entirely, not just unused.
+
+For the **inline preview specifically** (the one surface using
+`responsive: true`), the width/height sliders behave a bit differently
+from a literal "resize the picture" control: since CSS forces the
+displayed width to 100% of its container regardless of the `width`
+option, changing "Width" doesn't change the pixel width shown - it
+changes the tree's internal aspect ratio (`viewBox="0 0 width
+height"`), i.e. how tall the preview ends up once that fixed width is
+applied via `height: auto`. "Height" has a more direct effect (visibly
+taller/shorter, matching the ratio). Confirmed directly (headless
+Chrome, an artificially narrowed container matching a realistic preview
+column): the *displayed* width stayed capped at the container's own
+width in every case, while displayed height scaled exactly with the
+viewBox aspect ratio (e.g. 400x900 -> displayed 700x1575, matching
+400:900 = 700:1575). Both sliders are still offered - "Width" is a real
+tuning knob (how much horizontal vs. vertical room the layout algorithm
+gets to work with), just not literally "how many pixels wide it looks."
+
+Verified end to end (headless Chrome, both surfaces): the sliders
+genuinely grow/shrink the tree's own rendered extent (measured directly
+off node coordinates, not just the SVG's own declared size) - roughly
+2x width option -> 2x rendered extent, consistent with `fit-to-size`'s
+own scale computation - and the *entire* existing regression suite
+(layout switching between all three, align tips, support values,
+branch lengths, zoom, font size, selection/copy-tip-names, SVG/PNG
+export, the inline preview's poll-reparent survival, and the negative-
+branch-length unrooted-layout fix re-checked against the real live
+page) was re-run after this mode switch and still passes unchanged -
+this touches core layout sizing shared by every other feature in this
+toolbar, so all of it needed re-confirming, not just the two new
+sliders. No new Python tests - pure client-side behavior, same
+reasoning as this file's other tree-toolbar sections.
+
+### Width/height sliders should resize the tree, not the page
+
+Immediate follow-up bug report: the height slider was growing the
+*visible panel* on the page along with the tree, not just the tree's
+own content - on the full viewer, `#tree_container` (non-responsive
+mode) had no CSS height at all, so its box just grew to whatever
+`svg.attr("height", ...)` set (see `set_size()`/`initialize_svg()`
+above); on the inline preview (`responsive: true`), the svg's own style
+is `width: 100%; height: auto`, so a taller `height` option widens the
+`viewBox`'s aspect ratio, which - with width pinned to 100% of the
+container - renders proportionally taller on the page too. Either way,
+the container was sized *by* its content instead of the other way
+around, so "scale the tree" and "grow the page" were the same thing.
+
+Fixed by giving both containers a genuinely fixed CSS `height` plus
+`overflow: auto` - `#tree_container { height: 800px; }` (matching
+`treeOptions`'s own default `height: 800`, so the tree fits with no
+scrollbar at its starting size) and `#tree-preview-wrapper .panel-body
+{ height: 420px; }` (matching `window.treePreviewOptions`'s default
+`height: 420`, same reasoning). Past that starting size, a slider still
+genuinely grows the tree's own rendered extent exactly as before (see
+the section above) - it just now overflows within a viewport of fixed
+visible size, scrollable via the browser's native scrollbars, rather
+than pushing the rest of the page down. This is a pure CSS containment
+fix - no JS changed, the sliders' own handlers (`rebuildTree()`/
+`rebuildTreePreviewSvg()`) are untouched.
+
+Verified directly (headless Chrome, both surfaces, reading
+`getBoundingClientRect()` on the container/panel-body before and after
+driving each slider to its max): container height/width are bit-for-bit
+identical before and after in every case, `scrollHeight`/`scrollWidth`
+exceed `clientHeight`/`clientWidth` once a slider is pushed well past
+its default (confirming the content is actually overflowing rather than
+silently clipping), and shrinking a slider back down still leaves the
+container at its original fixed size throughout. No new Python tests -
+pure CSS, same reasoning as this file's other tree-toolbar sections.
+
+### Tip font size +/- buttons replaced with a range control
+
+Both surfaces' "Tip font size" +/-2px buttons (`font_size_increase`/
+`font_size_decrease`, `tp_font_size_increase`/`tp_font_size_decrease`)
+were swapped for a single `<input type="range">`
+(`tree_font_size_range`, `tp_font_size_range`, both `min="6" max="40"
+step="1"`, matching the buttons' own existing clamp range) - the same
+control shape the width/height sliders already established on both
+surfaces. `applyTipFontSize()`'s own body (full viewer) and the inline
+preview's equivalent inline handler are unchanged - only how
+`tipFontSize`/`window.treePreviewOptions['font-size']` gets set
+changed, from `Math.min/max(current +/- 2, ...)` on a click to
+`parseInt(this.value, 10)` on the range's own `'input'` event (same
+"fires continuously while dragging" choice already used for the width/
+height sliders, for the same immediate-feedback reason).
+
+No behavior regression from the switch: `shown_font_size`'s own
+`Math.min(this.font_size, this.scales[0])` cap (see the tip-font-size
+section above) still applies exactly the same way regardless of how
+`"font-size"` gets set - confirmed directly (headless Chrome, both
+surfaces): dragging the slider to its max (40) on a tree/container
+whose current `fit-to-size` `scales[0]` is smaller than 40 still caps
+the *computed* rendered size at that smaller value, same as the old
++/- buttons would have if clicked enough times to reach the same
+option value. The full existing toggle regression (layout switching,
+align tips, support values, branch lengths, zoom, width/height sliders,
+the panel-stays-fixed-size CSS above, selection/copy-tip-names, SVG/PNG
+export, the inline preview's poll-reparent survival) was re-run
+afterward on both surfaces and still passes unchanged. No new Python
+tests - pure client-side control swap, same reasoning as this file's
+other tree-toolbar sections.
+
+### Width/height/font sliders weren't actually independent on the inline preview
+
+Reported live: dragging the Width slider on the workspace/history
+preview visibly changed the tree's height and font size too, not just
+its horizontal extent - despite the width handler only ever touching
+`window.treePreviewOptions.width`. The full viewer never had this bug
+(confirmed directly, not assumed - see below); it was specific to the
+inline preview's own `responsive: true` mode.
+
+**Root cause: `responsive: true` renders via an svg `viewBox`, not real
+width/height attributes, and viewBox-to-viewport scaling is isotropic
+(the same factor on every axis) whenever the *displayed* size is
+externally pinned - which it is here** (`style("width", "100%")
+.style("height", "auto")`, see `initialize_svg()` in the vendored
+bundle). With the container's physical width fixed, widening the
+`viewBox` (i.e. raising the "width" option, which sets `viewBox="0 0
+width height"`) necessarily shrinks the effective pixels-per-unit
+factor - on *both* axes, since a viewBox has one scale, not two
+independent ones - so the displayed height shrinks too, and with it
+every element sized in svg user units, including tip label text.
+Confirmed directly (headless Chrome, measuring real `getBoundingClientRect()`
+values, not the svg's own internal viewBox numbers which don't reveal
+this): doubling only the "width" option roughly halved the *displayed*
+height of the same tree, with "height"/"font-size" never touched.
+`getComputedStyle().fontSize` on a text element is *not* a reliable way
+to check this, incidentally - it reports the authored/attribute value,
+not the effective on-screen size after viewBox scaling, which is
+exactly why this file's own earlier verification of the font-size
+slider (see that section above) didn't already catch this - it happened
+to only ever test font size in isolation, never alongside a width
+change.
+
+**Fixed by switching `window.treePreviewOptions.responsive` to `false`**
+- matching `templates/treeviz/tree.html`'s own full viewer, which
+renders with real `width`/`height` svg attributes and no viewBox at
+all, and was never affected by this in the first place (confirmed
+directly: an isolated width-only change against the vendored bundle in
+non-responsive mode left the rendered vertical extent and `scales[0]`/
+`shown_font_size` completely unchanged). With no viewBox, "width" and
+"height" size their own axis independently by construction - a tree
+wider or taller than the fixed-size panel (see the section above) now
+genuinely overflows into that panel's own scrollbars instead of being
+silently rescaled to fit, which is also exactly the "the tree can
+potentially be larger than the viewport" behavior asked for alongside
+this fix. `buildTreePreviewExportableSvg()` (SVG/PNG export) needed no
+change - it already set `width`/`height`/`viewBox` explicitly on the
+exported clone regardless of the live svg's own mode.
+
+**A second, unrelated bug found while verifying this fix, pre-existing
+and not introduced by it:** `tp_height_range`'s declared `value="420"`
+was never actually reachable given its own `min="200" step="50"` (valid
+steps are 200, 250, 300, ... - 420 isn't one of them) - the HTML range
+input spec's value-sanitization algorithm silently snaps an
+out-of-step value to the nearest valid one *whenever it's set*,
+including the initial parse of the `value` attribute on page load, not
+just on drag. So this slider's real starting value was always `400`,
+one silent step away from the `420` both its own markup and
+`window.treePreviewOptions`'s own default height claimed - invisible in
+normal use (dragging from an already-snapped position never re-triggers
+the mismatch), but exactly the kind of thing that surfaces as a
+confusing "off by one step" once something (here, this fix's own
+regression test, setting `.val(420)` programmatically to reset between
+checks) tries to treat 420 as the slider's real value. Fixed by
+widening its `step` to `10` (200, 210, 220, ... does include 420) -
+the width slider and both surfaces' other range inputs were checked
+too and don't have this misalignment.
+
+Verified end to end (headless Chrome): width, height, and font-size
+changes, applied one at a time, each leave the other two - and the
+fixed-size panel from the section above - completely unaffected
+(`getBoundingClientRect()` measurements before/after every change), and
+a tree pushed well past its default size genuinely overflows
+(`scrollHeight`/`scrollWidth` exceeding `clientHeight`/`clientWidth`)
+rather than rescaling. The full existing toolbar regression (layout
+switching, align tips, support values, branch lengths, zoom, the
+poll-reparent survival check) was re-run afterward and still passes
+unchanged. No new Python tests - pure client-side rendering-mode
+change, same reasoning as this file's other tree-toolbar sections.

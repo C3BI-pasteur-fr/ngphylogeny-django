@@ -26,7 +26,14 @@
     font-weight: 600;
   }
   #tree-preview-wrapper .panel-body {
-    overflow-x: auto;
+    /* Fixed viewport: the Width/Height range controls scale the tree's own
+       rendered size (a literal svg width/height attribute - see
+       window.treePreviewOptions's own "responsive: false" note) without
+       this container growing/shrinking to match - see CLAUDE.md's "tree
+       panel stays fixed size" note. 420px matches the default height
+       option so the tree fits with no scrollbar at its starting size. */
+    height: 420px;
+    overflow: auto;
   }
   .tree-preview-heading {
     display: flex;
@@ -35,8 +42,18 @@
     flex-wrap: wrap;
     gap: 8px;
   }
+  /* Matches templates/treeviz/tree.html's own .branch-length-label - this
+     preview never had its own rule for it (the label previously never
+     actually rendered at all, see treePreviewBranchLengthStyler's own
+     comment, so the omission was invisible until that got fixed). */
+  .branch-length-label {
+    font-size: 9px;
+    fill: #888;
+  }
   .tree-preview-toolbar {
     display: flex;
+    flex-wrap: wrap;
+    align-items: center;
     gap: 4px;
     font-weight: normal;
   }
@@ -44,6 +61,18 @@
     background: #446cb3;
     color: #fff;
     border-color: #446cb3;
+  }
+  .tree-preview-range-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 11px;
+    color: #666;
+    margin: 0;
+  }
+  .tree-preview-range-label input[type="range"] {
+    width: 60px;
+    vertical-align: middle;
   }
   /* Workflow step chain (workspace/include/history_contents_refreshable.html)
      - one box per tool step (consecutive datasets from the same tool
@@ -307,7 +336,29 @@
     window.treePreviewOptions = {
 	width: 800,
 	height: 420,
-	responsive: true,
+	// Deliberately false, unlike this preview's own earlier version -
+	// see the width/height slider section of CLAUDE.md ("independent
+	// axes") for why: under responsive:true, the svg has no literal
+	// width/height attributes at all - it's styled width:100%/
+	// height:auto with a "viewBox" set from these two options, and a
+	// browser's viewBox-to-viewport scaling is isotropic (the same
+	// factor on both axes) whenever the *displayed* width is pinned to
+	// something else (here, the container's own 100% width) - so
+	// changing "width" alone, with the physical container width
+	// unchanged, necessarily rescales the *effective* pixel-per-unit
+	// factor on the height axis too, and with it every geometry/text
+	// element sized in svg user units (confirmed directly: doubling
+	// "width" alone measured a ~2x *smaller* displayed height and a
+	// visually smaller font, despite "height"/"font-size" themselves
+	// never changing) - reported live as "everything moves" when only
+	// the width slider was touched. With responsive:false (matching
+	// templates/treeviz/tree.html's own full viewer, which never had
+	// this bug), the svg gets real width/height attributes instead - no
+	// viewBox, no cross-axis scaling - so "width" and "height" are
+	// independent by construction, and a tree wider/taller than the
+	// fixed-size panel above simply overflows into its own scrollbars,
+	// exactly as intended rather than being silently rescaled to fit.
+	responsive: false,
 	zoom: true,
 	// See templates/treeviz/tree.html's own treeOptions for why this is
 	// false, unlike the library's own default - brush (drag-to-select)
@@ -316,14 +367,14 @@
 	// reported live against this exact preview.
 	brush: false,
 	'show-scale': true,
-	// Smaller than the library's own 14px default - confirmed directly
-	// (headless Chrome, a real container narrower than this SVG's own
-	// 800-unit logical width) that phylotree.js 2.x's text does *not*
-	// visually shrink along with the rest of the tree when "responsive"
-	// scales the whole SVG down to fit a smaller container - only the
-	// geometry (nodes, branches) does. In this compact preview (unlike
-	// the full-page viewer, which has room to spare) that left 14px
-	// text looking oversized relative to the rest of the drawing,
+	// Smaller than the library's own 14px default and than the full
+	// viewer's own starting size - this preview's starting canvas
+	// (800x420) is meant to sit compactly above the dataset table, not
+	// fill the page the way the full viewer does, and 14px text
+	// originally looked oversized relative to that smaller drawing
+	// (confirmed live). Still just the "font-size" render option, same
+	// as the full viewer - the Tip font size slider adjusts this
+	// exactly the same way on both surfaces.
 	// reported live.
 	'font-size': 9,
 	'align-tips': false,
@@ -334,7 +385,18 @@
 	// bundle.
 	'is-radial': false,
 	'is-unrooted': false,
-	'internal-names': false
+	'internal-names': false,
+	// See templates/treeviz/tree.html's own treeOptions for why - under
+	// the library's default spacing mode, the "width"/"height" options
+	// above are silently ignored for actual layout sizing (confirmed
+	// directly against the vendored bundle), only "fit-to-size" mode
+	// actually ties rendered size to them - needed for the width/height
+	// range sliders below to do anything at all. Also made the "font-size"
+	// option above take effect on its own, without the extra spacing_x()
+	// workaround an earlier version of this file needed under the
+	// default spacing mode.
+	'left-right-spacing': 'fit-to-size',
+	'top-bottom-spacing': 'fit-to-size'
     };
     window.treePreviewShowBranchLengths = false;
 
@@ -358,16 +420,77 @@
 	if (!node || typeof node.querySelectorAll !== 'function') {
 	    return;
 	}
-	element.selectAll('.branch-length-label').remove();
+	// `element` here is the edge's own <path class="branch"> - appending
+	// a <text> as its *child* (the original approach) is invalid SVG (a
+	// <path>'s content model has no room for child elements at all), so
+	// the label silently never painted even though it genuinely existed
+	// in the DOM - getBoundingClientRect() on it measured all zeros,
+	// confirmed directly, which is exactly why every earlier
+	// verification of this toggle (counting DOM nodes, never checking
+	// actual rendering) never caught it. See templates/treeviz/tree.html's
+	// own branchLengthStyler for the full writeup, including a second,
+	// more serious bug found right after this one: appending to the
+	// path's own `element.node().parentNode` (a first attempt) worked for
+	// the branch-length *toggle* (a `.layout()` call on an already-built
+	// tree, where the parentNode is reliably attached by then) but broke
+	// - wrong position, then zero labels - on any full rebuild (the
+	// width/height sliders, or switching layout), since a fresh render()'s
+	// newly-created <path> isn't guaranteed to already be attached under
+	// its final parent at the exact moment edge_styler runs. Fixed the
+	// same way there: resolve the parent through the stable `this.svg`
+	// reference instead - `this.svg.select("." + this.css_classes
+	// ["tree-container"])`, the single wrapping <g class=
+	// "phylotree-container"> the library always draws every edge/node
+	// into - rather than the edge's own (possibly not-yet-attached)
+	// parentNode. Each edge's own label is still tracked via a bound
+	// `.datum(edgeDatum)` and a strict-equality filter, since the parent
+	// holds every edge's label as a sibling, not just this one's.
+	var parent = this.svg.select("." + this.css_classes["tree-container"]);
+	parent.selectAll('.branch-length-label')
+	    .filter(function (d) { return d === edgeDatum; })
+	    .remove();
 	var length = this.phylotree.branch_length_accessor(edgeDatum.target);
 	if (window.treePreviewShowBranchLengths && length !== undefined) {
-	    element.append('text')
+	    // See templates/treeviz/tree.html's own branchLengthStyler for the
+	    // full writeup: the rectangular/"linear" layout draws each branch
+	    // as an elbow (a vertical drop to the target's row, then a
+	    // horizontal run to the target's depth), not a straight line from
+	    // source to target - a plain (source+target)/2 row midpoint lands
+	    // halfway up the vertical segment instead of on the horizontal run
+	    // the label is meant to annotate (reported live: right x, wrong
+	    // y). The correct row, matching the library's own
+	    // `lineSegmentPlacer` convention, is the *target's* row
+	    // (`edgeDatum.target.x`) - a constant, not an average. Radial/
+	    // unrooted layouts draw a real straight line/arc instead, where
+	    // the plain midpoint is already geometrically correct, so only
+	    // the rectangular case is special-cased here.
+	    var isRectangular = !this.radial() && !this.unrooted();
+	    var labelY = isRectangular
+		? edgeDatum.target.x - 3
+		: (edgeDatum.source.x + edgeDatum.target.x) / 2 - 3;
+	    parent.append('text')
+		.datum(edgeDatum)
 		.attr('class', 'branch-length-label')
 		.attr('x', (edgeDatum.source.y + edgeDatum.target.y) / 2)
-		.attr('y', (edgeDatum.source.x + edgeDatum.target.x) / 2 - 3)
+		.attr('y', labelY)
 		.text(parseFloat(length).toFixed(3));
 	}
     }
+    // Registered as the render-time "edge-styler" option (persisted
+    // directly on window.treePreviewOptions, so every future rebuild
+    // picks it up automatically) rather than via the separate
+    // `display.style_edges(...)` call this file used to make right
+    // after `tree.render(...)` in rebuildTreePreviewSvg() - see
+    // templates/treeviz/tree.html's own treeOptions["edge-styler"]
+    // assignment for the full writeup: TreeRender's constructor reads
+    // `this.edge_styler` straight from `this.options['edge-styler']`
+    // and runs its entire first edge-drawing pass during that same
+    // render() call, before style_edges() ever got a chance to run
+    // afterward - so every full rebuild (exactly what any width/height
+    // slider or layout button click triggers here) always drew its
+    // first layout with no styler registered at all, silently losing
+    // the branch-length labels even with the toggle still on.
+    window.treePreviewOptions['edge-styler'] = treePreviewBranchLengthStyler;
 
     window.rebuildTreePreviewSvg = function () {
 	if (!window.treePreviewPendingNewick) {
@@ -400,18 +523,7 @@
 	// and never hit this.
 	window.treePreviewDisplay = tree.render(
 	    $.extend({container: '#tree-preview-svg'}, window.treePreviewOptions));
-	window.treePreviewDisplay.style_edges(treePreviewBranchLengthStyler);
 	$container.append(window.treePreviewDisplay.show());
-	// See templates/treeviz/tree.html's own applyTipFontSize for why -
-	// the "font-size" option alone doesn't make an *increase* visible,
-	// since the actually-rendered size is capped by spacing_x()
-	// (defaults to 14, independent of "font-size") under this library's
-	// default spacing mode - confirmed directly, not assumed.
-	var fontSize = window.treePreviewOptions['font-size'];
-	if (window.treePreviewDisplay.spacing_x() < fontSize) {
-	    window.treePreviewDisplay.spacing_x(fontSize, true);
-	    window.treePreviewDisplay.layout();
-	}
     };
 
     window.placeTreePreviewIntoLiveRegion = function () {
@@ -572,12 +684,15 @@
       <button type="button" class="btn btn-default btn-xs" id="tp_zoom_reset" title="Reset view">
         <span class="glyphicon glyphicon-refresh"></span>
       </button>
-      <button type="button" class="btn btn-default btn-xs" id="tp_font_size_decrease" title="Smaller tip labels">
-        <span class="glyphicon glyphicon-minus"></span>
-      </button>
-      <button type="button" class="btn btn-default btn-xs" id="tp_font_size_increase" title="Larger tip labels">
-        <span class="glyphicon glyphicon-plus"></span>
-      </button>
+      <label class="tree-preview-range-label" title="Tip font size">A
+        <input type="range" id="tp_font_size_range" min="6" max="40" step="1" value="9">
+      </label>
+      <label class="tree-preview-range-label" title="Tree width">W
+        <input type="range" id="tp_width_range" min="400" max="2400" step="50" value="800">
+      </label>
+      <label class="tree-preview-range-label" title="Tree height">H
+        <input type="range" id="tp_height_range" min="200" max="2400" step="10" value="420">
+      </label>
       <button type="button" class="btn btn-default btn-xs" id="tp_copy_tip_names" title="Copy the selected clade's tip names to the clipboard">Copy tips</button>
       <button type="button" class="btn btn-default btn-xs" id="tp_export_svg" title="Export the tree as an SVG image">SVG</button>
       <button type="button" class="btn btn-default btn-xs" id="tp_export_png" title="Export the tree as a PNG image">PNG</button>
@@ -649,12 +764,16 @@
 	$('#tp_zoom_reset').on('click', function () {
 	    window.rebuildTreePreviewSvg();
 	});
-	$('#tp_font_size_increase').on('click', function () {
-	    window.treePreviewOptions['font-size'] = Math.min(window.treePreviewOptions['font-size'] + 2, 40);
+	$('#tp_font_size_range').on('input', function () {
+	    window.treePreviewOptions['font-size'] = parseInt(this.value, 10);
 	    window.rebuildTreePreviewSvg();
 	});
-	$('#tp_font_size_decrease').on('click', function () {
-	    window.treePreviewOptions['font-size'] = Math.max(window.treePreviewOptions['font-size'] - 2, 6);
+	$('#tp_width_range').on('input', function () {
+	    window.treePreviewOptions.width = parseInt(this.value, 10);
+	    window.rebuildTreePreviewSvg();
+	});
+	$('#tp_height_range').on('input', function () {
+	    window.treePreviewOptions.height = parseInt(this.value, 10);
 	    window.rebuildTreePreviewSvg();
 	});
 

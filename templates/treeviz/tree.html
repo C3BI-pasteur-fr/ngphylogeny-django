@@ -53,6 +53,14 @@
       }
       #tree_container {
         width: 100%;
+        /* Fixed viewport: the Width/Height range controls scale the tree's
+           own rendered size (an svg attribute in this non-responsive mode -
+           see rebuildTree()), not this container - matching the default
+           height option (800) means the tree fits with no scrollbar at its
+           starting size, and only overflows/scrolls once a slider grows it
+           past that, by design (see CLAUDE.md's "tree panel stays fixed
+           size" note). */
+        height: 800px;
         overflow: auto;
       }
       #tree_container svg {
@@ -102,15 +110,16 @@
                 </div>
             </div>
             <div class="toolbar-group">
-                <span>Tip font size</span>
-                <div class="btn-group" role="group">
-                    <button type="button" class="btn btn-default btn-sm" id="font_size_decrease" title="Smaller tip labels">
-                        <span class="glyphicon glyphicon-minus"></span>
-                    </button>
-                    <button type="button" class="btn btn-default btn-sm" id="font_size_increase" title="Larger tip labels">
-                        <span class="glyphicon glyphicon-plus"></span>
-                    </button>
-                </div>
+                <label for="tree_font_size_range">Tip font size</label>
+                <input type="range" id="tree_font_size_range" min="6" max="40" step="1" value="14">
+            </div>
+            <div class="toolbar-group">
+                <label for="tree_width_range">Width</label>
+                <input type="range" id="tree_width_range" min="400" max="3000" step="50" value="1200">
+            </div>
+            <div class="toolbar-group">
+                <label for="tree_height_range">Height</label>
+                <input type="range" id="tree_height_range" min="300" max="3000" step="50" value="800">
             </div>
             <div class="toolbar-group">
                 <button type="button" class="btn btn-default btn-sm" id="copy_tip_names" title="Copy the selected clade's tip names to the clipboard">
@@ -189,7 +198,24 @@
             // Never set both true at once - see setLayout() below.
             "is-radial": false,
             "is-unrooted": false,
-            "internal-names": false
+            "internal-names": false,
+            // Needed for the width/height sliders below to do anything
+            // at all - confirmed directly against the vendored bundle
+            // that under this library's own *default* spacing mode
+            // ("fixed-step"), the actual rendered extent
+            // (this.size[0]/this.size[1]) is computed purely from
+            // fixed_width (spacing_x()/spacing_y()) and the tree's own
+            // leaf count/depth, completely ignoring the "width"/"height"
+            // options passed to render() - only "fit-to-size" mode
+            // actually ties the rendered size to those options. Verified
+            // empirically too: doubling width/height under fixed-step
+            // left the tree's own drawn extent unchanged; under
+            // fit-to-size it scaled proportionally as expected. This
+            // also simplified the tip-font-size feature - see
+            // applyTipFontSize() below, which no longer needs the
+            // spacing_x() workaround this mode switch made unnecessary.
+            "left-right-spacing": "fit-to-size",
+            "top-bottom-spacing": "fit-to-size"
         };
         var showBranchLengths = false;
         var display;
@@ -244,53 +270,149 @@
             if (!node || typeof node.querySelectorAll !== 'function') {
                 return;
             }
-            element.selectAll(".branch-length-label").remove();
+            // `element` here is the edge's own <path class="branch"> (the
+            // "container" drawEdge() passes to the edge_styler, confirmed
+            // directly in the vendored bundle) - appending a <text> as its
+            // *child* (the original approach) is invalid SVG: a <path>'s
+            // content model doesn't support child elements at all, so the
+            // label silently never painted, even though it was really
+            // sitting in the DOM (getBoundingClientRect() on it measured
+            // all zeros - confirmed directly, not assumed - which is
+            // exactly why every earlier verification of this toggle,
+            // counting DOM nodes rather than checking actual rendering,
+            // never caught it). Fixed by appending to the branch's own
+            // *parent* <g> (a valid sibling of the path, which does
+            // support text children) instead - reached via `this.svg.
+            // select("." + this.css_classes["tree-container"])` (the
+            // single wrapping <g class="phylotree-container"> the
+            // library always draws every edge/node into, confirmed
+            // directly - the same class its own internal transform/
+            // reroot code targets), NOT via `element.node().parentNode`.
+            // A first attempt used the latter and worked for the
+            // branch-length *toggle* (a `.layout()` call on an
+            // already-fully-built tree, where the path's parentNode is
+            // reliably attached by the time edge_styler runs) but broke
+            // - wrong position, then zero labels entirely - on any full
+            // rebuild (the width/height sliders, or switching layout):
+            // during a fresh render(), drawEdge()'s own newly-created
+            // <path> isn't guaranteed to already be attached under its
+            // final parent at the exact moment edge_styler runs,
+            // confirmed directly (reproduced: toggling on via .layout()
+            // gave 41 correctly-positioned, visible labels; immediately
+            // rebuilding via a slider change with the toggle still on
+            // gave zero). Going through `this.svg` instead sidesteps
+            // that timing entirely - it's stable and already fully
+            // attached (it's the render's own root) regardless of where
+            // in the edge-drawing loop this call happens to land. Each
+            // edge's own label is tracked via a bound `.datum(edgeDatum)`
+            // and matched back with a strict-equality filter, since the
+            // parent <g> holds every edge's label as a sibling, not just
+            // this one's - the edge/node objects themselves are stable
+            // for the lifetime of one `tree`/`display` instance (every
+            // mutation here is either a `.layout()` on the existing
+            // instance or a full `new phylotree(...)` + fresh render,
+            // never an in-place edge-object swap), so identity
+            // comparison is safe.
+            var parent = this.svg.select("." + this.css_classes["tree-container"]);
+            parent.selectAll(".branch-length-label")
+                .filter(function (d) { return d === edgeDatum; })
+                .remove();
             var length = this.phylotree.branch_length_accessor(edgeDatum.target);
             if (showBranchLengths && length !== undefined) {
-                element.append("text")
+                // The rectangular/"linear" layout draws each branch as an
+                // elbow (d3's own stepBefore curve, confirmed directly in
+                // the vendored bundle's `draw_line`) - a vertical drop
+                // from the source's row to the target's row, then a
+                // horizontal run from the source's depth to the target's
+                // depth - not a straight diagonal line from source to
+                // target. A plain (source+target)/2 midpoint on the *row*
+                // axis lands halfway up the vertical segment, nowhere
+                // near the actual horizontal run the label is meant to
+                // annotate - confirmed live (reported: right x, wrong y).
+                // The library's own `lineSegmentPlacer` (used elsewhere
+                // in this bundle for placing things along an edge) uses
+                // exactly this instead: the horizontal run sits at a
+                // *constant* row equal to the target's own
+                // (`yCoord(edge.target)`, i.e. `edgeDatum.target.x` in
+                // this tree's coordinate convention, confirmed directly:
+                // `xCoord(d) => d.y` depth, `yCoord(d) => d.x` row) - so
+                // the correct y for a point *on* that segment is
+                // `edgeDatum.target.x`, not a source/target average.
+                // Radial and unrooted layouts draw a genuinely straight
+                // line (or arc) between the two node positions instead
+                // (`drawUnrootedEdge`/`drawArc`, confirmed directly), so
+                // the plain midpoint *is* geometrically correct there and
+                // is left unchanged - only reported broken on linear.
+                var isRectangular = !this.radial() && !this.unrooted();
+                var labelY = isRectangular
+                    ? edgeDatum.target.x - 3
+                    : (edgeDatum.source.x + edgeDatum.target.x) / 2 - 3;
+                parent.append("text")
+                    .datum(edgeDatum)
                     .attr("class", "branch-length-label")
                     .attr("x", (edgeDatum.source.y + edgeDatum.target.y) / 2)
-                    .attr("y", (edgeDatum.source.x + edgeDatum.target.x) / 2 - 3)
+                    .attr("y", labelY)
                     .text(parseFloat(length).toFixed(3));
             }
         }
+        // Registered as the render-time "edge-styler" option (below,
+        // once treeOptions exists) rather than via the separate
+        // `display.style_edges(...)` this file used to call right after
+        // `tree.render(...)` in rebuildTree() - a real, second bug found
+        // alongside the positioning one above: TreeRender's own
+        // constructor reads `this.edge_styler` straight from
+        // `this.options['edge-styler']` and runs its *entire* first
+        // edge-drawing pass during that same render() call, before
+        // rebuildTree() ever got a chance to call style_edges()
+        // afterward - so on every full rebuild (this is exactly what a
+        // width/height slider change or a layout switch is), the very
+        // first layout pass always ran with no styler registered yet,
+        // and nothing ever re-ran it later. This is *why* the toggle
+        // itself (a `.layout()` call on an already-built display, styler
+        // already registered from its own earlier rebuild) looked like
+        // it worked in isolation, while any rebuild while already toggled
+        // on lost the labels outright - confirmed directly (reproduced:
+        // the toggle's own `.layout()` call always redrew labels
+        // correctly; immediately triggering a rebuild via any slider or
+        // layout button, with the toggle still on, gave zero every time,
+        // regardless of the this.svg-based positioning fix above).
+        // `style_edges()`'s own `.bind(this)` isn't needed for this -
+        // `this.edge_styler(container, edge, transition)` (drawEdge's
+        // own call site) already binds `this` to the TreeRender instance
+        // as an ordinary method call, identically either way.
 
-        // Tip label font size, in px, as requested via the render()
-        // "font-size" option - but that option alone isn't enough to
-        // make an *increase* visible: verified directly against the
-        // vendored bundle that the actually-rendered size
-        // (this.shown_font_size) is computed as
-        // Math.min(this.font_size, this.scales[0]), and under this
-        // library's default spacing mode ("fixed-step"),
-        // this.scales[0] is just this.fixed_width[0] - hardcoded to 14
-        // in the constructor, completely independent of the "font-size"
-        // option. Confirmed empirically: rendering with "font-size": 24
-        // alone still measured a computed font-size of 14px - the
-        // library's own live `spacing_x()` accessor (which does map onto
-        // fixed_width[0]) is what actually has to move too, followed by
-        // a real .layout() call (its own built-in call to
-        // this.placenodes() alone wasn't enough to recompute
-        // shown_font_size - only a full .layout() pass does). Also
-        // worth knowing: the library's *own* font_size() accessor method
-        // is unreachable for this - `this.font_size` is set as a plain
-        // instance property in the constructor, which shadows the
-        // same-named prototype method entirely, so `display.font_size(20)`
-        // throws "not a function" - confirmed directly, not guessed.
+        // Tip label font size, in px, via the render() "font-size"
+        // option. Under this library's default spacing mode
+        // ("fixed-step"), that option alone wasn't enough to make an
+        // *increase* visible - the actually-rendered size was capped by
+        // this.scales[0], which under fixed-step is just
+        // this.fixed_width[0] (hardcoded to 14), independent of
+        // "font-size" - needing a workaround via the live spacing_x()
+        // accessor. Switching to "left-right-spacing"/"top-bottom-
+        // spacing": "fit-to-size" above (needed anyway for the width/
+        // height sliders below to do anything) also ties this.scales[0]
+        // directly to the actual width/height option instead, which for
+        // any reasonably-sized canvas is comfortably larger than a
+        // normal tip font size - confirmed empirically that "font-size"
+        // alone now takes effect with no extra workaround needed. (The
+        // library's *own* font_size() accessor method is still
+        // unreachable regardless - `this.font_size` is a plain instance
+        // property that shadows the same-named prototype method, so
+        // `display.font_size(20)` throws "not a function" - this is why
+        // "font-size" is still only ever set via the render() options
+        // object, never that accessor.)
         var tipFontSize = 14;
 
         function applyTipFontSize() {
             treeOptions["font-size"] = tipFontSize;
             rebuildTree();
-            if (display.spacing_x() < tipFontSize) {
-                display.spacing_x(tipFontSize, true);
-                display.layout();
-            }
         }
+
+        treeOptions["edge-styler"] = branchLengthStyler;
 
         function rebuildTree() {
             var tree = new window.phylotree.phylotree(newick);
             display = tree.render(treeOptions);
-            display.style_edges(branchLengthStyler);
             var container = document.getElementById("tree_container");
             container.innerHTML = "";
             container.appendChild(display.show());
@@ -298,13 +420,21 @@
 
         rebuildTree();
 
-        $("#font_size_increase").on("click", function () {
-            tipFontSize = Math.min(tipFontSize + 2, 40);
+        $("#tree_font_size_range").on("input", function () {
+            tipFontSize = parseInt(this.value, 10);
             applyTipFontSize();
         });
-        $("#font_size_decrease").on("click", function () {
-            tipFontSize = Math.max(tipFontSize - 2, 6);
-            applyTipFontSize();
+
+        // "input" (not "change") fires continuously while dragging, for
+        // immediate feedback - a full rebuild is cheap enough for a
+        // single tree that this doesn't need debouncing.
+        $("#tree_width_range").on("input", function () {
+            treeOptions.width = parseInt(this.value, 10);
+            rebuildTree();
+        });
+        $("#tree_height_range").on("input", function () {
+            treeOptions.height = parseInt(this.value, 10);
+            rebuildTree();
         });
 
         function setLayout($button, isRadial, isUnrooted) {
