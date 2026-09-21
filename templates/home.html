@@ -24,4 +24,19 @@
 {% block content %}
     <hr>
     {% include "include/phylogeny_analysis_list.html" %}
+    <div class="extension-banner">
+        <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="#1f77b4" stroke-width="1.6" class="extension-banner-icon">
+            <rect x="3" y="4" width="18" height="14" rx="2"/>
+            <path d="M3 8h18"/>
+            <path d="M12 12v6M9 21h6M9 15h1M12 15h1M15 15h1"/>
+        </svg>
+        <div class="extension-banner-text">
+            <h3>Browser Extension <span class="badge-new">New</span></h3>
+            <p>Paste sequences from any page straight into an NGPhylogeny One Click or BLAST form.</p>
+        </div>
+        <a href="https://github.com/C3BI-pasteur-fr/ngphylogeny-browser-extension/releases/download/v0.2.0/4d1996c9cfc44481a440-0.2.0.xpi"
+           class="btn extension-banner-btn">
+            Get it for Firefox
+        </a>
+    </div>
 {% endblock %}

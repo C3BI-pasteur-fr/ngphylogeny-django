@@ -2818,3 +2818,58 @@ switching, align tips, support values, branch lengths, zoom, the
 poll-reparent survival check) was re-run afterward and still passes
 unchanged. No new Python tests - pure client-side rendering-mode
 change, same reasoning as this file's other tree-toolbar sections.
+
+### Home page: download banner for the Firefox browser extension
+
+A separate, external project
+(`C3BI-pasteur-fr/ngphylogeny-browser-extension`) ships a Firefox
+extension that lets a user paste sequences from any web page straight
+into an NGPhylogeny One Click or BLAST form - this app has no code of
+its own for it, only a place to point people at the release. Added a
+promotional banner to the home page (`templates/home.html`, right after
+the existing `{% include "include/phylogeny_analysis_list.html" %}`)
+linking directly to the versioned GitHub release asset
+(`.../releases/download/v0.2.0/....xpi`) - Firefox's own
+`.xpi`-extension handling shows its native "Add extension?" install
+prompt on navigating straight to that URL, no App-side download view or
+storage needed.
+
+Deliberately **not** added to `templates/include/phylogeny_analysis_list.html`
+itself, even though the banner sits directly below that include's own
+markup - that partial is also reused, unmodified, by
+`templates/phylogeny_analysis_choices.html` (a separate "Phylogeny
+Analysis" page reachable from elsewhere), and the ask was specifically
+for the home page. Keeping the banner in `home.html`'s own `{% block
+content %}` instead of inside the shared include means the other page
+using that include doesn't pick up a banner nobody asked to put there.
+
+Went through this session's usual "propose the UI change as a mockup
+built from the page's real layout/colors before touching templates"
+step first - two Artifact-canvas options (a fourth card slotted into
+the existing One Click/Advanced/A la Carte row, vs. a separate banner
+below that row) were built matching the real page's actual accent
+color (`#1f77b4`), card gradient/border treatment, and
+`"Helvetica Neue", Helvetica, Arial, sans-serif` font stack (all read
+directly from `assets/css/home.css`/`custom.css`, not guessed). The
+banner option was chosen - it reads as a distinct callout for a
+one-off external tool rather than a fourth, visually-equal workflow
+choice competing with the three core submission paths, and doesn't
+force `phylo-analysis`'s existing 3-wide grid to become an uneven
+4-wide one.
+
+New CSS (`assets/css/home.css`): `.extension-banner` (a
+left-accent-bordered callout, same `#1f77b4` accent and light-blue tint
+as the mockup, not reusing `.phylo-analysis`'s own card styling since
+this isn't one of those cards) plus a generic `.badge-new` pill (amber
+`#e8871e`, matching the mockup's own "NEW" tag) - the closest existing
+precedent in this codebase for a colored pill is the workspace history
+page's `.status-pill-*`/`.itol-badge` set (see the step-chain/dataset-
+table sections above), but those are state-specific (finished/running/
+error) and not reusable here, so a small new class was added instead
+of stretching an unrelated one.
+
+No new Python tests - a static link + CSS addition on an already-
+covered page (`data.tests.StaticPagesSmokeTest.test_pages_return_200`
+already renders `home.html` end to end and continues to pass unchanged);
+nothing here has server-side logic or a context variable to unit test,
+same reasoning as this file's other pure-template/CSS sections.
