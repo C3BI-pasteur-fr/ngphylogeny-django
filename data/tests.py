@@ -213,6 +213,30 @@ class DownloadFileContentTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content, original)
 
+    def test_purged_dataset_download_url_404_does_not_crash_the_view(self):
+        """
+        Regression test: hit live in production - show_dataset() can
+        still succeed and hand back a download_url for a dataset whose
+        actual file content has already been purged from Galaxy
+        (workspace.tasks.deleteoldgalaxyhistory()'s
+        delete_history(..., purge=True), see CLAUDE.md) - this endpoint
+        has no ownership check, so an old dataset id stays directly
+        reachable. urlopen(req) then raised an uncaught
+        urllib.error.HTTPError: HTTP Error 404: Not Found, 500ing the
+        page instead of degrading gracefully.
+        """
+        from urllib.error import HTTPError
+        with patch('bioblend.galaxy.datasets.DatasetClient.show_dataset',
+                   return_value={'download_url': '/api/datasets/x/display',
+                                  'name': 'result', 'file_ext': 'txt',
+                                  'history_id': 'hist1'}), \
+             patch('data.views.urlopen',
+                   side_effect=HTTPError(
+                       'http://fake-galaxy.example.org/api/datasets/x/display',
+                       404, 'Not Found', None, None)):
+            response = self.client.get('/data/download/ff5476bcf6c921fa')
+        self.assertEqual(response.status_code, 200)
+
 
 class TreeVisualizationTest(TestCase):
     """

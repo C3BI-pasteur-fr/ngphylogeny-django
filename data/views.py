@@ -1,3 +1,4 @@
+from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin
 from urllib.request import urlopen, Request
 import json
@@ -16,6 +17,34 @@ from .forms import UploadForm
 from galaxy.decorator import connection_galaxy
 from workspace.views import get_or_create_history
 from blast.models import BlastRun
+
+
+def _open_galaxy_download_url(gi, dlurl):
+    """
+    Raw (non-bioblend) fetch of a dataset's actual file content, once
+    show_dataset() has already succeeded and handed back a download_url
+    (see CLAUDE.md's "x-api-key header" note on why this bypasses
+    bioblend entirely). show_dataset() succeeding doesn't guarantee this
+    still will: workspace.tasks.deleteoldgalaxyhistory() purges a
+    history's actual files on Galaxy (delete_history(..., purge=True))
+    while the dataset's own metadata row can remain queryable - and none
+    of download_file/tree_visualization/export_to_itol have an ownership
+    check, so an old dataset id stays directly reachable long after its
+    real data is gone (a real production 500: urllib.error.HTTPError:
+    HTTP Error 404: Not Found, uncaught). Raises HTTPError/URLError
+    uncaught by design - callers render a clean error page instead.
+    """
+    url = urljoin(gi.base_url, dlurl)
+    req = Request(url, headers={'x-api-key': gi.key})
+    return urlopen(req)
+
+
+def _galaxy_download_error_response(request, exc):
+    return render(request, 'error.html', {
+        'errortitle': 'Error downloading file',
+        'errormessage': 'This file is no longer available on the Galaxy '
+                         'server (%s).' % exc})
+
 
 class UploadMixin(object):
     def upload_content(self, content, history_id=None, name="pasted_data"):
@@ -111,9 +140,10 @@ def download_file(request, file_id):
         if not name:
             name = "download"
         if dlurl:
-            url = urljoin(gi.base_url, dlurl)
-            req = Request(url, headers={'x-api-key': gi.key})
-            response = urlopen(req)
+            try:
+                response = _open_galaxy_download_url(gi, dlurl)
+            except (HTTPError, URLError) as e:
+                return _galaxy_download_error_response(request, e)
             # HttpResponse, not StreamingHttpResponse: response.read()
             # already reads the whole thing into memory, so there's no
             # actual streaming happening here - and passing bytes
@@ -193,9 +223,10 @@ def tree_visualization(request, file_id):
         dlurl = data.get('download_url')
         historyid = data.get('history_id')
         if dlurl and historyid:
-            url = urljoin(gi.base_url, dlurl)
-            req = Request(url, headers={'x-api-key': gi.key})
-            response = urlopen(req)
+            try:
+                response = _open_galaxy_download_url(gi, dlurl)
+            except (HTTPError, URLError) as e:
+                return _galaxy_download_error_response(request, e)
             # .decode(): the template embeds this in a JS string literal
             # via {{ newick_tree|escapejs }} (see treeviz/tree.html) -
             # passing raw bytes through, Django's template rendering
@@ -219,9 +250,10 @@ def export_to_itol(request, file_id):
     if isinstance(data, dict):
         dlurl = data.get('download_url')
         if dlurl:
-            url = urljoin(gi.base_url, dlurl)
-            req = Request(url, headers={'x-api-key': gi.key})
-            response = urlopen(req)
+            try:
+                response = _open_galaxy_download_url(gi, dlurl)
+            except (HTTPError, URLError) as e:
+                return _galaxy_download_error_response(request, e)
             tmpfile = tempfile.NamedTemporaryFile()
             tmpfile.write(response.read())
             tmpfile.flush()
