@@ -37,6 +37,24 @@ PERMALINK_SALT = 'workspace.permalink'
 from utils import ip
 
 
+def _parse_history_json(raw, default):
+    """
+    workspace.tasks.deleteoldgalaxyhistory() clears a cleaned-up
+    WorkspaceHistory's history_content_json/history_info_json to "" once
+    its Galaxy data is purged (see CLAUDE.md's "Workflow duplicates and
+    the Celery cleanup jobs") - and history_detail/the citation AJAX
+    views have no ownership check, so an old, already-deleted history's
+    id is still directly reachable. json.loads("") raises a
+    JSONDecodeError ("Expecting value: line 1 column 1 (char 0)")
+    instead of degrading gracefully - a real production 500. Same
+    tolerant-parsing convention already used by running_jobs_view.
+    """
+    try:
+        return json.loads(raw)
+    except (ValueError, TypeError):
+        return default
+
+
 @staff_member_required
 def daily_report_view(request):
     """
@@ -301,8 +319,14 @@ class WorkspaceHistoryObjectMixin(SingleObjectMixin):
         w = queryset.get(history=hist_id,
                          galaxy_server=server)
 
-        w.history_content = json.loads(w.history_content_json)
-        w.history_info = json.loads(w.history_info_json)
+        w.history_content = _parse_history_json(w.history_content_json, [])
+        # Falls back to just the real history id (not {}) so the
+        # template's {% url ... object.history_info.id %} calls (session
+        # toggle, rename, refresh timer, citation links) still reverse
+        # correctly for a cleaned-up history instead of raising
+        # NoReverseMatch on a missing id.
+        w.history_info = _parse_history_json(
+            w.history_info_json, {'id': hist_id})
         return w
 
     def get_context_data(self, **kwargs):
@@ -480,7 +504,7 @@ def get_dataset_citations(request, history_id):
     gi = request.galaxy
     try:
         w = WorkspaceHistory.objects.get(history=history_id)
-        w.history_content = json.loads(w.history_content_json)
+        w.history_content = _parse_history_json(w.history_content_json, [])
         for file in w.history_content:
             try:
                 dataset_provenance = gi.histories.show_dataset_provenance(
@@ -537,7 +561,7 @@ def get_dataset_citations_bibtex(request, history_id):
     gi = request.galaxy
     try:
         w = WorkspaceHistory.objects.get(history=history_id)
-        w.history_content = json.loads(w.history_content_json)
+        w.history_content = _parse_history_json(w.history_content_json, [])
         for file in w.history_content:
             dataset_provenance = gi.histories.show_dataset_provenance(
                 history_id,
@@ -566,7 +590,7 @@ def get_dataset_citations_txt(request, history_id):
     gi = request.galaxy
     try:
         w = WorkspaceHistory.objects.get(history=history_id)
-        w.history_content = json.loads(w.history_content_json)
+        w.history_content = _parse_history_json(w.history_content_json, [])
         for file in w.history_content:
             dataset_provenance = gi.histories.show_dataset_provenance(
                 history_id,

@@ -1428,6 +1428,25 @@ class HistoryContentRefreshViewTest(TestCase):
         prov.assert_not_called()
         self.assertIn('Analysis is being initialized', response.content.decode())
 
+    def test_cleaned_up_history_does_not_crash_the_view(self):
+        """
+        Regression test: hit live in production -
+        workspace.tasks.deleteoldgalaxyhistory() clears a cleaned-up
+        history's history_content_json/history_info_json to "" once its
+        Galaxy data is purged (see CLAUDE.md), and history_detail has no
+        ownership check, so an old, already-deleted history's id stays
+        directly reachable. json.loads("") raised an uncaught
+        JSONDecodeError ("Expecting value: line 1 column 1 (char 0)"),
+        500ing the page instead of degrading gracefully.
+        """
+        WorkspaceHistory.objects.filter(pk=self.history.pk).update(
+            deleted=True, finished=True,
+            history_content_json="", history_info_json="")
+        with patch('workspace.views.updateworkspacestatus.delay'):
+            response = self.client.get(
+                reverse('history_detail', kwargs={'history_id': 'hist1'}))
+        self.assertEqual(response.status_code, 200)
+
 
 class TreePreviewTest(TestCase):
     """
