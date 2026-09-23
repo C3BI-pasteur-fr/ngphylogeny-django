@@ -332,7 +332,6 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
                 workflow.delete_from_galaxy(gi)
                 return render(request, self.template_name, context)
 
-        print(galaxy_file)
         # We check form validity
         if not self.check_form_validity(request, context):
             workflow.delete_from_galaxy(gi)

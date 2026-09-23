@@ -9,5 +9,4 @@ def send_delete_galaxy_history(sender, instance, using, **kwargs):
     removes history from db and from Galaxy server
     in an asynchronous call to celery
     """
-    print("Removing an history signal")
     deletegalaxyhistory.delay(instance.history)

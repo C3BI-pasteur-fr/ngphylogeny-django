@@ -291,8 +291,7 @@ class Tool(models.Model):
                     tools_import_report['new'].append(t)
                 else:
                     tools_import_report['already_exist'].append(t)
-            except (ValueError, ValidationError) as e:
-                print(e)
+            except (ValueError, ValidationError):
                 tools_import_report['error'].append(id_tool)
         return tools_import_report
 
@@ -364,7 +363,6 @@ class ToolInputData(ToolData):
 
         l_ext = self.get_extensions()
         l_ext_filtered = [ext for ext in l_ext if ext not in ignore]
-        print(l_ext_filtered)
         galaxy_server = self.tool.galaxy_server
         return ToolOutputData.objects.filter(extension__in=l_ext_filtered,
                                              tool__galaxy_server=galaxy_server)

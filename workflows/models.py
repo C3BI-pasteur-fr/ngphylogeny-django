@@ -179,7 +179,6 @@ class WorkflowGalaxyFactory(object):
     def build(self, galaxy_instance, list_tools, history_id):
         self.set_steps(galaxy_instance, list_tools, history_id)
         if self.valid:
-            print(self.to_json())
             # import_workflow_json (which took a JSON string) was
             # removed from bioblend; to_json() already returns a dict
             # (via ast.literal_eval), so import_workflow_dict is the
@@ -261,7 +260,6 @@ class WorkflowGalaxyFactory(object):
 
     def to_json(self):
         import ast
-        print(str(self))
         return ast.literal_eval(str(self))
 
 

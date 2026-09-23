@@ -299,8 +299,6 @@ def add_file_to_session(request, file_id):
             request.session['files']={}
         fdict = request.session['files']
         if file_id not in fdict:
-            print("data:")
-            print(json.dumps(data))
             fdict[file_id]={'id': file_id, 'ext' : data.get('file_ext'), 'history' : data.get('history_id'), 'name': data.get('name')}
         return redirect('history_detail', history_id=data.get('history_id'))
     return render(request, 'error.html', {'errortitle': 'Error while adding file to session', 'errormessage': 'File id does not exist'})
