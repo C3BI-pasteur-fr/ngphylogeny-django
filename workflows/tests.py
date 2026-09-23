@@ -11,7 +11,8 @@ from django.utils import timezone
 
 from galaxy.models import GalaxyUser, Server
 from tools.models import Tool
-from workflows.exceptions import WorkflowInvalidFormError
+from workflows.exceptions import (
+    WorkflowInputFileFormatError, WorkflowInvalidFormError)
 from workflows.models import Workflow, WorkflowStepInformation
 from workflows.tasks import deleteoldgalaxyworkflows
 from workflows.views.wkadvanced import WorkflowAdvancedFormView
@@ -269,6 +270,30 @@ class ProcessFileToUploadTest(TestCase):
             fasta, "pasted.fasta")
         self.assertEqual(nseq, 4)
         self.assertEqual(length, 4)
+
+    def test_non_utf8_uploaded_file_raises_clean_error_not_unicodedecodeerror(self):
+        """
+        Regression test: hit live in production - process_file_to_upload()
+        re-opened the just-written temp file with a plain open(tmp_file.name)
+        (text mode, the default) and handed it to biofile.valid_fasta(),
+        which is written to accept either bytes or str and branches on
+        isinstance(raw, bytes) to decode with errors='replace' - but a
+        text-mode open() already tries to decode as UTF-8 *inside*
+        fasta_file.read() itself, before valid_fasta() ever gets a
+        chance to handle it. Real traceback: UnicodeDecodeError: 'utf-8'
+        codec can't decode byte 0xff in position 15: invalid start byte
+        - a genuine UTF-16 fasta file (0xFF as the first byte is a
+        UTF-16LE BOM, plausible from Windows Notepad/Excel), 500ing the
+        page instead of the existing "malformed/too few sequences"
+        WorkflowInputFileFormatError this same function already raises
+        for other bad input. Fixed by opening in binary mode, matching
+        what valid_fasta()'s own bytes branch expects.
+        """
+        view = WorkflowAdvancedFormView()
+        fasta = (">s1\nACGT\n>s2\nACGT\n>s3\nACGT\n>s4\nACGT\n"
+                 ).encode('utf-16')
+        with self.assertRaises(WorkflowInputFileFormatError):
+            view.process_file_to_upload(fasta, "utf16.fasta")
 
 
 class GalaxyUnavailableTest(TestCase):

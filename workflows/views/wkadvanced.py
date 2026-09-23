@@ -174,7 +174,15 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
             tmp_file.flush()
 
         # Check that input file is Fasta and is not empty
-        nseq, length, seqaa = biofile.valid_fasta(open(tmp_file.name))
+        # open() in binary mode, not text mode: valid_fasta() branches
+        # on isinstance(raw, bytes) to decode with errors='replace' -
+        # but a plain open(tmp_file.name) (text mode, the default)
+        # already tries to decode as UTF-8 *inside* .read() itself,
+        # before valid_fasta() ever gets a chance to handle it, and
+        # raises UnicodeDecodeError uncaught for any non-UTF-8 upload
+        # (e.g. a real UTF-16 fasta file saved from Windows Notepad/
+        # Excel - 0xFF as the very first byte is a UTF-16LE BOM).
+        nseq, length, seqaa = biofile.valid_fasta(open(tmp_file.name, 'rb'))
         if nseq < 4 :
             raise WorkflowInputFileFormatError(
                 "Input data is malformed or contain less than 4 sequences"
