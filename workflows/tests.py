@@ -337,3 +337,59 @@ class GalaxyUnavailableTest(TestCase):
         self.assertEqual(response.status_code, 503)
         self.assertTemplateUsed(
             response, 'workflows/galaxy_unavailable.html')
+
+
+class WorkflowMakerMissingObjectTest(TestCase):
+    """
+    Regression test: WorkflowMakerView.get_object() (workflows/views/
+    wkmaker.py) used to do Workflow.objects.filter(id_galaxy=...)
+    .exclude(category='base').first() and then unconditionally set
+    wk_obj.json - a real production 500 (AttributeError: 'NoneType'
+    object has no attribute 'json') on GET /workflows/wkmake/<id> for
+    any id with no matching *non-base* local row, even though
+    show_workflow() above it can still succeed (Galaxy still knows the
+    workflow - this only crashes on the local DB lookup, not on a
+    Galaxy call). Two real ways to hit this: an id that's only ever
+    known locally as the category='base' row (always excluded here - a
+    maker-built workflow is never 'base'), and an id whose duplicated
+    row was already cleaned up by workflows.tasks.
+    deleteoldgalaxyworkflows()'s 7-day cutoff (see CLAUDE.md) while a
+    stale link/bookmark to it still exists. Fixed with
+    get_object_or_404, matching the same pattern already used by
+    RerunWorkflow (workflows/views/generic.py) - both should now 404
+    instead of 500.
+    """
+
+    def setUp(self):
+        user = User.objects.create_user('admin')
+        with patch('galaxy.models.requests.get',
+                   return_value=Mock(status_code=200,
+                                      json=lambda: {'version_major': '25.1'})):
+            self.server = Server.objects.create(
+                url='http://fake-galaxy.example.org', current=True)
+        GalaxyUser.objects.create(
+            user=user, galaxy_server=self.server, api_key='fakekey',
+            anonymous=True)
+
+    @staticmethod
+    def _galaxy_show_workflow_ok():
+        return patch(
+            'bioblend.galaxy.workflows.WorkflowClient.show_workflow',
+            return_value={'id': 'galaxyid1', 'name': 'PhyML OneClick',
+                          'steps': {}})
+
+    def test_base_workflow_id_returns_404_not_500(self):
+        Workflow.objects.create(
+            galaxy_server=self.server, id_galaxy='galaxyid1',
+            name='PhyML OneClick', category='base', description='d',
+            slug='phyml-oneclick')
+        with self._galaxy_show_workflow_ok():
+            response = self.client.get(reverse(
+                'workflow_maker_form', kwargs={'id': 'galaxyid1'}))
+        self.assertEqual(response.status_code, 404)
+
+    def test_unknown_workflow_id_returns_404_not_500(self):
+        with self._galaxy_show_workflow_ok():
+            response = self.client.get(reverse(
+                'workflow_maker_form', kwargs={'id': 'does-not-exist'}))
+        self.assertEqual(response.status_code, 404)
