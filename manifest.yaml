@@ -193,7 +193,7 @@ spec:
             - "NGPhylogeny_fr.wsgi"
             - "--master"
             - "--processes"
-            - "4"
+            - "8"
             - "--threads"
             - "2"
             - "--harakiri"
@@ -298,9 +298,27 @@ spec:
               value: "${CONTACT_FORM_RECIPIENTS}"
           resources:
             requests:
-              memory: "512Mi"
-            limits:
               memory: "1Gi"
+              # Explicit, not left to the namespace's own project-limit-range
+              # default (500m/500m per container, request==limit, no burst) -
+              # that default doesn't scale with --processes above, so going
+              # 4->8 workers on an unset cpu: would have meant 8 processes
+              # squeezed into the same 0.5 vCPU ceiling 4 processes had
+              # before (worse per-process budget, not more capacity). 1000m
+              # limit keeps the same ~125m/process ratio the old 4-process/
+              # 500m default had. Sized to leave headroom under this
+              # namespace's real quota (`kubectl describe quota`, checked
+              # 2026-09-23: requests.cpu/limits.cpu both 4 hard, 2500m used
+              # at the time - every container here still on the 500m
+              # default) even while the init Job (also unset cpu:, another
+              # transient 500m default) runs alongside this Deployment
+              # during a deploy - see .gitlab-ci.yml's .deploy script,
+              # which applies the whole manifest in one kubectl apply and
+              # only waits for the Job afterward, not before.
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "1000m"
           readinessProbe:
             httpGet:
               # /status, not / - a plain static 200, exempted from
@@ -319,6 +337,20 @@ spec:
             # rather than assuming instant readiness.
             initialDelaySeconds: 30
             periodSeconds: 10
+            # Explicit, not left to Kubernetes' own 1s default - a real
+            # production incident (2026-09-23) showed both probes
+            # failing with "context deadline exceeded (Client.Timeout
+            # exceeded while awaiting headers)" against a genuinely
+            # trivial endpoint, on a pod that was CPU-starved (the
+            # web container had no explicit cpu: before this, so it
+            # fell back to this namespace's project-limit-range default
+            # of 500m shared across all --processes) and shortly
+            # afterwards OOMKilled - the process wasn't broken, just too
+            # slow under load to answer within 1s. 1s is razor-thin for
+            # a Python/WSGI process under any real load; 3s still keeps
+            # failureThreshold's own 30s-of-sustained-failure detection
+            # window meaningful for an actually hung process.
+            timeoutSeconds: 3
             failureThreshold: 3
           livenessProbe:
             httpGet:
@@ -326,6 +358,7 @@ spec:
               port: 8000
             initialDelaySeconds: 30
             periodSeconds: 10
+            timeoutSeconds: 3
             failureThreshold: 3
 ---
 apiVersion: apps/v1
