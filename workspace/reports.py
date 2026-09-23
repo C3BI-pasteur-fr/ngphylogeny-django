@@ -19,7 +19,7 @@ the long-standing, universally-supported way to put an image in an email.
 import base64
 import io
 from collections import defaultdict, OrderedDict
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 
 import matplotlib
 matplotlib.use('Agg')
@@ -136,9 +136,20 @@ def gather_last_7_days():
     start = today - timedelta(days=6)
     days = [start + timedelta(days=i) for i in range(7)]
 
+    # created_date__gte=<a plain datetime>, not created_date__date__gte=
+    # start: the latter compiles to django_datetime_cast_date(created_date,
+    # UTC, UTC) >= start, which wraps the column in a function - Postgres
+    # can't use a plain index on created_date for that, and this table
+    # is large enough (701,957 rows) that this alone cost ~4s per report
+    # (EXPLAIN ANALYZE, 2026-09-23), full sequential scan every time. A
+    # plain range comparison against the raw column is index-friendly
+    # and, since start is already a UTC-normalized date
+    # (timezone.localdate() under this project's TIME_ZONE='UTC'), gives
+    # the exact same boundary.
+    start_dt = timezone.make_aware(datetime.combine(start, time.min))
     rows = (
         WorkspaceHistory.objects
-        .filter(created_date__date__gte=start)
+        .filter(created_date__gte=start_dt)
         .values('created_date__date', 'workflow_category', 'workflow_steps',
                  'workflow__name')
         .annotate(count=Count('id'))
@@ -472,12 +483,14 @@ def render_report_email():
 
 
 REPORT_WEB_CACHE_KEY = 'workspace_daily_report_web_context'
-# Rendering 5 matplotlib charts is the slow part of assembling this
-# report - cheap enough for the email (a Celery task nobody's waiting on),
-# but noticeably slow as something a person loads in a browser and sits
-# waiting for. A usage dashboard doesn't need to be second-fresh, so cache
-# the assembled context instead of rebuilding it from scratch on every
-# single page view.
+# Assembling this report (the gather_* queries above, plus rendering 5
+# matplotlib charts) is genuinely slow at real production scale - see
+# WorkspaceHistory.created_date's own db_index=True comment for measured
+# numbers - cheap enough for the email (a Celery task nobody's waiting
+# on), but noticeably slow as something a person loads in a browser and
+# sits waiting for. A usage dashboard doesn't need to be second-fresh,
+# so cache the assembled context instead of rebuilding it from scratch
+# on every single page view.
 REPORT_WEB_CACHE_TTL = 15 * 60
 
 

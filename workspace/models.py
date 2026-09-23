@@ -17,7 +17,14 @@ class WorkspaceHistory(models.Model):
     # The potential workflow that has been executed in the workspace
     workflow = models.ForeignKey(Workflow, null=True, on_delete=models.SET_NULL)
     name = models.CharField(max_length=100)
-    created_date = models.DateTimeField(auto_now_add=True)
+    # db_index=True: workspace/reports.py's daily-report queries
+    # (gather_last_7_days, gather_period_totals) all filter/order/group
+    # by this column - with no index at all, real production data
+    # (701,957 rows) measured ~3.7-4s *each* for these (EXPLAIN ANALYZE,
+    # 2026-09-23), a full sequential scan/external sort every time,
+    # dominating the report's total generation time far more than the
+    # matplotlib rendering this file used to (and still does) blame.
+    created_date = models.DateTimeField(auto_now_add=True, db_index=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
     email = models.CharField(max_length=100)
     monitored = models.BooleanField(default=False)
@@ -61,3 +68,21 @@ class WorkspaceHistory(models.Model):
     class Meta:
         verbose_name_plural = "Workspace histories"
         unique_together = (("history", "galaxy_server"),)
+        indexes = [
+            # workspace.views.running_jobs_view's WorkspaceHistory query
+            # filters on exactly these three columns - with no index at
+            # all, real production data (701,949 rows, only 9 actually
+            # matching) measured a ~2.8s parallel sequential scan for
+            # this one query alone (EXPLAIN ANALYZE, 2026-09-23),
+            # directly explaining that page's slow load. A partial
+            # index (only the still-running rows) stays tiny forever -
+            # it grows with how many jobs are currently running, not
+            # with the whole table - rather than a full index over
+            # every historical row.
+            models.Index(
+                fields=['created_date'],
+                condition=models.Q(
+                    monitored=True, finished=False, deleted=False),
+                name='wsph_running_jobs_idx',
+            ),
+        ]

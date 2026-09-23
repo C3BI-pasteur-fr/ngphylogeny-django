@@ -80,6 +80,24 @@ class BlastRun(models.Model):
     deleted = models.BooleanField(default=False)
     tree = models.TextField(null=True)
 
+    class Meta:
+        indexes = [
+            # Same reasoning as WorkspaceHistory's own
+            # wsph_running_jobs_idx (see workspace/models.py) -
+            # workspace.views.running_jobs_view's BlastRun query filters
+            # on exactly these two columns, with no index. A partial
+            # index over just the still-pending/running rows stays tiny
+            # regardless of how large blast_blastrun grows overall.
+            models.Index(
+                fields=['date'],
+                # Literal 'P'/'R', not the PENDING/RUNNING class
+                # constants - a nested Meta class body doesn't have
+                # access to BlastRun's own namespace, only the module's.
+                condition=models.Q(status__in=['P', 'R'], deleted=False),
+                name='blastrun_running_idx',
+            ),
+        ]
+
     def format_sequence(self):
         return re.sub("\*$","",('\n'.join(textwrap.wrap(self.query_seq, 60)))).rstrip()
 
