@@ -357,7 +357,7 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
         except WorkflowInvalidFormError as e:
             # if one form is not valid
             workflow.delete_from_galaxy(gi)
-            delete_history(wksph.history)
+            delete_history(request, wksph.history)
             return self.get(request, *args, **kwargs)
         except WorkflowInputFileFormatError as e:
             context = self.get_context_data(object=self.object)
@@ -386,7 +386,24 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
             return HttpResponseRedirect(self.succes_url)
 
         except Exception:
-            delete_history(wksph.history)
+            # Real production bug: this used to call delete_history
+            # (workspace/views.py, @connection_galaxy-decorated,
+            # signature (request, history_id)) as delete_history(
+            # wksph.history) - a single positional string arg, which
+            # bound the history id string to the *request* parameter
+            # instead. connection_galaxy's wrapper then crashed with
+            # AttributeError: 'str' object has no attribute 'session' on
+            # request.session.get(...) - caught by the decorator's own
+            # broad except Exception (logged, HttpResponseGone
+            # returned), so the AttributeError never surfaced directly,
+            # but the cleanup silently never ran either: every failed
+            # Advanced-workflow submission (e.g. a tool parameter Galaxy
+            # rejects, like the real "randstart" out-of-range case that
+            # surfaced this) left its just-created WorkspaceHistory row
+            # and local session state uncleaned. tools/views.py's own
+            # call site already used the correct (request, history_id)
+            # form - matched here.
+            delete_history(request, wksph.history)
             raise
         #finally:
             # delete the workflow copy of oneclick workflow when

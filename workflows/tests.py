@@ -2,14 +2,16 @@ from datetime import timedelta
 from unittest.mock import Mock, patch
 
 from bioblend.galaxy.client import ConnectionError
-from django.contrib.auth.models import User
+from django.contrib.auth.models import AnonymousUser, User
 from django.core.management import call_command
-from django.test import TestCase
+from django.http import HttpResponse
+from django.test import RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
 from galaxy.models import GalaxyUser, Server
 from tools.models import Tool
+from workflows.exceptions import WorkflowInvalidFormError
 from workflows.models import Workflow, WorkflowStepInformation
 from workflows.tasks import deleteoldgalaxyworkflows
 from workflows.views.wkadvanced import WorkflowAdvancedFormView
@@ -393,3 +395,95 @@ class WorkflowMakerMissingObjectTest(TestCase):
             response = self.client.get(reverse(
                 'workflow_maker_form', kwargs={'id': 'does-not-exist'}))
         self.assertEqual(response.status_code, 404)
+
+
+class WorkflowAdvancedSubmitCleanupTest(TestCase):
+    """
+    Regression test: WorkflowAdvancedFormView.post() (workflows/views/
+    wkadvanced.py) called delete_history(wksph.history) - a single
+    positional string argument - at both of its cleanup call sites (the
+    WorkflowInvalidFormError branch, and the final except Exception:
+    around invoke_workflow). delete_history (workspace/views.py) is
+    @connection_galaxy-decorated with signature (request, history_id) -
+    passing only the history id string bound it to the *request*
+    parameter instead, and connection_galaxy's wrapper then crashed with
+    AttributeError: 'str' object has no attribute 'session' on
+    request.session.get(...). That AttributeError was itself caught by
+    the decorator's own broad except Exception (logged, HttpResponseGone
+    returned) rather than propagating - so the cleanup silently never
+    ran, on every failed Advanced-workflow submission. Real production
+    case that surfaced this: Galaxy rejecting a "randstart" tool
+    parameter outside its valid [0, 10] range with a 400, at which point
+    invoke_workflow's except Exception: block tried (and silently
+    failed) to clean up the just-created, now-orphaned history.
+    tools/views.py's own call site already used the correct
+    (request, history_id) form - matched here.
+
+    Drives WorkflowAdvancedFormView.post() directly (not through the
+    full URL/connection_galaxy pipeline) with get_object/
+    get_context_data/check_form_validity/analyze_forms/create_history
+    all mocked out, keeping this focused on the one thing being tested:
+    what delete_history is actually called with once something fails.
+    """
+
+    def setUp(self):
+        with patch('galaxy.models.requests.get',
+                   return_value=Mock(status_code=200,
+                                      json=lambda: {'version_major': '25.1'})):
+            self.server = Server.objects.create(
+                url='http://fake-galaxy.example.org', current=True)
+        user = User.objects.create_user('admin')
+        GalaxyUser.objects.create(
+            user=user, galaxy_server=self.server, api_key='fakekey',
+            anonymous=True)
+
+    def _make_view_and_request(self):
+        request = RequestFactory().post('/workflows/advanced/fake/full', {
+            'blastrun': '--', 'galaxyfile': 'fakedatasetid',
+        })
+        request.session = self.client.session
+        request.user = AnonymousUser()
+        request.galaxy_server = self.server
+        request.galaxy = Mock()
+
+        workflow = Mock()
+        workflow.category = 'duplicated'
+        workflow.json = {'inputs': {'in1': {}}, 'steps': {}}
+        workflow.tooldesc = 'step.tool'
+        workflow.description = 'desc'
+
+        view = WorkflowAdvancedFormView()
+        view.request = request
+        view.kwargs = {'slug': 'fake'}
+        view.object = None
+        view.get_object = Mock(return_value=workflow)
+        view.get_context_data = Mock(return_value={})
+        view.check_form_validity = Mock(return_value=True)
+
+        return view, request, workflow
+
+    def test_invoke_workflow_failure_calls_delete_history_correctly(self):
+        view, request, workflow = self._make_view_and_request()
+        view.analyze_forms = Mock()
+        request.galaxy.workflows.invoke_workflow = Mock(
+            side_effect=Exception('boom'))
+
+        with patch('workflows.views.wkadvanced.create_history',
+                   return_value=Mock(history='fakehistid')), \
+             patch('workflows.views.wkadvanced.delete_history') as delete_history_mock:
+            with self.assertRaises(Exception):
+                view.post(request)
+
+        delete_history_mock.assert_called_once_with(request, 'fakehistid')
+
+    def test_invalid_form_failure_calls_delete_history_correctly(self):
+        view, request, workflow = self._make_view_and_request()
+        view.analyze_forms = Mock(side_effect=WorkflowInvalidFormError('bad'))
+        view.get = Mock(return_value=HttpResponse())
+
+        with patch('workflows.views.wkadvanced.create_history',
+                   return_value=Mock(history='fakehistid')), \
+             patch('workflows.views.wkadvanced.delete_history') as delete_history_mock:
+            view.post(request)
+
+        delete_history_mock.assert_called_once_with(request, 'fakehistid')
