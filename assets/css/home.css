@@ -87,17 +87,6 @@
     color: #555;
 }
 
-.badge-new {
-    background: #e8871e;
-    color: #fff;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    padding: 3px 8px;
-    border-radius: 9px;
-}
-
 .extension-banner-btn {
     flex-shrink: 0;
     background: #1f77b4;
