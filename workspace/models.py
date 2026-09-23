@@ -85,4 +85,22 @@ class WorkspaceHistory(models.Model):
                     monitored=True, finished=False, deleted=False),
                 name='wsph_running_jobs_idx',
             ),
+            # workspace/reports.py's gather_all_time() groups every row
+            # (all-time, by definition) by exactly these three columns -
+            # created_date's own index above doesn't help this one at
+            # all, since this query never touches created_date. Real
+            # production data measured this at ~2.9-3.2s (EXPLAIN
+            # ANALYZE, 2026-09-23), a plain Seq Scan reading the whole
+            # (wide - history_content_json/history_info_json are TEXT)
+            # heap for every one of 701,970 rows just to project out 3
+            # narrow columns. A covering index lets Postgres satisfy
+            # this via an Index Only Scan instead - the same fix already
+            # measured cutting gather_period_totals() from ~3.7s to
+            # ~1.3s for the same reason (its own created_date index).
+            # Not partial (unlike wsph_running_jobs_idx above): this
+            # query genuinely needs every row, all-time.
+            models.Index(
+                fields=['workflow_category', 'workflow_steps', 'workflow'],
+                name='wsph_alltime_category_idx',
+            ),
         ]
