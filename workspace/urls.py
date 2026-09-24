@@ -20,7 +20,7 @@ from .views import HistoryDetailView, HistoryContentRefreshView, PreviousHistory
     get_dataset_citations, get_dataset_citations_bibtex, get_dataset_citations_txt, \
     WorkspaceDeleteView, WorkspaceRenameView, \
     WorkspaceChangeEmailView, DeleteAllHistories, daily_report_view, \
-    running_jobs_view, WorkspacePermalinkView
+    running_jobs_view, WorkspacePermalinkView, export_rocrate
 
 urlpatterns = [
     re_path(r'^report$',
@@ -53,6 +53,8 @@ urlpatterns = [
         get_dataset_citations_bibtex, name="get_dataset_citations_bibtex"),
     re_path(r'^history/citations/text/(?P<history_id>[\w-]+)$',
         get_dataset_citations_txt, name="get_dataset_citations_txt"),
+    re_path(r'^history/(?P<history_id>[\w-]+)/rocrate$',
+        export_rocrate, name="history_rocrate"),
     re_path(r'^history/galaxyerror/(?P<id>[\w-]+)$',
         GalaxyErrorView.as_view(),
         name="galaxy_error_url"),

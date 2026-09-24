@@ -1,5 +1,7 @@
 from __future__ import unicode_literals
+import io
 import json
+import zipfile
 
 import requests
 from django.contrib import messages
@@ -13,7 +15,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.generic import TemplateView, ListView, DeleteView, UpdateView, DetailView, View
 from django.views.generic.edit import SingleObjectMixin
 from bioblend.galaxy.client import ConnectionError
-from django.shortcuts import render, redirect
+from django.shortcuts import get_object_or_404, render, redirect
 from django.http import HttpResponseRedirect
 from blast.models import BlastRun
 from .tasks import deletegalaxyhistory
@@ -23,6 +25,7 @@ from galaxy.decorator import connection_galaxy
 from .emails import site_url
 from .models import WorkspaceHistory
 from .reports import CATEGORY_LABELS, build_report_web_context
+from .rocrate import build_rocrate_metadata
 from tools.models import Tool
 from .tasks import updateworkspacestatus
 
@@ -302,6 +305,53 @@ def build_citations(dataset_tool_ids):
         except Tool.DoesNotExist:
             pass
     return refs
+
+
+@connection_galaxy
+def export_rocrate(request, history_id):
+    """
+    Download an RO-Crate (https://www.researchobject.org/ro-crate/)
+    packaging this history's workflow/tool provenance as a citable,
+    machine-readable record - see workspace/rocrate.py's own docstring
+    for exactly what it contains and why dataset files are referenced by
+    URL rather than bundled into the crate.
+
+    No ownership/finished check, same as history_detail and every other
+    per-history view in this file (see CLAUDE.md's permalink section for
+    why: a history's id is already not secret, reachable the exact same
+    way elsewhere) - the "export" button itself only appears once
+    object.finished is true, but a crate built mid-run just describes
+    whatever's there yet rather than being blocked outright.
+    """
+    gi = request.galaxy
+    galaxy_server = request.galaxy_server
+    w = get_object_or_404(
+        WorkspaceHistory, history=history_id, galaxy_server=galaxy_server)
+    w.history_content = _parse_history_json(w.history_content_json, [])
+    w.history_info = _parse_history_json(
+        w.history_info_json, {'id': history_id})
+
+    dataset_ids = [f.get('id') for f in w.history_content
+                   if isinstance(f, dict) and f.get('id')]
+    dataset_tool_ids, tool_names = resolve_dataset_tools(
+        gi, galaxy_server, w.history, dataset_ids)
+
+    metadata = build_rocrate_metadata(w, dataset_tool_ids, tool_names)
+
+    # A zip containing just ro-crate-metadata.json, not a bare JSON
+    # download - the conventional .crate.zip shape RO-Crate tooling
+    # (ro-crate-py, Describo, ...) expects to unzip and find that file
+    # in, even though there's nothing else local to bundle alongside it
+    # here (see workspace/rocrate.py's docstring on remote-only files).
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr('ro-crate-metadata.json', json.dumps(metadata, indent=2))
+    buf.seek(0)
+
+    response = HttpResponse(buf.read(), content_type='application/zip')
+    response['Content-Disposition'] = (
+        'attachment; filename="ngphylogeny-%s-rocrate.zip"' % w.history)
+    return response
 
 
 class WorkspaceHistoryObjectMixin(SingleObjectMixin):

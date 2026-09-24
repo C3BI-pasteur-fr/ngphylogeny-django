@@ -968,6 +968,17 @@
 
   </ul>
 </article>
+{% if object.finished %}
+<h4>Reproducibility</h4>
+<a class="btn btn-default" href="{% url 'history_rocrate' object.history_info.id %}">
+  <span class="glyphicon glyphicon-download"></span> Export RO-Crate
+</a>
+<p class="help-block">
+  Downloads an <a href="https://www.researchobject.org/ro-crate/" target="_blank">RO-Crate</a> -
+  a citable, machine-readable record of this analysis: the workflow, every tool used
+  (with version and citation), and links to every input/output file.
+</p>
+{% endif %}
 <h4>Files stored in session</h4>
 <table  class="table table-striped ">
   <tr><th>File ID</th><th>File Name</th><th>History ID</th><th>Remove</th></tr>

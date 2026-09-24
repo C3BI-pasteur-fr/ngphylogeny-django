@@ -1,4 +1,6 @@
+import io
 import json
+import zipfile
 from datetime import timedelta
 from unittest.mock import Mock, patch
 
@@ -24,6 +26,7 @@ from workspace.reports import (WEEKLY_TO_MONTHLY_SPAN_DAYS,
                                 gather_period_totals, render_report_html)
 from workspace.tasks import (deleteoldgalaxyhistory, send_daily_report,
                               updateworkspacestatus)
+from workspace.rocrate import build_rocrate_metadata
 from workspace.views import PERMALINK_SALT, build_citations, resolve_dataset_tools
 
 
@@ -1296,6 +1299,233 @@ class ResolveDatasetToolsTest(TestCase):
         refs = build_citations({'d1': 'mafft'})
         self.assertEqual(len(refs), 2)
         self.assertTrue(any('MAFFT paper' in r for r in refs))
+
+
+class RoCrateMetadataTest(TestCase):
+    """
+    Unit tests for build_rocrate_metadata (workspace/rocrate.py) - pure
+    function, given already-resolved dataset_tool_ids/tool_names (see
+    ResolveDatasetToolsTest above for that half), so no Galaxy/bioblend
+    mocking needed here, just a real WorkspaceHistory/Tool/Citation
+    fixture to build the crate from.
+    """
+
+    def setUp(self):
+        with patch('galaxy.models.requests.get',
+                   return_value=Mock(status_code=200,
+                                      json=lambda: {'version_major': '25.1'})):
+            self.server = Server.objects.create(
+                url='http://fake-galaxy.example.org', current=True)
+        with patch('tools.models.requests.get',
+                   return_value=Mock(status_code=200, json=lambda: {
+                       'id': 'mafft', 'name': 'ignored', 'version': '1.0',
+                       'inputs': [], 'outputs': [],
+                   })):
+            self.tool = Tool.objects.create(
+                galaxy_server=self.server, id_galaxy='mafft',
+                name='MAFFT', description='Alignment', version='1.0')
+        from tools.models import Citation
+        Citation.objects.create(
+            tool=self.tool,
+            reference='@article{a,author={Katoh K},title={MAFFT},'
+                      'journal={NAR},year={2013}}')
+
+        self.history = WorkspaceHistory.objects.create(
+            history='hist1', name='My analysis', email='',
+            monitored=True, finished=True, source_ip='127.0.0.1',
+            workflow_category='OneClick', workflow_steps='MAFFT.BMGE',
+            galaxy_server=self.server)
+        self.history.history_content = [
+            {'id': 'd1', 'hid': 1, 'name': 'input.fasta', 'state': 'ok',
+             'extension': 'fasta'},
+            {'id': 'd2', 'hid': 2, 'name': 'MAFFT alignment', 'state': 'ok',
+             'extension': 'fasta'},
+        ]
+        self.history.history_info = {
+            'id': 'hist1', 'create_time': '2026-09-01T10:00:00.000000',
+            'update_time': '2026-09-01T10:05:00.000000'}
+
+    def test_root_dataset_and_context(self):
+        metadata = build_rocrate_metadata(self.history, {'d1': 'mafft'},
+                                          {'mafft': 'MAFFT'})
+        self.assertEqual(
+            metadata['@context'], 'https://w3id.org/ro/crate/1.2/context')
+        by_id = {e['@id']: e for e in metadata['@graph']}
+        root = by_id['./']
+        self.assertEqual(root['@type'], 'Dataset')
+        self.assertIn('My analysis', root['name'])
+        self.assertEqual(root['mainEntity'], {'@id': '#action'})
+        self.assertEqual(len(root['hasPart']), 2)
+
+    def test_dataset_file_entities_reference_the_real_download_url(self):
+        metadata = build_rocrate_metadata(
+            self.history, {'d1': 'mafft'}, {'mafft': 'MAFFT'})
+        file_entities = [e for e in metadata['@graph'] if e.get('@type') == 'File']
+        self.assertEqual(len(file_entities), 2)
+        d1 = next(e for e in file_entities if e['name'] == 'input.fasta')
+        self.assertIn('/data/download/d1', d1['@id'])
+        self.assertEqual(d1['contentUrl'], d1['@id'])
+        self.assertEqual(d1['encodingFormat'], 'fasta')
+
+    def test_per_tool_step_create_action_links_tool_to_its_output_files(self):
+        # The spec-correct way to say "this file came from this tool" -
+        # not a resultOf property on the File itself (not valid
+        # RO-Crate vocabulary - see this module's own docstring).
+        metadata = build_rocrate_metadata(
+            self.history, {'d1': 'mafft'}, {'mafft': 'MAFFT'})
+        by_id = {e['@id']: e for e in metadata['@graph']}
+        step = by_id['#step-mafft']
+        self.assertEqual(step['@type'], 'CreateAction')
+        self.assertEqual(step['instrument'], {'@id': '#tool-mafft'})
+        self.assertEqual(
+            step['result'],
+            [{'@id': 'http://ngphylogeny.fr/data/download/d1'}])
+        # d2 wasn't resolved to a tool (not in dataset_tool_ids) - no
+        # step action references it, not a crash.
+        self.assertNotIn(
+            {'@id': 'http://ngphylogeny.fr/data/download/d2'},
+            step['result'])
+
+    def test_tool_entity_includes_local_version_and_citation(self):
+        metadata = build_rocrate_metadata(
+            self.history, {'d1': 'mafft'}, {'mafft': 'MAFFT'})
+        by_id = {e['@id']: e for e in metadata['@graph']}
+        tool_entity = by_id['#tool-mafft']
+        self.assertEqual(tool_entity['@type'], 'SoftwareApplication')
+        self.assertEqual(tool_entity['version'], '1.0')
+        self.assertIn('url', tool_entity)
+        self.assertTrue(any('Katoh' in c for c in tool_entity['citation']))
+
+    def test_tool_entity_without_a_local_tool_row_still_gets_url_and_version(self):
+        # "upload1" is a Galaxy builtin never imported into this app's
+        # own Tool table - RO-Crate 1.2 still requires url/version on
+        # every SoftwareApplication, so both need a real fallback.
+        metadata = build_rocrate_metadata(
+            self.history, {'d1': 'upload1'}, {'upload1': 'Upload File'})
+        by_id = {e['@id']: e for e in metadata['@graph']}
+        tool_entity = by_id['#tool-upload1']
+        self.assertIn('url', tool_entity)
+        self.assertEqual(tool_entity['version'], 'unknown')
+
+    def test_workflow_entity_has_the_required_multi_type(self):
+        metadata = build_rocrate_metadata(self.history, {}, {})
+        by_id = {e['@id']: e for e in metadata['@graph']}
+        self.assertEqual(
+            set(by_id['#workflow']['@type']),
+            {'File', 'SoftwareSourceCode', 'ComputationalWorkflow'})
+
+    def test_root_has_a_license(self):
+        metadata = build_rocrate_metadata(self.history, {}, {})
+        by_id = {e['@id']: e for e in metadata['@graph']}
+        self.assertIn('license', by_id['./'])
+        license_id = by_id['./']['license']['@id']
+        self.assertIn(license_id, by_id)
+
+    def test_action_uses_real_galaxy_timestamps_when_available(self):
+        metadata = build_rocrate_metadata(
+            self.history, {'d1': 'mafft'}, {'mafft': 'MAFFT'})
+        by_id = {e['@id']: e for e in metadata['@graph']}
+        action = by_id['#action']
+        self.assertEqual(action['@type'], 'CreateAction')
+        self.assertEqual(action['startTime'], '2026-09-01T10:00:00.000000')
+        self.assertEqual(action['endTime'], '2026-09-01T10:05:00.000000')
+        self.assertEqual(len(action['result']), 2)
+
+    def test_ngphylo_citation_present_and_linked_from_root(self):
+        metadata = build_rocrate_metadata(self.history, {}, {})
+        by_id = {e['@id']: e for e in metadata['@graph']}
+        citation = by_id['https://doi.org/10.1093/nar/gkz303']
+        self.assertEqual(citation['@type'], 'ScholarlyArticle')
+        self.assertEqual(
+            by_id['./']['citation'],
+            {'@id': 'https://doi.org/10.1093/nar/gkz303'})
+
+    def test_no_datasets_or_tools_does_not_crash(self):
+        self.history.history_content = []
+        metadata = build_rocrate_metadata(self.history, {}, {})
+        by_id = {e['@id']: e for e in metadata['@graph']}
+        self.assertEqual(by_id['./']['hasPart'], [])
+        self.assertEqual(by_id['#action']['result'], [])
+
+
+class ExportRoCrateViewTest(TestCase):
+    """
+    Integration test for workspace.views.export_rocrate, through the
+    real @connection_galaxy-decorated view - same established pattern as
+    HistoryContentRefreshViewTest below (a real Server/anonymous
+    GalaxyUser/local Tool DB fixture, bioblend's own
+    show_dataset_provenance patched directly).
+    """
+
+    def setUp(self):
+        with patch('galaxy.models.requests.get',
+                   return_value=Mock(status_code=200,
+                                      json=lambda: {'version_major': '25.1'})):
+            self.server = Server.objects.create(
+                url='http://fake-galaxy.example.org', current=True)
+        user = User.objects.create_user('admin')
+        GalaxyUser.objects.create(
+            user=user, galaxy_server=self.server, api_key='fakekey',
+            anonymous=True)
+        with patch('tools.models.requests.get',
+                   return_value=Mock(status_code=200, json=lambda: {
+                       'id': 'mafft', 'name': 'ignored', 'version': '1.0',
+                       'inputs': [], 'outputs': [],
+                   })):
+            Tool.objects.create(
+                galaxy_server=self.server, id_galaxy='mafft',
+                name='MAFFT', description='Alignment', version='1.0')
+
+        history_content = [
+            {'id': 'd1', 'hid': 1, 'name': 'input.fasta', 'state': 'ok',
+             'extension': 'fasta'},
+        ]
+        WorkspaceHistory.objects.create(
+            history='hist1', name='Test run', email='', monitored=True,
+            finished=True, source_ip='127.0.0.1',
+            workflow_category='OneClick', workflow_steps='',
+            galaxy_server=self.server,
+            history_content_json=json.dumps(history_content),
+            history_info_json=json.dumps({'id': 'hist1', 'name': 'Test run'}))
+
+    def test_download_is_a_zip_containing_a_valid_ro_crate(self):
+        with patch('bioblend.galaxy.histories.HistoryClient.show_dataset_provenance',
+                   return_value={'tool_id': 'mafft'}), \
+             patch('workspace.views.updateworkspacestatus.delay'):
+            response = self.client.get(
+                reverse('history_rocrate', kwargs={'history_id': 'hist1'}))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/zip')
+        self.assertIn('ngphylogeny-hist1-rocrate.zip',
+                      response['Content-Disposition'])
+
+        zf = zipfile.ZipFile(io.BytesIO(response.content))
+        self.assertEqual(zf.namelist(), ['ro-crate-metadata.json'])
+        metadata = json.loads(zf.read('ro-crate-metadata.json'))
+        by_id = {e['@id']: e for e in metadata['@graph']}
+        self.assertIn('./', by_id)
+        self.assertEqual(by_id['#tool-mafft']['name'], 'MAFFT')
+
+    def test_history_without_galaxy_call_failure_still_returns_a_crate(self):
+        # Galaxy provenance lookup fails entirely - resolve_dataset_tools
+        # already handles this by leaving datasets unresolved (see
+        # ResolveDatasetToolsTest) - the crate should still download,
+        # just without any per-tool-step CreateAction/SoftwareApplication
+        # entities (nothing was resolved to build them from).
+        with patch('bioblend.galaxy.histories.HistoryClient.show_dataset_provenance',
+                   side_effect=requests.exceptions.Timeout('boom')), \
+             patch('workspace.views.updateworkspacestatus.delay'):
+            response = self.client.get(
+                reverse('history_rocrate', kwargs={'history_id': 'hist1'}))
+        self.assertEqual(response.status_code, 200)
+        zf = zipfile.ZipFile(io.BytesIO(response.content))
+        metadata = json.loads(zf.read('ro-crate-metadata.json'))
+        file_entities = [e for e in metadata['@graph'] if e.get('@type') == 'File']
+        self.assertEqual(len(file_entities), 1)
+        step_actions = [e for e in metadata['@graph']
+                        if e.get('@type') == 'CreateAction' and e['@id'] != '#action']
+        self.assertEqual(step_actions, [])
 
 
 class HistoryContentRefreshViewTest(TestCase):
