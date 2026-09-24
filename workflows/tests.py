@@ -271,6 +271,28 @@ class ProcessFileToUploadTest(TestCase):
         self.assertEqual(nseq, 4)
         self.assertEqual(length, 4)
 
+    def test_sequence_ids_are_sanitized_before_upload(self):
+        """
+        Regression test: a real user's PhyML+SMS OneClick run failed at
+        the "Tree image" step ("ERROR: missing ')' at line 0 near
+        '_1_364'") because a non-breaking space survived, untouched,
+        all the way from the uploaded FASTA into the output tree - see
+        utils.biofile.sanitize_fasta_id's own docstring. This confirms
+        the fix is actually wired into the Advanced/Workflow Maker
+        upload path (process_file_to_upload), not just that the
+        sanitizer function itself works in isolation.
+        """
+        view = WorkflowAdvancedFormView()
+        fasta = (">A0A1Q2MHV5\xa0_1_364\nACGT\n>s2\nACGT\n"
+                 ">s3\nACGT\n>s4\nACGT\n")
+        tmp_file, name, nseq, length, seqaa = view.process_file_to_upload(
+            fasta, "pasted.fasta")
+        tmp_file.seek(0)
+        content = tmp_file.read().decode('utf-8')
+        self.assertIn('>A0A1Q2MHV5_1_364\n', content)
+        self.assertNotIn('\xa0', content)
+        self.assertEqual(nseq, 4)
+
     def test_non_utf8_uploaded_file_raises_clean_error_not_unicodedecodeerror(self):
         """
         Regression test: hit live in production - process_file_to_upload()

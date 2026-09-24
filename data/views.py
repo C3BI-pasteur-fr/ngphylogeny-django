@@ -17,6 +17,7 @@ from .forms import UploadForm
 from galaxy.decorator import connection_galaxy
 from workspace.views import get_or_create_history
 from blast.models import BlastRun
+from utils import biofile
 
 
 def _open_galaxy_download_url(gi, dlurl):
@@ -56,6 +57,13 @@ class UploadMixin(object):
         else:
             self.history_id = get_or_create_history(self.request)
 
+        # Rewrite sequence ids to something every downstream Galaxy
+        # tool in the pipeline (MAFFT, PhyML/PhyML-SMS, newick_utilities'
+        # nw_display, ...) will tokenize identically - see
+        # biofile.sanitize_fasta_content's own docstring for the real
+        # production bug this prevents from recurring.
+        content = biofile.sanitize_fasta_content(content)
+
         return self.request.galaxy.tools.paste_content(content=content, file_name=name,
                                                        history_id=self.history_id)
 
@@ -67,6 +75,15 @@ class UploadMixin(object):
         tmpfile = tempfile.NamedTemporaryFile()
         for chunk in file.chunks():
             tmpfile.write(chunk)
+        tmpfile.flush()
+
+        # Same sanitization as upload_content() above - see
+        # biofile.sanitize_fasta_content's own docstring.
+        tmpfile.seek(0)
+        sanitized = biofile.sanitize_fasta_content(tmpfile.read())
+        tmpfile.seek(0)
+        tmpfile.truncate()
+        tmpfile.write(sanitized)
         tmpfile.flush()
 
         if history_id:

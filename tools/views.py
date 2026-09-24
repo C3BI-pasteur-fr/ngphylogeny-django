@@ -115,6 +115,30 @@ def tool_exec_view(request, pk, store_output=None):
                         for chunk in uploaded_file.chunks():
                             tmp_file.write(chunk)
                         tmp_file.flush()
+                        # Rewrite sequence ids to something every
+                        # downstream Galaxy tool will tokenize
+                        # identically - see
+                        # biofile.sanitize_fasta_content's own
+                        # docstring for the real production bug this
+                        # prevents from recurring. Same code as
+                        # data.views.UploadMixin.upload_file() and
+                        # workflows.views.wkadvanced.
+                        # process_file_to_upload() - not covered by its
+                        # own dedicated view-level test here (this
+                        # view's own setup - ToolForm/
+                        # ToolFieldWhiteList/gi.tools.show_tool - is
+                        # substantial and unrelated to what's being
+                        # verified), see data.tests.
+                        # UploadMixinSanitizesFastaTest and workflows.
+                        # tests.ProcessFileToUploadTest for the same
+                        # sanitize_fasta_content() call proven correct
+                        # against the other two submission paths.
+                        tmp_file.seek(0)
+                        sanitized = biofile.sanitize_fasta_content(tmp_file.read())
+                        tmp_file.seek(0)
+                        tmp_file.truncate()
+                        tmp_file.write(sanitized)
+                        tmp_file.flush()
                         # send file to galaxy after verifying the
                         # allowed extensions
                         type = biofile.detect_type(tmp_file.name)
@@ -146,6 +170,16 @@ def tool_exec_view(request, pk, store_output=None):
                         if content:
                             tmp_file = tempfile.NamedTemporaryFile()
                             tmp_file.write(content)
+                            tmp_file.flush()
+                            # Same sanitization as the uploaded_file
+                            # branch above - see
+                            # biofile.sanitize_fasta_content's own
+                            # docstring.
+                            tmp_file.seek(0)
+                            sanitized = biofile.sanitize_fasta_content(tmp_file.read())
+                            tmp_file.seek(0)
+                            tmp_file.truncate()
+                            tmp_file.write(sanitized)
                             tmp_file.flush()
                             # send file to galaxy after verifying the
                             # allowed extensions

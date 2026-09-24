@@ -1,3 +1,4 @@
+import io
 from unittest.mock import Mock, patch
 
 from django.contrib.auth.models import User
@@ -7,6 +8,7 @@ from django.test import TestCase, override_settings
 
 from galaxy.models import GalaxyUser, Server
 from utils import biofile
+from data.views import UploadMixin
 
 
 class ValidFastaTest(TestCase):
@@ -36,6 +38,113 @@ class ValidFastaTest(TestCase):
         nseq, length, seqaa = biofile.valid_fasta(fasta)
         self.assertEqual(nseq, 2)
         self.assertEqual(length, 12)
+
+
+class SanitizeFastaContentTest(TestCase):
+    """
+    Regression test for utils.biofile.sanitize_fasta_id/
+    sanitize_fasta_content: a real user's uploaded FASTA had a
+    non-breaking space (U+00A0) embedded inside a sequence id
+    ("A0A1Q2MHV5\\xa0_1_364" - plausibly a copy-paste artifact from a
+    webpage/spreadsheet). Nothing in the regular OneClick/Advanced/Tool
+    submission pipeline sanitized sequence ids at all before this
+    (cleanseqname() was only ever called from blast/tasks.py, a
+    separate code path) - it survived MAFFT/PhyML/PhyML-SMS untouched
+    (those tools don't treat a NBSP as a token delimiter) into the
+    output tree, where newick_utilities' own Newick parser *does* treat
+    it as one: "ERROR: missing ')' at line 0 near '_1_364'" on the
+    "Tree image" step - reported live, with the actual .nhx file
+    containing 12 such ids. A more lenient parser (gotree) read the
+    same tree back with no complaint.
+    """
+
+    def test_sanitize_fasta_id_replaces_non_breaking_space(self):
+        self.assertEqual(
+            biofile.sanitize_fasta_id('A0A1Q2MHV5\xa0_1_364'),
+            'A0A1Q2MHV5_1_364')
+
+    def test_sanitize_fasta_id_replaces_newick_special_characters(self):
+        self.assertEqual(
+            biofile.sanitize_fasta_id('foo(bar);baz,qux:1'),
+            'foo_bar_baz_qux_1')
+
+    def test_sanitize_fasta_id_collapses_and_strips_underscores(self):
+        self.assertEqual(biofile.sanitize_fasta_id('a  b'), 'a_b')
+        self.assertEqual(biofile.sanitize_fasta_id('_a_'), 'a')
+
+    def test_sanitize_fasta_id_never_returns_empty(self):
+        self.assertEqual(biofile.sanitize_fasta_id('   '), 'seq')
+
+    def test_sanitize_fasta_content_rewrites_only_the_id_keeps_description(self):
+        content = '>A0A1Q2MHV5\xa0_1_364 some description here\nACGT\n'
+        result = biofile.sanitize_fasta_content(content)
+        self.assertEqual(
+            result,
+            '>A0A1Q2MHV5_1_364 some description here\nACGT\n')
+
+    def test_sanitize_fasta_content_leaves_sequence_lines_untouched(self):
+        content = '>seq1\nACGT\n>seq2\nACGT\n'
+        self.assertEqual(biofile.sanitize_fasta_content(content), content)
+
+    def test_sanitize_fasta_content_accepts_and_returns_bytes(self):
+        content = '>A\xa0B\nACGT\n'.encode('utf-8')
+        result = biofile.sanitize_fasta_content(content)
+        self.assertIsInstance(result, bytes)
+        self.assertEqual(result, b'>A_B\nACGT\n')
+
+    def test_sanitize_fasta_content_does_not_change_sequence_counts(self):
+        # The actual regression: sanitizing ids must never change what
+        # valid_fasta() counts - only the id characters change.
+        raw = '>a\xa01\nACGT\n>b\xa02\nACGT\n>c\xa03\nACGT\n>d\xa04\nACGT\n'
+        nseq_before, length_before, _ = biofile.valid_fasta(io.StringIO(raw))
+        sanitized = biofile.sanitize_fasta_content(raw)
+        nseq_after, length_after, _ = biofile.valid_fasta(io.StringIO(sanitized))
+        self.assertEqual(nseq_before, nseq_after)
+        self.assertEqual(length_before, length_after)
+
+
+class UploadMixinSanitizesFastaTest(TestCase):
+    """
+    Confirms the sanitizer from SanitizeFastaContentTest above is
+    actually wired into UploadMixin.upload_content()/upload_file() -
+    the shared choke point both the plain /data/upload page and
+    OneClick's own WorkflowFormView.form_valid() (workflows/views/
+    generic.py, which inherits these methods) submit through - not
+    just that the sanitizer function works in isolation.
+    """
+
+    def _mixin(self):
+        mixin = UploadMixin()
+        mixin.request = Mock()
+        return mixin
+
+    def test_upload_content_sanitizes_pasted_text(self):
+        mixin = self._mixin()
+        mixin.upload_content(
+            '>A0A1Q2MHV5\xa0_1_364\nACGT\n', history_id='hist1')
+        sent = mixin.request.galaxy.tools.paste_content.call_args.kwargs['content']
+        self.assertIn('>A0A1Q2MHV5_1_364\n', sent)
+        self.assertNotIn('\xa0', sent)
+
+    def test_upload_file_sanitizes_an_uploaded_file(self):
+        mixin = self._mixin()
+        fasta = SimpleUploadedFile(
+            'test.fa', '>A0A1Q2MHV5\xa0_1_364\nACGT\n'.encode('utf-8'),
+            content_type='text/plain')
+        captured = {}
+
+        def _capture(path, **kwargs):
+            # Read the temp file *while the mocked upload_file() call is
+            # still in progress* - it's a NamedTemporaryFile (delete on
+            # close), gone by the time upload_file() returns and its
+            # own local variable goes out of scope.
+            with open(path, 'rb') as f:
+                captured['content'] = f.read().decode('utf-8')
+
+        mixin.request.galaxy.tools.upload_file.side_effect = _capture
+        mixin.upload_file(fasta, history_id='hist1')
+        self.assertIn('>A0A1Q2MHV5_1_364\n', captured['content'])
+        self.assertNotIn('\xa0', captured['content'])
 
 
 class StaticPagesSmokeTest(TestCase):

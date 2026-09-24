@@ -173,6 +173,20 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
             tmp_file.write(data)
             tmp_file.flush()
 
+        # Rewrite sequence ids to something every downstream Galaxy tool
+        # in the pipeline (MAFFT, PhyML/PhyML-SMS, newick_utilities'
+        # nw_display, ...) will tokenize identically - see
+        # biofile.sanitize_fasta_content's own docstring for the real
+        # production bug (a non-breaking space survived alignment/tree
+        # building untouched, then broke the Newick Display step) this
+        # is here to prevent from recurring.
+        tmp_file.seek(0)
+        sanitized = biofile.sanitize_fasta_content(tmp_file.read())
+        tmp_file.seek(0)
+        tmp_file.truncate()
+        tmp_file.write(sanitized)
+        tmp_file.flush()
+
         # Check that input file is Fasta and is not empty
         # open() in binary mode, not text mode: valid_fasta() branches
         # on isinstance(raw, bytes) to decode with errors='replace' -
