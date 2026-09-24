@@ -2873,3 +2873,307 @@ covered page (`data.tests.StaticPagesSmokeTest.test_pages_return_200`
 already renders `home.html` end to end and continues to pass unchanged);
 nothing here has server-side logic or a context variable to unit test,
 same reasoning as this file's other pure-template/CSS sections.
+
+### Documentation page: browser extension section, stale content removed
+
+`templates/documentation.html` never mentioned the Firefox extension at
+all. Added a "Browser Extension" section (with a `.badge-new` "New"
+pill, matching the home page banner) - checked the extension's actual
+local checkout (`../ngphylogeny_browser_extension`, a sibling repo) for
+its real latest tag and README rather than guessing: the app's own
+references to it were stuck on `v0.3.0`, but the real latest tag is
+`v0.5.1`, with two real functionalities added since - fetch-by-accession
+(NCBI/UniProt) and fetch-orthologs via OrthoDB - that the doc section
+now describes alongside the original page-detection flow. Both
+`templates/home.html`'s banner and the new doc section were bumped to
+the real `v0.5.1` `.xpi` asset (`4d1996c9cfc44481a440-0.5.1.xpi`,
+verified via the GitHub API directly, not assumed from the version
+number alone - the hash prefix is fixed across releases, only the
+version suffix changes).
+
+`.badge-new` moved from `home.css` (home-page-only, loaded only via
+that template's own `{% block stylesheet %}`) into `custom.css`
+(loaded on every page via `base.html`) once the documentation page
+needed the same pill - same "used from a second page -> move to the
+global stylesheet" precedent as the dataset-table CSS move documented
+elsewhere in this file, rather than duplicating the class or pulling in
+all of `home.css` just for one rule.
+
+Also removed, both stale relative to the actual current deployment:
+- The "Example video" section - the referenced file was never deployed
+  on the new prod.
+- The old "Run NGPhylogeny.fr locally (Docker)" instructions, which
+  still described the pre-docker-compose-rewrite two-image `docker run`
+  workflow (`evolbioinfo/ngphylogeny`/`evolbioinfo/ngphylogeny-galaxy`,
+  images that predate this branch's own Docker rewrite - see "Docker"
+  above). Replaced with the actual current `docker compose up -d` /
+  `docker-compose.standalone.yml` commands from README.md, plus a link
+  to it for the rest of the configuration options.
+
+Multi-line shell snippets in this section use raw `<pre>` HTML, not
+triple-backtick fenced code blocks - `markdown2`'s configured `extras`
+(`MARKDOWN_STYLES` in `settings/base.py`: `code-friendly`, `tables`)
+don't include `fenced-code-blocks`, so a ``` block silently collapsed
+into a single-line `<p><code>...</code></p>` with the newlines lost
+instead of a real `<pre>` block - caught by actually rendering the page
+and inspecting the output HTML, not assumed from the markdown source
+alone.
+
+Separately, found and removed several leftover debug `print()`
+statements scattered across the codebase (`tools/models.py`,
+`workspace/signals.py`, `workflows/models.py`, `utils/biofile.py`,
+`workflows/views/wkadvanced.py`, `data/views.py`) while reading through
+production logs for unrelated issues - raw, unstructured output (a
+dataset dict, a full workflow JSON dumped twice, a bare mimetype
+string) going straight to stdout in production with no diagnostic
+structure, adding noise alongside real tracebacks. No behavior change;
+removing them also stopped `python manage.py test` itself from printing
+that same noise into its own output.
+
+### Real production incident: `ngphylogeny-web` OOMKilled / CPU-starved probes
+
+`kubectl describe pod` on a live `ngphylogeny-web` pod
+(`ngphylogenyfr-prod`, 2026-09-23) showed `Last State: Terminated /
+Reason: OOMKilled / Exit Code: 137` after ~16.5 minutes running, plus
+repeated `Liveness`/`Readiness probe failed: context deadline exceeded
+(Client.Timeout exceeded while awaiting headers)` events against the
+trivial `/status` endpoint. Root cause, found by also pulling the
+namespace's real `kubectl describe limitrange`/`describe quota` output:
+the `web` container had **no explicit `cpu:` request/limit at all** -
+every container in this namespace silently falls back to the
+namespace's own `project-limit-range` default (`500m`/`500m`, request
+== limit, no burst) - so all 4 uwsgi `--processes` (8 execution
+contexts counting `--threads 2`) were sharing half a CPU core total,
+independent of memory pressure. That alone plausibly explains the probe
+timeouts (a trivial endpoint starved of CPU can still miss a 1s
+default probe timeout); the resulting slow/backed-up request handling
+under load is a plausible contributor to the OOM alongside it.
+
+Fixed in `manifest.yaml`'s `web` Deployment:
+- `resources`: memory `512Mi/1Gi` -> `1Gi/2Gi`; added explicit
+  `cpu: 500m` request / `1000m` limit (previously unset, silently
+  defaulting to the namespace's `500m`/`500m`). Sized by actually
+  reading the namespace's real quota (`requests.cpu`/`limits.cpu` both
+  `4` hard, `2500m` used at the time - 5 containers x the `500m`
+  default) and leaving headroom even while the one-shot `init` Job
+  (also no explicit `cpu:`, another transient `500m` default) runs
+  alongside this Deployment during a deploy -
+  `.gitlab-ci.yml`'s `.deploy` script applies the whole manifest in one
+  `kubectl apply` and only *waits* for the Job afterward, not before,
+  so it briefly coexists with the Deployments' own pods.
+- `--processes`: `4` -> `8`. Doubling process count alone, on an
+  unset/still-500m `cpu:`, would have made things *worse* - 8 processes
+  squeezed into the same ceiling 4 had (worse per-process budget, not
+  more capacity) - the `1000m` limit keeps the same ~125m/process ratio
+  the old 4-process/500m default had, just explicit and doubled
+  alongside the process count.
+- `readinessProbe`/`livenessProbe` `timeoutSeconds`: unset (Kubernetes'
+  own `1s` default) -> `3`. The actual observed failure was a literal
+  timeout, not a wrong status code - `1s` is razor-thin for a
+  Python/WSGI process under any real load, and this exact 1s default
+  was already implicated once before in a related incident (see the
+  step-chain "pod restart" section above).
+
+Verified live end to end after redeploying: `kubectl get pod ... -o
+jsonpath='{.spec.containers[0].args}{.spec.containers[0].resources}'`
+confirmed the new config was actually running (`--processes 8`,
+`limits: {cpu: 1, memory: 2Gi}`), zero OOM/probe-failure events since.
+
+### Real production incident: Running Jobs and Daily Report pages slow - missing indexes
+
+Both investigated the same way: reproduced the exact ORM-generated SQL
+and ran `EXPLAIN ANALYZE` directly against the live production database
+(read-only, via `kubectl exec` into the `postgres` pod) rather than
+guessing from the code alone.
+
+**`workspace.views.running_jobs_view`**: `WorkspaceHistory` has
+**701,949 rows** in production; the view's own filter (`monitored=True,
+finished=False, deleted=False`) matches only **9** of them, but with no
+index on any of those three columns, Postgres had no choice but a full
+sequential scan every time - measured at **~2.8s** for that one query
+alone. Same story for `BlastRun`'s half of the same view
+(`status__in=[PENDING, RUNNING], deleted=False`), on a much smaller
+table so less costly in practice but equally unindexed. Fixed with a
+**partial index** on each (`workspace.WorkspaceHistory.Meta.indexes`'
+`wsph_running_jobs_idx`, `blast.BlastRun.Meta.indexes`'
+`blastrun_running_idx`) - scoped to exactly the "still running"
+condition each view filters on, so the index itself stays tiny
+regardless of how large the underlying table grows, rather than
+indexing every historical row. Confirmed live post-fix: the same query
+dropped to **0.27ms**, now an `Index Scan`.
+
+**`workspace/reports.py`'s daily-report queries** (`gather_last_7_days`,
+`gather_period_totals`, `gather_all_time`) all touch
+`WorkspaceHistory.created_date`, also with no index at all - each
+measured **~3.7-4s** (**~14.4s total** across the three), full
+sequential scans/external sorts, dominating the report's real
+generation time far more than the matplotlib chart rendering this
+module's own comment used to blame (that comment was accurate once,
+just stale at 700K+ real rows). Two fixes:
+- `WorkspaceHistory.created_date` got `db_index=True`.
+- `gather_last_7_days()`'s filter was rewritten from
+  `created_date__date__gte=start` to a plain `created_date__gte=<a
+  real datetime>` range - the `__date` lookup compiles to
+  `django_datetime_cast_date(created_date, UTC, UTC) >= ...` on
+  Postgres, wrapping the column in a function call that made even a
+  plain index on it unusable; a bare range comparison against the raw
+  column is what actually lets the new index apply.
+
+That index alone dropped `gather_period_totals()`'s own `ORDER BY
+created_date LIMIT 1` lookup from **~3.7s to ~0.13ms** (`Index Only
+Scan`, 0 heap fetches), but its `GROUP BY date_trunc('week',
+created_date)` aggregation itself only dropped to **~1.3s** - a
+full-table "since the beginning" aggregate genuinely has to visit
+every row once, indexing only removes the *unnecessary* heap I/O, not
+the inherent per-row work. `gather_all_time()` wasn't touched by the
+`created_date` index at all (it groups by `workflow_category`/
+`workflow_steps`/`workflow_id` instead, still a plain `Seq Scan`,
+**~2.9-3.2s**) - fixed separately with a second, non-partial covering
+index (`wsph_alltime_category_idx` on those three columns), turning it
+into an `Index Only Scan` too, confirmed dropping to **~1.4s** for the
+same "avoid the heap, not the row count" reason.
+
+Given `gather_all_time()`/`gather_period_totals()` are inherently
+full-table, all-time aggregates - and the table only grows - the
+`workspace.reports.build_report_web_context()` 15-minute cache
+(`REPORT_WEB_CACHE_TTL`) was **deliberately kept**, not removed even
+after indexing: real measured floor for the whole report, post-fix, is
+still ~5-6s of DB time plus ~3.2s of real matplotlib chart rendering
+(6 charts, individually timed) - not something further indexing alone
+can eliminate, and this table's row count trends upward, not down.
+
+As with every other field-shape/index change in this project,
+migrations aren't committed and regenerate fresh per deploy (see
+"Migrations are not committed" above), so `migrate` alone silently
+no-ops these on the already-migrated production database - each needed
+the equivalent `CREATE INDEX CONCURRENTLY` run by hand directly against
+the live Postgres. Claude Code's own auto-mode classifier blocks
+running DDL against a database directly (even read-only diagnostic
+`EXPLAIN ANALYZE` queries were fine; the actual `CREATE INDEX`
+executions were not) - the exact SQL was handed to the user to run
+themselves, then verified afterward (both via `pg_indexes` and by
+re-running `EXPLAIN ANALYZE` to confirm the new index scan and
+timing) rather than assumed applied.
+
+### RO-Crate export for a finished workspace history
+
+Once a workflow run finishes, a new "Export RO-Crate" button on the
+history detail page (`templates/workspace/include/
+history_contents_provenance_ajax.html`, gated on `{% if object.finished
+%}`, next to the existing citation links) downloads a citable,
+machine-readable [RO-Crate](https://www.researchobject.org/ro-crate/)
+record of the run: the workflow, every tool actually used (with
+version and citation pulled from this app's own `Tool`/`Citation`
+tables), and every input/output file - packaged as the conventional
+`.crate.zip` (a zip containing just `ro-crate-metadata.json`, the shape
+RO-Crate tooling like `ro-crate-py`/Describo expects to unzip and find
+that file in).
+
+`workspace/rocrate.py` builds the JSON-LD graph (pure function, no
+Galaxy/DB calls of its own - takes an already-fetched `WorkspaceHistory`
+plus the already-resolved `dataset_tool_ids`/`tool_names` from
+`resolve_dataset_tools`, the same helper the step-chain/table/citations
+already share); `workspace.views.export_rocrate`
+(`GET /workspace/history/<id>/rocrate`) does the Galaxy-touching
+orchestration and zips the result. Deliberately does **not** bundle any
+dataset bytes - every `File` entity's `contentUrl` points at this app's
+own existing `download_file` endpoint (itself proxying Galaxy), not
+embedded content: this app does no storage of its own (see "What this
+is" at the top of this file), and re-zipping a whole history's actual
+files server-side on export would risk the same class of large-file/
+memory/timeout issues already hit elsewhere in this codebase
+(`utils/biofile.py`'s `valid_fasta()`, the uwsgi harakiri/large-upload
+incidents above) for no real benefit - the data already has a stable,
+working URL.
+
+**Tested against a real, finished history run for real against
+`galaxy.pasteur.fr`**, not just synthetic fixtures - `docker compose -f
+docker-compose.yml -f docker-compose.dev.yml up -d --build`, using the
+untracked `.env`'s real `NGPHYLO_GALAXY_URL=https://galaxy.pasteur.fr`
++ API key (`docker-compose.dev.yml` bind-mounts this checkout into
+`web`/`celery-worker`/`celery-beat` so code edits take effect via
+Django's own autoreload, no rebuild needed - see that file's own header
+comment). Reused two already-finished `WorkspaceHistory` rows sitting
+in the local dev DB from earlier real testing sessions rather than
+submitting a new job - clicked the real button on the real rendered
+page and downloaded the real zip.
+
+**Validated with the actual reference tooling, not just eyeballed**:
+`pip install rocrate roc-validator` (respectively `ro-crate-py`, the
+reference Python implementation, and the community SHACL-based
+`rocrate-validator` CLI). First pass, against the `ro-crate-1.1`
+profile, failed - not on anything this module produced, but on a
+genuinely dead `https://w3id.org/ro-crate/1.1/context` redirect on the
+RO-Crate project's own infrastructure (confirmed directly via `curl` -
+a real, live 404, not a sandbox/network issue, since the sibling `1.2`
+URL resolves fine; `ro-crate-py`'s own default output has already moved
+to 1.2 for the same reason). Moved `RO_CRATE_CONTEXT`/`CONFORMS_TO` to
+RO-Crate **1.2**'s (working) URLs, which then surfaced four real,
+spec-level gaps in this module's own output - all fixed, each confirmed
+by re-validating again until it actually passed clean, not assumed
+fixed from reading the spec alone:
+- Root entity needs a `license` - no established NGPhylogeny.fr
+  license/terms page exists to link to (checked - grepped every
+  template for one) - CC-BY-4.0 used as a reasonable, permissive
+  default, explicitly flagged in the code as a policy choice this
+  module makes on the project's behalf, not confirmed maintainer
+  policy.
+- A per-file `resultOf` (pointing a `File` back at the tool that
+  produced it) isn't real RO-Crate vocabulary - schema.org has no such
+  property. The spec-correct direction is the reverse: one
+  `CreateAction` *per tool step* (`#step-<tool_id>`), each listing just
+  that step's own output files via `result` - alongside the existing
+  single top-level `#action` describing the run as a whole.
+- Every `SoftwareApplication` entity needs `url` and `version` -
+  previously only set when this app's own `Tool` table happened to
+  have them (nothing for Galaxy builtins like `upload1`, which are
+  never imported into that table at all). Added real fallbacks: `url`
+  from the tool id itself where it's already a toolshed path with the
+  scheme stripped (`toolshed.pasteur.fr/repos/.../mafft/7.407_1` ->
+  `https://...`), or that Galaxy server's own tool page otherwise;
+  `version` from the tool id's own trailing segment when no local
+  `Tool` record has one, `"unknown"` only as the last resort.
+- The `#workflow` entity's `@type` needs `File` and
+  `SoftwareSourceCode` alongside `ComputationalWorkflow` - the Workflow
+  Run Crate profile's own convention that a workflow entity is
+  simultaneously "a file", "source code", and "a computational
+  workflow", even with no separately downloadable workflow file of its
+  own here.
+- Declaring `conformsTo` the more specific `process-run-crate-0.5`
+  profile (in addition to base `ro-crate-1.2`) needed the referenced
+  URIs to actually be defined as graph entities, not bare `@id`
+  references - and needed to satisfy *two different* type expectations
+  across the two profiles' own validator checks (`ro-crate-1.2` wants
+  `Profile`, `process-run-crate-0.5` wants `CreativeWork`, checked
+  directly by re-validating rather than assumed) - both types declared
+  together on each.
+
+**End state**: `ro-crate-1.2` passes clean, **65/65** required checks.
+`process-run-crate-0.5` (the more specific profile whose
+`CreateAction`/`ComputationalWorkflow` shape this module's output
+actually follows) is **41/42** - the one holdout is a hard-coded SHACL
+constraint in the installed `roc-validator` 0.11.4's own bundled copy
+of that profile (`profiles/ro-crate/1.1/must/
+1_file-descriptor_metadata.ttl`, `sh:hasValue <https://w3id.org/ro/
+crate/1.1>` - found by reading that file directly, not guessed) that
+requires the file descriptor's `conformsTo` to include the *exact* 1.1
+URI regardless of the crate's actual content - i.e. this specific
+installed validator's `process-run-crate-0.5` implementation hasn't
+been updated for RO-Crate 1.2 yet. Deliberately not "fixed" by adding a
+1.1 conformance claim to a crate that intentionally doesn't use 1.1's
+(dead) context - that would be a false declaration made only to
+satisfy one specific tool's stale check, not a real improvement.
+Cross-checked separately by loading the crate with `ro-crate-py`
+directly (loads cleanly, every entity dereferences correctly, `File`/
+`SoftwareApplication` counts match) and by fetching one of the crate's
+own referenced `contentUrl`s directly (a real tree-image SVG came back).
+
+Test coverage: `workspace.tests.RoCrateMetadataTest` (pure
+metadata-building unit tests - root entity shape, per-step
+`CreateAction` linkage, tool `url`/`version` fallbacks including the
+no-local-`Tool`-row case, the `#workflow` multi-type, the root
+`license`) and `workspace.tests.ExportRoCrateViewTest` (full view/zip
+integration test through the real `@connection_galaxy`-decorated view,
+including a Galaxy-provenance-lookup-failure degradation case - the
+crate should still download, just without any per-tool-step
+information it couldn't resolve).
