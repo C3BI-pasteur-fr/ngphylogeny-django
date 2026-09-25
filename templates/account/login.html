@@ -23,13 +23,9 @@
                     <div class="submit-row">
                         <input type="submit" value="Login">
                     </div>
-                    {# Account creation is disabled by default - see
-                       settings.NGPHYLO_ACCOUNT_CREATION_ENABLED
-                       (NGPHYLO_ACCOUNT_CREATION_ENABLED env var /
-                       ACCOUNT_CREATION_ENABLED GitLab CI/CD variable).
-                       Restore this link on any deployment where it's
-                       turned on. #}
-                    {# <p><a href="{% url 'create_account' %}">Create an account</a></p> #}
+                    {% if account_creation_enabled %}
+                    <p><a href="{% url 'create_account' %}">Create an account</a></p>
+                    {% endif %}
                 </form>
                 <div>
 

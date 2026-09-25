@@ -160,6 +160,22 @@ class AccountCreationDisabledTest(TestCase):
         response = self.client.get(reverse('login'))
         self.assertNotContains(response, reverse('create_account'))
 
+    @override_settings(NGPHYLO_ACCOUNT_CREATION_ENABLED=True)
+    def test_login_page_links_to_signup_once_enabled(self):
+        # Regression test: this link used to be a manually-maintained
+        # commented-out block in the template, updated by hand and only
+        # if someone remembered to - AccountLoginView.get_context_data()
+        # now feeds the real setting in, so the link tracks it
+        # automatically. Also a regression guard for a real bug hit
+        # live: the original comment spanned multiple lines using a
+        # bare {# ... #} tag, which Django's template lexer does NOT
+        # treat as a multi-line comment (its regex doesn't match across
+        # newlines) - the "commented-out" text rendered as plain,
+        # visible text on the page instead of being hidden at all.
+        response = self.client.get(reverse('login'))
+        self.assertContains(response, reverse('create_account'))
+        self.assertNotContains(response, 'NGPHYLO_ACCOUNT_CREATION_ENABLED')
+
 
 class AccountDeleteViewTest(TestCase):
     """

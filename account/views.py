@@ -2,6 +2,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login, logout
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.views import LoginView
 from django.shortcuts import redirect, render
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, TemplateView, View
@@ -12,6 +13,25 @@ from workspace.models import WorkspaceHistory
 from workspace.tasks import deletegalaxyhistory
 from .forms import AccountCreationForm
 from .models import UserProfile
+
+
+class AccountLoginView(LoginView):
+    """
+    Plain django.contrib.auth.views.LoginView, except it also exposes
+    settings.NGPHYLO_ACCOUNT_CREATION_ENABLED to the template
+    (account/login.html's own "Create an account" link) - the stock
+    LoginView has no context hook for this, and the link needs to
+    reflect the real, current setting rather than a manually-maintained
+    commented-out block that only updates when someone remembers to
+    edit the template by hand.
+    """
+    template_name = 'account/login.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['account_creation_enabled'] = \
+            settings.NGPHYLO_ACCOUNT_CREATION_ENABLED
+        return context
 
 
 class AccountCreateView(CreateView):
@@ -33,9 +53,9 @@ class AccountCreateView(CreateView):
     module constant, so it can be flipped per-deployment without a code
     change. Nothing else about the feature is removed -
     AccountCreationForm/the URL/form_valid() all still work exactly as
-    before; this only gates dispatch() itself. Also restore the
-    "Create an account" link in templates/account/login.html once this
-    is enabled somewhere by default.
+    before; this only gates dispatch() itself. The login page's own
+    "Create an account" link (AccountLoginView below) reads the same
+    setting, so it appears/disappears automatically alongside this.
     """
     form_class = AccountCreationForm
     template_name = 'account/create_account.html'
