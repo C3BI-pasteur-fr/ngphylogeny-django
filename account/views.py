@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login, logout
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -12,18 +13,6 @@ from workspace.tasks import deletegalaxyhistory
 from .forms import AccountCreationForm
 from .models import UserProfile
 
-# Temporarily disabled (code-level, not an env var - same "quick
-# disable" shape already established for BLAST, see CLAUDE.md's "BLAST
-# analysis was briefly, temporarily disabled" section and templates/
-# blast/blast_disabled.html) pending a real RGPD/privacy notice: this
-# form collects personal data (email) with no consent checkbox or
-# privacy-policy link anywhere in the app yet. Flip back to False (and
-# restore the "Create an account" link in templates/account/login.html)
-# once that text exists. Nothing else about the feature is removed -
-# AccountCreationForm/the URL/the view all still work exactly as
-# before, this only gates access to them.
-ACCOUNT_CREATION_DISABLED = True
-
 
 class AccountCreateView(CreateView):
     """
@@ -31,13 +20,29 @@ class AccountCreateView(CreateView):
     account/forms.py's AccountCreationForm for the actual validation.
     Logs the new account straight in and sends them to the existing
     /account page (name="account", AccountDetailView below).
+
+    Gated off by default (settings.NGPHYLO_ACCOUNT_CREATION_ENABLED,
+    driven by the NGPHYLO_ACCOUNT_CREATION_ENABLED env var /
+    ACCOUNT_CREATION_ENABLED GitLab CI/CD variable - see settings/
+    base.py) pending a real RGPD/privacy notice: this form collects
+    personal data (email) with no consent checkbox or privacy-policy
+    text anywhere in the app yet. Same code-level "quick disable" shape
+    already established for BLAST (see CLAUDE.md's "BLAST analysis was
+    briefly, temporarily disabled" section and templates/blast/
+    blast_disabled.html), just settings-driven rather than a bare
+    module constant, so it can be flipped per-deployment without a code
+    change. Nothing else about the feature is removed -
+    AccountCreationForm/the URL/form_valid() all still work exactly as
+    before; this only gates dispatch() itself. Also restore the
+    "Create an account" link in templates/account/login.html once this
+    is enabled somewhere by default.
     """
     form_class = AccountCreationForm
     template_name = 'account/create_account.html'
     success_url = reverse_lazy('account')
 
     def dispatch(self, request, *args, **kwargs):
-        if ACCOUNT_CREATION_DISABLED:
+        if not settings.NGPHYLO_ACCOUNT_CREATION_ENABLED:
             return render(
                 request, 'account/create_account_disabled.html', status=503)
         if request.user.is_authenticated:

@@ -1,7 +1,7 @@
 from unittest.mock import Mock, patch
 
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from galaxy.models import Server
@@ -65,21 +65,22 @@ class AccountCreateViewTest(TestCase):
     page - see AccountCreateView's own docstring for why no separate
     onboarding step is needed.
 
-    Account creation is currently gated off (account.views.
-    ACCOUNT_CREATION_DISABLED, see AccountCreationDisabledTest below) -
-    the two tests that go through dispatch() via a real request patch
-    that flag back to False, so this coverage of the underlying,
-    still-intact feature doesn't rot while it's disabled.
+    Account creation is disabled by default (settings.
+    NGPHYLO_ACCOUNT_CREATION_ENABLED, see AccountCreationDisabledTest
+    below) - the two tests that go through dispatch() via a real
+    request override that setting back to True, so this coverage of
+    the underlying, still-intact feature doesn't rot while it's off by
+    default.
     """
 
-    @patch('account.views.ACCOUNT_CREATION_DISABLED', False)
+    @override_settings(NGPHYLO_ACCOUNT_CREATION_ENABLED=True)
     def test_get_renders_the_signup_form(self):
         response = self.client.get(reverse('create_account'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'id_username')
         self.assertContains(response, 'id_email')
 
-    @patch('account.views.ACCOUNT_CREATION_DISABLED', False)
+    @override_settings(NGPHYLO_ACCOUNT_CREATION_ENABLED=True)
     def test_already_authenticated_users_are_redirected_to_account(self):
         User.objects.create_user(username='bob', password='pw123456789')
         self.client.login(username='bob', password='pw123456789')
@@ -127,10 +128,13 @@ class AccountCreateViewTest(TestCase):
 
 class AccountCreationDisabledTest(TestCase):
     """
-    Account creation is temporarily gated off (account.views.
-    ACCOUNT_CREATION_DISABLED = True) pending a real RGPD/privacy
-    notice - see that flag's own comment. Same "quick disable" shape as
-    BLAST's own temporary disable (see CLAUDE.md) - the feature itself
+    Account creation is off by default (settings.
+    NGPHYLO_ACCOUNT_CREATION_ENABLED, default False - see
+    NGPhylogeny_fr/settings/base.py) pending a real RGPD/privacy notice
+    - see AccountCreateView's own docstring. Same "quick disable" shape
+    as BLAST's own temporary disable (see CLAUDE.md), just settings-
+    driven so a deployment can turn it on via the
+    ACCOUNT_CREATION_ENABLED GitLab CI/CD variable - the feature itself
     (AccountCreationForm, the URL, form_valid()) is untouched, only
     dispatch() is gated, so this asserts the gate itself, not a removal.
     """

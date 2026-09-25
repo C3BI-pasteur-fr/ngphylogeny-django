@@ -169,6 +169,11 @@ BLAST server option and deactivates NCBI's public one at the same time -
 the two aren't independently toggleable (see `settings/base.py`'s `BLASTS`
 dict). Off by default, meaning BLAST runs go to NCBI's public server.
 
+`NGPHYLO_ACCOUNT_CREATION_ENABLED=True` re-enables public account sign-up
+(`/account/create`) - off by default pending a real RGPD/privacy notice
+(see `account/views.py`'s `AccountCreateView`); left off, that page serves
+a 503 "temporarily unavailable" page instead.
+
 `NGPHYLO_WORKSPACE_RETENTION_DAYS` sets how many days a finished analysis
 is kept before `workspace.tasks.deleteoldgalaxyhistory`'s daily cleanup
 removes it (`workspace/models.py`'s `WorkspaceHistory.RETENTION_DAYS`) -

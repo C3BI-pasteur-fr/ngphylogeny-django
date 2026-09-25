@@ -203,6 +203,11 @@ build:
 #     ['activated'], off by default) and deactivates NCBI's public server
 #     option at the same time (mutually exclusive, not independently
 #     toggleable - see CLAUDE.md).
+#   - ACCOUNT_CREATION_ENABLED (plain, optional): "true" re-enables
+#     public account sign-up (account.views.AccountCreateView) - off by
+#     default pending a real RGPD/privacy notice (see that view's own
+#     docstring). Left unset/anything else, GET/POST /account/create
+#     both serve a 503 "temporarily unavailable" page instead.
 #   - WORKSPACE_RETENTION_DAYS (plain, optional): days a finished
 #     workspace history is kept before workspace.tasks.
 #     deleteoldgalaxyhistory's daily cleanup removes it (workspace/

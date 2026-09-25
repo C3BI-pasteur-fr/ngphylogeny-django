@@ -237,6 +237,15 @@ EMAIL_USE_TLS = (os.environ.get('NGPHYLO_EMAIL_USE_TLS')== 'True')
 NGPHYLO_MAINTENANCE_MODE = (
     os.environ.get('NGPHYLO_MAINTENANCE_MODE', '').lower() == 'true')
 
+# "true" (case-insensitive, same reasoning as NGPHYLO_MAINTENANCE_MODE
+# above) re-enables public account sign-up (account.views.
+# AccountCreateView) - off by default, pending a real RGPD/privacy
+# notice (that form collects personal data - email - with no consent
+# checkbox or privacy-policy text anywhere in the app yet). See
+# AccountCreateView.dispatch(), which reads this directly.
+NGPHYLO_ACCOUNT_CREATION_ENABLED = (
+    os.environ.get('NGPHYLO_ACCOUNT_CREATION_ENABLED', '').lower() == 'true')
+
 if EMAIL_PORT:
     # Truthy check, not "is not None": docker-compose.yml/
     # docker-compose.standalone.yml pass this through as "${NGPHYLO_EMAIL_PORT:-}",

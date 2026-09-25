@@ -214,6 +214,12 @@ spec:
             # celery-beat/init, which never touch settings.BLASTS.
             - name: NGPHYLO_PASTEUR_BLAST_ENABLED
               value: "${PASTEUR_BLAST_ENABLED}"
+            # web-only - account.views.AccountCreateView is the only
+            # thing that reads this, and only web serves that view.
+            # Left unset/empty (the default when ACCOUNT_CREATION_ENABLED
+            # isn't set), account creation stays off (503).
+            - name: NGPHYLO_ACCOUNT_CREATION_ENABLED
+              value: "${ACCOUNT_CREATION_ENABLED}"
             # Also set on celery-worker (workspace.tasks.
             # deleteoldgalaxyhistory, which actually enforces this, runs
             # there) - not on celery-beat/init, which never evaluate
