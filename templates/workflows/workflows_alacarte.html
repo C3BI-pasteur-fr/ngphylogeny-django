@@ -57,19 +57,6 @@
 {% endblock %}
 {% block xl-content %}
 <br>
-{% if messages %}
-<ul class="messages">
-    {% for message in messages %}
-    {% if "error" in message.tags %}
-    <div class="alert alert-danger alert-dismissable">
-        <a href="#" class="close" data-dismiss="alert"
-           aria-label="close">&times;</a><strong>Warning!</strong>
-        {{ message }}
-    </div>
-    {% endif %}
-    {% endfor %}
-</ul>
-{% endif %}
 <div class="row">
     <div class="col-md-11 col-md-offset-1">
         <h3 class="text-justify"><span class="glyphicon glyphicon-chevron-right small"></span> Name</h3>

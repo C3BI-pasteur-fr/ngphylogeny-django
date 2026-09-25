@@ -3,19 +3,6 @@
 {% block title %}Previous analyses{% endblock %}
 {% block content %}
 <div class="col-md-offset-1">
-  {% if messages %}
-  <ul class="messages">
-    {% for message in messages %}
-    {% if "error" in message.tags %}
-    <div class="alert alert-danger alert-dismissable">
-      <a href="#" class="close" data-dismiss="alert"
-         aria-label="close">&times;</a><strong>Warning!</strong>
-      {{ message }}
-    </div>
-    {% endif %}
-    {% endfor %}
-  </ul>
-  {% endif %}
   {% if permalink_url %}
   <div class="panel panel-info">
     <div class="panel-heading">Permalink to this list</div>

@@ -134,8 +134,8 @@ class AccountCreationDisabledTest(TestCase):
     """
     Account creation is off by default (settings.
     NGPHYLO_ACCOUNT_CREATION_ENABLED, default False - see
-    NGPhylogeny_fr/settings/base.py) pending a real RGPD/privacy notice
-    - see AccountCreateView's own docstring. Same "quick disable" shape
+    NGPhylogeny_fr/settings/base.py) for now - see AccountCreateView's
+    own docstring. Same "quick disable" shape
     as BLAST's own temporary disable (see CLAUDE.md), just settings-
     driven so a deployment can turn it on via the
     ACCOUNT_CREATION_ENABLED GitLab CI/CD variable - the feature itself
@@ -386,3 +386,29 @@ class AccountDeleteViewTest(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertIn('/account/login', response.url)
+
+    @patch('account.views.deletegalaxyworkflow.delay')
+    @patch('account.views.deletegalaxyhistory.delay')
+    def test_confirmation_message_shows_on_the_redirect_target(
+            self, mock_delete_history, mock_delete_workflow):
+        # Regression test for a real bug hit live: this view's own
+        # success message used to only actually render on the handful
+        # of pages (templates/account/user_info.html and two others)
+        # that had their own ad-hoc "show messages" block - home.html
+        # (this view's own redirect target) never had one, so the
+        # message sat queued (django.contrib.messages defaults to
+        # cookie-based storage, unaffected by the logout()/session
+        # change this view also does) until it happened to land on one
+        # of those few pages later - reported as a stale "account
+        # deleted" message showing up on the account page right after
+        # an unrelated, brand new sign-up. templates/base.html now
+        # renders (and thereby consumes) messages on every page, so the
+        # very next page load - here, follow=True's own GET / - must
+        # show it immediately instead.
+        self.client.login(username='alice', password='secretpass')
+
+        response = self.client.post(
+            reverse('delete_account'), {'yes': ''}, follow=True)
+
+        self.assertContains(
+            response, 'Your account and its analyses have been deleted')

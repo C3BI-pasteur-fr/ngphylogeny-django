@@ -52,8 +52,8 @@ x-django-env: &django-env
   # back.
   NGPHYLO_PASTEUR_BLAST_ENABLED: "${NGPHYLO_PASTEUR_BLAST_ENABLED:-False}"
   # "True" re-enables public account sign-up (account.views.
-  # AccountCreateView) - off by default pending a real RGPD/privacy
-  # notice, see that view's own docstring.
+  # AccountCreateView) - off by default for now, see that view's own
+  # docstring.
   NGPHYLO_ACCOUNT_CREATION_ENABLED: "${NGPHYLO_ACCOUNT_CREATION_ENABLED:-False}"
   # Days a finished workspace history is kept before
   # workspace.tasks.deleteoldgalaxyhistory's daily cleanup removes it -

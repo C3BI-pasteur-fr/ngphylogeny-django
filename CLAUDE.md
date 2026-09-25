@@ -3177,3 +3177,354 @@ integration test through the real `@connection_galaxy`-decorated view,
 including a Galaxy-provenance-lookup-failure degradation case - the
 crate should still download, just without any per-tool-step
 information it couldn't resolve).
+
+### Self-service user accounts: one shared Galaxy key, sign-up, deletion
+
+A whole new self-service account layer was added on top of the
+previously bare-bones `account`/`galaxy` apps: public sign-up, a
+per-account analyses list, and self-service deletion - all built
+around a single architectural change that had to come first.
+
+**Every visitor - logged into an NGPhylogeny account or not - now
+authenticates to Galaxy through the same single, shared API key**, not
+a personal one per account. `galaxy.decorator.connection_galaxy` used
+to `get_or_create()` a personal `GalaxyUser` row for an authenticated
+`request.user` and redirect to set one up if it had no `api_key` - that
+redirect target (`'galaxy_account'`) was itself a dead URL name that
+had never existed in this project's URLconf (the real name is
+`'account'`), so an authenticated user with no personal key actually
+got an uncaught `NoReverseMatch` 500, not a clean redirect - never
+caught because nothing exercised that path before real accounts
+existed. `connection_galaxy` now always looks up the one
+`GalaxyUser(anonymous=True)` row for the current Galaxy server,
+regardless of who's logged in. `WorkspaceHistory.get_galaxy_user()`
+(called by `rename()` on every `save()`) mirrors this: prefers a
+personal `GalaxyUser` row if one happens to exist (backwards
+compatible with any pre-existing one) *and has a real `api_key`* -
+found live against the real local dev DB, which still had leftover
+personal rows with a blank `api_key` from the old code path; without
+the `api_key` check, `if gu:` treated that empty-key row as "found" and
+crashed with `ValueError('API key must be set')` instead of ever
+falling back to the shared key. Falls back to `None` (not the shared
+key) for a session-only, not-logged-in history, preserving `rename()`'s
+pre-existing no-op behavior for anonymous visitors exactly (the
+previous version had no `else` branch here at all) - changing that as a
+side effect broke a good chunk of this file's own existing test
+fixtures, which create anonymous-session `WorkspaceHistory` rows
+without mocking `rename()`'s real Galaxy call.
+
+**A real production incident from this exact change, caught live**: a
+real user (`flemoine`) created a local account and submitted a
+FastTree/OneClick workflow - it sat forever on "Analysis is being
+initialized on the Galaxy server, please wait a few seconds" even
+though the real Galaxy run had actually finished in ~3 seconds
+(confirmed directly against `galaxy.pasteur.fr` - 13 datasets, all
+`ok`, 6 jobs, all `ok`). Root cause: `celery-worker` had been running
+for 33 hours, since *before* this session's `get_galaxy_user()` fix -
+unlike the Django dev server (`web`, autoreloads via `StatReloader` on
+file changes), Celery workers don't watch files and reload; they keep
+running whatever code was loaded at process start until restarted.
+`initializeworkspacejob` crashed outright with the *old*
+`GalaxyUser.DoesNotExist` on `w.save()`, and `workspace.tasks.
+updateworkspacestatus` silently caught the same exception every single
+10s poll ("Problem with Galaxy server, will retry later"), so the
+DB row's `history_content_json`/`finished` never updated even though
+the underlying task ran fine on every *other* front. `docker compose
+restart celery-worker celery-beat` (documented in `docker-compose.
+dev.yml`'s own header comment, added as part of diagnosing this)
+immediately resolved it. Worth remembering for any future local
+Celery-task-side change: a code edit alone is not enough to test it
+against the running dev stack.
+
+**Account sign-up** (`account.views.AccountCreateView`,
+`account/forms.py`'s `AccountCreationForm` - username/email/password +
+django-simple-captcha) logs the new account straight in and sends it to
+`/account`. **Self-service deletion**
+(`account.views.AccountDeleteView`, a plain `get()`/`post()`-checks-
+`"yes"` `View` - not Django's `DeleteView`, which has the same real
+Django 4.x confirmation-page/`self.object.delete()` quirk already hit
+and fixed once for BLAST, see "Deleting a BLAST run" below) deletes
+every one of the account's own `WorkspaceHistory` rows too, per an
+explicit decision with the user - same soft-delete-and-queue-Galaxy-
+cleanup effect as the existing "Delete all histories" button. Each such
+row is also **detached** (`user` set to `None`) *before* the `User` row
+itself is deleted, not just marked `deleted=True` -
+`WorkspaceHistory.user` is `on_delete=CASCADE`, so without this, Django
+ORM's own cascade-delete emulation (real Postgres FK constraints here
+are actually plain `NO ACTION`, confirmed directly via `pg_constraint`
+- Django enforces "cascade" at the ORM level by issuing its own
+`DELETE`s, not via a real DB-level cascade) would hard-delete those
+rows outright, permanently erasing them from `workspace.reports`'s
+usage counts (which explicitly count `deleted=True` rows too - "a
+usage report, not a what's-still-retained report"). The account itself
+(`auth.User`, and `UserProfile` via its own `OneToOneField` CASCADE) is
+a real, hard delete - no PII kept around; only `total_users`/the
+user-growth chart (see below) reflects one fewer account from that
+point on, the normal shape of a "current number of accounts" metric,
+not a loss of workflow-usage history.
+
+**The Workspace page (session-based list) now also shows this
+account's own histories**, merged with the classic session-id list -
+`workspace.views.PreviousHistoryListView.get_queryset()` filters on
+`history__in=session_ids OR user=request.user` (when authenticated)
+instead of session-only, additive not a replacement. Its own permalink
+(`get_context_data()`) is built from that same merged queryset now,
+not just the session list, so a permalink generated while logged in
+carries both halves - previously it silently dropped the account half
+even though the page visibly showed it. The "Workspace" nav link in
+`base.html` used to only get a real `href` when the session list had
+at least one entry (plain muted, unclickable text otherwise) - removed
+that gate entirely, since the page itself already handles an
+empty/account-only case gracefully and the old gate just made the page
+unreachable from the nav in exactly the case (a logged-in user, fresh
+session) they'd most want to reach it.
+
+**The permalink itself used to point at a hardcoded `ngphylogeny.fr`
+host**, not whatever host the local instance was actually running on -
+`site_url()` (`workspace/emails.py`) exists for contexts with *no
+request at all* (a Celery task building an email/RO-Crate link) and
+falls back to `os.environ.get('NGPHYLO_HOST', 'ngphylogeny.fr')` when
+`NGPHYLO_HTTPS_HOST` isn't set - reused here even though this view
+*does* have a real `request`. Fixed by switching to
+`self.request.build_absolute_uri(...)`, which reflects the actual host
+that was used to reach the page, no env var needed at all - reported
+live on a local dev instance (`localhost:8000` links pointing at
+`https://ngphylogeny.fr` instead).
+
+**The Workspace and account history lists were reformatted to match
+the Running Jobs page's own table look** (`.history-table-card`/
+`.history-table`/`.status-pill`, all global via `assets/css/
+custom.css`) instead of the old `<ul class="nav histories-nav
+nav-pills">` layout - shared by both pages via one new partial,
+`templates/workspace/include/history_list_table.html`. Columns: Name,
+Source (a status-pill "Account" vs. "Session", reusing the badge that
+used to be a separate `label label-primary` element), Type
+(`WorkspaceHistory.type_label`, same `CATEGORY_LABELS` mapping
+`running_jobs_view` already uses, exposed as a model property with a
+*local* import of `workspace.reports` to avoid a circular import -
+`reports.py` itself imports this module), Steps done
+(`WorkspaceHistory.steps_done`/`steps_total`, parsed from
+`history_content_json` the same tolerant way `running_jobs_view`
+already does, cached per-instance via `@cached_property` on the raw
+parsed list so both properties don't each re-parse the JSON), Created,
+and Days remaining. The delete action is a line-art SVG icon button
+now, matching the dataset-table redesign convention, not the old
+`glyphicon-trash`.
+
+**Real layout bug on the account page specifically, not the Workspace
+page**: the account page's Name column was effectively invisible.
+`templates/account/user_info.html` wrapped its content in a narrow
+`col-md-8` (offset by an empty `col-md-2`) - roughly 616px of real
+width at typical desktop sizes - while the table's *other* fixed-width
+columns alone summed to 660px, a **negative** budget for the one
+column (Name) deliberately left unconstrained to take "whatever's
+left" under `table-layout: fixed` (same convention as the dataset
+table - see "The Actions column's initial percentage width..." above
+for the same class of bug hit once already). Confirmed directly via
+real rendered-page measurements in headless Chrome (`--headless=new`,
+DevTools Protocol), not guessed. Fixed by widening the container to
+match the Workspace page's own (`col-md-offset-1`, no explicit width
+class - a plain block box shifted right by Bootstrap's own offset
+margin, not constrained to 8/12 of anything) and trimming the other
+columns to their real content width (660px -> 550px). Verified at
+992-1280px+ (359-367px for Name, no overflow) down to ~768px, where it
+gracefully truncates with an ellipsis + hover tooltip (the existing
+`.col-tool` CSS) rather than disappearing.
+
+**"Days until deletion" is shown on both pages** -
+`WorkspaceHistory.RETENTION_DAYS`/`days_until_deletion` (a `@property`
+computing `max(0, RETENTION_DAYS - (now - created_date).days)`, so it
+stays meaningful even for a still-running history) - see "Configurable
+retention/staleness cutoffs" below for how the cutoff itself is now
+configurable, not hardcoded.
+
+**A "Users" section was added to the daily report page/email**
+(`templates/workspace/_report_body.html`) - total registered account
+count plus a *cumulative* growth chart (`workspace.reports.
+gather_user_growth()`/`render_user_growth_chart()`, same weekly-
+switching-to-monthly bucketing convention as `gather_period_totals()`,
+sharing its `WEEKLY_TO_MONTHLY_SPAN_DAYS` threshold, but a running
+total by `auth.User.date_joined` rather than a per-period bar count -
+"evolution of the number of accounts" reads naturally as a growth
+curve, not new-signups-per-period).
+
+Test coverage: `account.tests` (form/view/deletion/gate tests -
+`AccountCreationFormTest`, `AccountCreateViewTest`,
+`AccountCreationDisabledTest`, `AccountDeleteViewTest`),
+`galaxy.tests.ConnectionGalaxySharedKeyTest` (an authenticated user
+with no personal `GalaxyUser` and an anonymous user both get the same
+shared key; the old per-user `get_or_create()` behavior is confirmed
+gone, not just made to not crash) and `galaxy.tests.
+AccountPageOwnHistoriesTest` (moved here from a since-deleted
+`galaxy.views.UpdateApiKey` - own-histories-only, deleted excluded,
+empty state, profile auto-creation, and a dedicated
+`test_saving_an_authenticated_users_history_falls_back_to_the_shared_key`/
+`test_stale_personal_galaxyuser_with_no_api_key_is_ignored` pair
+covering the exact two live bugs above), `workspace.tests.
+PreviousHistoryListViewAccountMergeTest`/`WorkspaceHistoryDaysUntilDeletionTest`/
+`WorkspaceHistoryTypeAndStepsTest`/`HistoryTableRedesignTest`.
+
+### Configurable retention/staleness cutoffs
+
+Every cleanup/staleness cutoff in this codebase used to be a bare
+Python literal, only ever changeable by editing code. All five are now
+env-var-driven (same shape as `NGPHYLO_MAINTENANCE_MODE`/
+`NGPHYLO_PASTEUR_BLAST_ENABLED`: read once in `settings/base.py` at
+process-start, not re-read per request - a deployment needs a restart
+to pick up a changed value, same as those two), each independently
+configurable via its own GitLab CI/CD variable:
+
+| Setting | Default | Governs |
+|---|---|---|
+| `NGPHYLO_WORKSPACE_RETENTION_DAYS` | 14 (unchanged) | `WorkspaceHistory.RETENTION_DAYS` - `workspace.tasks.deleteoldgalaxyhistory`'s daily cleanup |
+| `NGPHYLO_BLAST_RETENTION_DAYS` | **7** (was 14) | `BlastRun.RETENTION_DAYS` - `blast.tasks.deleteoldblastruns`'s daily cleanup |
+| `NGPHYLO_WORKFLOW_RETENTION_DAYS` | **14** (was 7) | `Workflow.RETENTION_DAYS` - `workflows.tasks.deleteoldgalaxyworkflows`'s daily cleanup (a Galaxy workflow *definition*, not the history's own data) |
+| `NGPHYLO_WORKFLOW_RUN_STALE_HOURS` | 24 (unchanged) | `workspace/tasks.py`'s `WORKFLOW_RUN_STALE_AFTER` |
+| `NGPHYLO_PASTEUR_BLAST_STALE_HOURS` | 3 (unchanged) | `blast/tasks.py`'s `PASTEUR_RUN_STALE_AFTER` |
+
+Two of these are real default changes, per an explicit decision with
+the user: BLAST retention drops from 14 to 7 days; workflow-definition
+retention rises from 7 to 14 (now matching workspace's own default,
+though the two settings are independently configurable, not tied
+together beyond sharing that default value).
+
+`RETENTION_DAYS` lives as a class attribute on the owning model
+(`WorkspaceHistory`/`BlastRun`/`Workflow`), read from `settings.
+NGPHYLO_*_RETENTION_DAYS` at class-body (i.e. import) time - safe,
+since Django only imports app models after settings are fully
+configured (same pattern already established for `GalaxyUser.
+GALAXY_REQUEST_TIMEOUT`). The two `*_STALE_HOURS` settings stay
+module-level constants in their own `tasks.py` (no natural per-model
+home for a Celery-task-only tuning knob). `int(os.environ.get(VAR) or
+'<default>')` - deliberately not a plain `default=` on `.get()` -
+matters here specifically because of the two different substitution
+mechanisms in play: `docker-compose.yml` supplies a real default value
+via its own `${VAR:-14}` shell syntax, but `manifest.yaml`'s
+`${VAR}` is substituted by `envsubst` (no bash-style `:-` default
+support at all) - an unset GitLab CI/CD variable there becomes a
+genuinely empty string, and `int('')` raises `ValueError`.
+
+Manifest wiring is deliberately not uniform across all four
+containers - each variable is only set where it's actually read.
+`NGPHYLO_WORKSPACE_RETENTION_DAYS` goes on both `web` (the "days left"
+display) and `celery-worker` (the cleanup task); the other four only
+on `celery-worker` - nothing web-facing reads `BlastRun`/`Workflow`
+retention or either staleness cutoff yet, and all four owning tasks
+route to queues (`default`/`monitor`) that single `celery-worker`
+Deployment already consumes, so `celery-beat`/`init` never need any of
+them.
+
+### Account creation and password reset, gated off for now
+
+Both public sign-up and the "forgot your password?" flow are gated off
+by default - `account.views.AccountCreationGateMixin`, a shared
+`dispatch()` override checking `settings.
+NGPHYLO_ACCOUNT_CREATION_ENABLED` (env var / `ACCOUNT_CREATION_ENABLED`
+GitLab CI/CD variable, same case-insensitive "true"-to-activate shape
+as `NGPHYLO_MAINTENANCE_MODE`/`NGPHYLO_PASTEUR_BLAST_ENABLED`), off
+unless explicitly turned on. Same "quick disable" shape already
+established once for BLAST (see "BLAST analysis was briefly,
+temporarily disabled" below), just settings-driven from the start
+rather than a bare module constant, so it's a GitLab variable change
+and a redeploy, not a code change, to turn either back on. Nothing
+about either feature is removed when disabled -
+`AccountCreationForm`/`PasswordResetForm`/the URLs/`form_valid()` all
+still work exactly as before; only `dispatch()` on each gated view is
+affected, rendering `templates/account/create_account_disabled.html`
+(503) instead.
+
+Password reset itself is built directly on `django.contrib.auth`'s own
+`PasswordResetView`/`-Done`/`-Confirm`/`-Complete` (well-tested Django
+internals, not reimplemented), wired up with this app's own templates/
+URL names under `/account/`. Deliberately plain text for the reset
+email itself (`templates/account/password_reset_email.html`), not
+`workspace/emails.py`'s branded `build_branded_html_email()` (inline-
+CID-image MIME wiring that every other outbound email in this codebase
+uses) - that helper doesn't fit `PasswordResetForm.save()`'s own
+email-sending path without overriding it, not worth that complexity
+for a low-traffic, currently-disabled utility flow. `settings.
+DEFAULT_FROM_EMAIL` was added (previously unset - Django's own default,
+`webmaster@localhost`, would have leaked into the reset email's From
+address) - reuses `NGPHYLO_REPORT_FROM_EMAIL`'s own default address
+(`ngphylogeny@pasteur.fr`) rather than introducing a third from-address
+setting. No `django.contrib.sites` app is installed, so `PasswordResetForm.
+save()` falls back to `RequestSite(request)` for the emailed link's
+domain - the real request host, same "don't hardcode a domain, use the
+real request" reasoning as the permalink fix above, no extra
+configuration needed for this to be correct.
+
+The login page's "Create an account"/"Forgot your password?" links
+read the same setting (`AccountLoginView`, a thin `LoginView` subclass
+whose `get_context_data()` adds `account_creation_enabled` -
+`LoginView` itself has no hook for this) so both appear/disappear
+together automatically, rather than needing to be manually
+commented/uncommented in the template per deployment.
+
+**A real Django template gotcha, hit twice in the same session**:
+`{# ... #}` is a *single-line-only* comment tag - the lexer's own regex
+(`{#.*?#}`) has no `re.DOTALL`, so it does not match across a newline.
+A multi-line `{# ... #}` block (first written to hide the "Create an
+account" link while the feature was disabled) was never recognized as
+a comment at all - the "commented-out" text, including the literal
+tag syntax it referenced, rendered as plain visible text on the login
+page instead of being hidden, reported live. Fixed there by switching
+to a real `{% if account_creation_enabled %}...{% endif %}` (see
+above) - and then hit *again*, independently, minutes later while
+adding a shared `{% comment %}` explanation block to `base.html` for
+the messages-framework fix below: that one used the correct
+`{% comment %}...{% endcomment %}` tag (which does span multiple lines
+correctly), but the comment's own *text* spelled out literal
+`{% if messages %}` tag syntax to explain what changed - Django
+tokenizes the *entire* template before `{% comment %}` gets a chance
+to skip anything, so that literal tag text inside the comment was
+parsed as a real, unmatched `{% if %}`, breaking the *entire* page with
+`TemplateSyntaxError: Unclosed tag`. Caught by `manage.py test` before
+ever being pushed, not live, this time - but both incidents point at
+the same lesson (already written down once, apparently not
+prominently enough): never spell out literal `{% %}`/`{{ }}` syntax
+inside a template comment, whether `{# #}` or `{% comment %}` - always
+paraphrase it in prose instead.
+
+### `django.contrib.messages` consolidated into `base.html`
+
+Reported live: right after creating a brand new account, the account
+page immediately showed "Your account and its analyses have been
+deleted" - a message from a completely unrelated, much earlier
+`AccountDeleteView` test. Root cause: this project's `messages`
+framework uses Django's own default storage
+(`MESSAGE_STORAGE`/cookie-based `FallbackStorage`, never overridden
+here), which persists client-side and is unaffected by `logout()`/
+session changes - and a message is only actually consumed once a
+template *iterates* over `messages` (`{% for message in messages %}`),
+not merely added. Only three individual page templates ever did that
+(`templates/account/user_info.html`, `templates/workspace/
+previous_analyses.html`, `templates/workflows/workflows_alacarte.html`
+- the latter two additionally filtered to `"error" in message.tags`
+only, silently discarding-without-displaying anything else) - neither
+`templates/home.html` nor the shared `base.html`/`base_site.html`
+shell rendered messages at all. `AccountDeleteView.post()` redirects to
+`home` after adding its own success message - which that page never
+displayed - so the message sat queued in the visitor's own cookie
+until, potentially much later, they happened to land on one of the
+three pages that did render messages, which is exactly what surfaced
+here as a stale, confusing message on an unrelated new sign-up.
+
+Fixed by moving message rendering into `base.html` itself, right
+inside the outer `.container` div (rendered on every page regardless
+of which specific blocks a child template overrides, including
+`workflows_alacarte.html`'s `xl-content`-only override, which sits in
+a *different* container further down but still inherits this since
+it's not wrapped in any overridable block at all) - one
+Bootstrap-alert-styled block for every message, tag-mapped
+(`error` -> `alert-danger`, anything else -> `alert-<tag>` or
+`alert-info` if untagged) rather than the old error-tag-only filtering,
+so an `INFO`-level message like this one is actually shown, not
+silently swallowed. The three per-page ad-hoc blocks were removed
+outright, not left duplicated alongside the new shared one.
+
+Test coverage: `account.tests.AccountDeleteViewTest.
+test_confirmation_message_shows_on_the_redirect_target` - posts a real
+delete-account request with `follow=True` and asserts the success
+message is already visible on the very next page (home), the actual
+end-to-end shape of the reported bug, not just that the template
+snippet renders in isolation.

@@ -10,14 +10,6 @@
                 Your job(s) will be executed by <a href="{{ galaxy_server.url }}">{{ galaxy_server.url }}</a>
             </div>
             {% endif %}
-            {% if messages %}
-                <ul class="messages">
-                    {% for message in messages %}
-                        {{ message }}
-                    {% endfor %}
-                </ul>
-            {% endif %}
-
             <h3>Your Analyses</h3>
             <p class="text-muted">
                 Every analysis you ran while logged in, from any browser or

@@ -20,14 +20,12 @@ from .models import UserProfile
 class AccountCreationGateMixin:
     """
     Shared dispatch() gate for AccountCreateView and the password-reset
-    views below - all of it is self-service account management on
-    personal data (email) with no consent checkbox/privacy-policy text
-    anywhere in the app yet, gated off together behind the same
-    setting.NGPHYLO_ACCOUNT_CREATION_ENABLED (NGPHYLO_ACCOUNT_CREATION_
-    ENABLED env var / ACCOUNT_CREATION_ENABLED GitLab CI/CD variable -
-    see settings/base.py) pending a real RGPD/privacy notice. Off by
-    default. Same code-level "quick disable" shape already established
-    for BLAST (see CLAUDE.md's "BLAST analysis was briefly, temporarily
+    views below - both self-service account management, gated off
+    together behind the same setting.NGPHYLO_ACCOUNT_CREATION_ENABLED
+    (NGPHYLO_ACCOUNT_CREATION_ENABLED env var / ACCOUNT_CREATION_ENABLED
+    GitLab CI/CD variable - see settings/base.py). Off by default for
+    now. Same code-level "quick disable" shape already established for
+    BLAST (see CLAUDE.md's "BLAST analysis was briefly, temporarily
     disabled" section and templates/blast/blast_disabled.html), just
     settings-driven rather than a bare module constant, and now shared
     across every view this applies to instead of duplicated per-view.

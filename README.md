@@ -170,9 +170,11 @@ the two aren't independently toggleable (see `settings/base.py`'s `BLASTS`
 dict). Off by default, meaning BLAST runs go to NCBI's public server.
 
 `NGPHYLO_ACCOUNT_CREATION_ENABLED=True` re-enables public account sign-up
-(`/account/create`) - off by default pending a real RGPD/privacy notice
-(see `account/views.py`'s `AccountCreateView`); left off, that page serves
-a 503 "temporarily unavailable" page instead.
+(`/account/create`) *and* the "forgot your password?" flow
+(`/account/password-reset`) - both off by default for now (see
+`account/views.py`'s `AccountCreationGateMixin`); left off, those pages
+serve a 503 "temporarily unavailable" page instead, and the login page
+hides both links.
 
 `NGPHYLO_WORKSPACE_RETENTION_DAYS` sets how many days a finished analysis
 is kept before `workspace.tasks.deleteoldgalaxyhistory`'s daily cleanup
@@ -217,6 +219,13 @@ The contact form (`surveys` app) similarly needs
 submitted message to staff, in addition to saving it as a `Feedback` row -
 left unset, only the DB row is saved, same no-op-by-default convention as
 the daily report above.
+
+`NGPHYLO_DEFAULT_FROM_EMAIL` sets the sender address for anything sent
+without its own explicit from address - currently just the password-reset
+email (`django.contrib.auth`'s own `PasswordResetForm.save()`, no other
+hook for this). Defaults to `ngphylogeny@pasteur.fr`, same as
+`NGPHYLO_REPORT_FROM_EMAIL`'s own default; left unset, Django's own default
+(`webmaster@localhost`) would otherwise leak into the From header.
 
 ## Standalone (Django + Galaxy, all in one)
 
