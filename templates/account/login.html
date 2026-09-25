@@ -23,7 +23,10 @@
                     <div class="submit-row">
                         <input type="submit" value="Login">
                     </div>
-                    <p><a href="{% url 'create_account' %}">Create an account</a></p>
+                    {# Account creation is temporarily disabled - see
+                       account.views.ACCOUNT_CREATION_DISABLED. Restore
+                       this link once it's re-enabled. #}
+                    {# <p><a href="{% url 'create_account' %}">Create an account</a></p> #}
                 </form>
                 <div>
 

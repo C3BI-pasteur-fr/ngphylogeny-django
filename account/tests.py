@@ -64,14 +64,22 @@ class AccountCreateViewTest(TestCase):
     created account straight in and sends it to the existing /account
     page - see AccountCreateView's own docstring for why no separate
     onboarding step is needed.
+
+    Account creation is currently gated off (account.views.
+    ACCOUNT_CREATION_DISABLED, see AccountCreationDisabledTest below) -
+    the two tests that go through dispatch() via a real request patch
+    that flag back to False, so this coverage of the underlying,
+    still-intact feature doesn't rot while it's disabled.
     """
 
+    @patch('account.views.ACCOUNT_CREATION_DISABLED', False)
     def test_get_renders_the_signup_form(self):
         response = self.client.get(reverse('create_account'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'id_username')
         self.assertContains(response, 'id_email')
 
+    @patch('account.views.ACCOUNT_CREATION_DISABLED', False)
     def test_already_authenticated_users_are_redirected_to_account(self):
         User.objects.create_user(username='bob', password='pw123456789')
         self.client.login(username='bob', password='pw123456789')
@@ -115,6 +123,38 @@ class AccountCreateViewTest(TestCase):
         # UserProfile itself is only get_or_create()'d lazily on the
         # /account page (AccountDetailView.get_context_data() above) -
         # not by signing up alone.
+
+
+class AccountCreationDisabledTest(TestCase):
+    """
+    Account creation is temporarily gated off (account.views.
+    ACCOUNT_CREATION_DISABLED = True) pending a real RGPD/privacy
+    notice - see that flag's own comment. Same "quick disable" shape as
+    BLAST's own temporary disable (see CLAUDE.md) - the feature itself
+    (AccountCreationForm, the URL, form_valid()) is untouched, only
+    dispatch() is gated, so this asserts the gate itself, not a removal.
+    """
+
+    def test_get_returns_503_with_the_disabled_page(self):
+        response = self.client.get(reverse('create_account'))
+        self.assertEqual(response.status_code, 503)
+        self.assertContains(
+            response, 'temporarily unavailable', status_code=503)
+
+    def test_post_does_not_create_an_account_while_disabled(self):
+        response = self.client.post(reverse('create_account'), {
+            'username': 'shouldnotexist',
+            'email': 'nope@example.org',
+            'password1': 'a-genuinely-strong-pass9',
+            'password2': 'a-genuinely-strong-pass9',
+        })
+        self.assertEqual(response.status_code, 503)
+        self.assertFalse(
+            User.objects.filter(username='shouldnotexist').exists())
+
+    def test_login_page_no_longer_links_to_signup(self):
+        response = self.client.get(reverse('login'))
+        self.assertNotContains(response, reverse('create_account'))
 
 
 class AccountDeleteViewTest(TestCase):

@@ -12,6 +12,18 @@ from workspace.tasks import deletegalaxyhistory
 from .forms import AccountCreationForm
 from .models import UserProfile
 
+# Temporarily disabled (code-level, not an env var - same "quick
+# disable" shape already established for BLAST, see CLAUDE.md's "BLAST
+# analysis was briefly, temporarily disabled" section and templates/
+# blast/blast_disabled.html) pending a real RGPD/privacy notice: this
+# form collects personal data (email) with no consent checkbox or
+# privacy-policy link anywhere in the app yet. Flip back to False (and
+# restore the "Create an account" link in templates/account/login.html)
+# once that text exists. Nothing else about the feature is removed -
+# AccountCreationForm/the URL/the view all still work exactly as
+# before, this only gates access to them.
+ACCOUNT_CREATION_DISABLED = True
+
 
 class AccountCreateView(CreateView):
     """
@@ -25,6 +37,9 @@ class AccountCreateView(CreateView):
     success_url = reverse_lazy('account')
 
     def dispatch(self, request, *args, **kwargs):
+        if ACCOUNT_CREATION_DISABLED:
+            return render(
+                request, 'account/create_account_disabled.html', status=503)
         if request.user.is_authenticated:
             return redirect('account')
         return super().dispatch(request, *args, **kwargs)
