@@ -2,7 +2,9 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login, logout
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.auth.views import LoginView
+from django.contrib.auth.views import (
+    LoginView, PasswordResetView, PasswordResetDoneView,
+    PasswordResetConfirmView, PasswordResetCompleteView)
 from django.shortcuts import redirect, render
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, TemplateView, View
@@ -13,6 +15,29 @@ from workspace.models import WorkspaceHistory
 from workspace.tasks import deletegalaxyhistory
 from .forms import AccountCreationForm
 from .models import UserProfile
+
+
+class AccountCreationGateMixin:
+    """
+    Shared dispatch() gate for AccountCreateView and the password-reset
+    views below - all of it is self-service account management on
+    personal data (email) with no consent checkbox/privacy-policy text
+    anywhere in the app yet, gated off together behind the same
+    setting.NGPHYLO_ACCOUNT_CREATION_ENABLED (NGPHYLO_ACCOUNT_CREATION_
+    ENABLED env var / ACCOUNT_CREATION_ENABLED GitLab CI/CD variable -
+    see settings/base.py) pending a real RGPD/privacy notice. Off by
+    default. Same code-level "quick disable" shape already established
+    for BLAST (see CLAUDE.md's "BLAST analysis was briefly, temporarily
+    disabled" section and templates/blast/blast_disabled.html), just
+    settings-driven rather than a bare module constant, and now shared
+    across every view this applies to instead of duplicated per-view.
+    """
+
+    def dispatch(self, request, *args, **kwargs):
+        if not settings.NGPHYLO_ACCOUNT_CREATION_ENABLED:
+            return render(
+                request, 'account/create_account_disabled.html', status=503)
+        return super().dispatch(request, *args, **kwargs)
 
 
 class AccountLoginView(LoginView):
@@ -34,37 +59,32 @@ class AccountLoginView(LoginView):
         return context
 
 
-class AccountCreateView(CreateView):
+class AccountCreateView(AccountCreationGateMixin, CreateView):
     """
     Public account sign-up (GET/POST /account/create) - see
     account/forms.py's AccountCreationForm for the actual validation.
     Logs the new account straight in and sends them to the existing
     /account page (name="account", AccountDetailView below).
 
-    Gated off by default (settings.NGPHYLO_ACCOUNT_CREATION_ENABLED,
-    driven by the NGPHYLO_ACCOUNT_CREATION_ENABLED env var /
-    ACCOUNT_CREATION_ENABLED GitLab CI/CD variable - see settings/
-    base.py) pending a real RGPD/privacy notice: this form collects
-    personal data (email) with no consent checkbox or privacy-policy
-    text anywhere in the app yet. Same code-level "quick disable" shape
-    already established for BLAST (see CLAUDE.md's "BLAST analysis was
-    briefly, temporarily disabled" section and templates/blast/
-    blast_disabled.html), just settings-driven rather than a bare
-    module constant, so it can be flipped per-deployment without a code
-    change. Nothing else about the feature is removed -
-    AccountCreationForm/the URL/form_valid() all still work exactly as
-    before; this only gates dispatch() itself. The login page's own
-    "Create an account" link (AccountLoginView below) reads the same
-    setting, so it appears/disappears automatically alongside this.
+    Gated off by default - see AccountCreationGateMixin above. Nothing
+    else about the feature is removed - AccountCreationForm/the URL/
+    form_valid() all still work exactly as before; only dispatch() is
+    gated. The login page's own "Create an account"/"Forgot your
+    password?" links (AccountLoginView below) read the same setting,
+    so they appear/disappear automatically alongside this.
+
+    Its own "redirect an already-authenticated visitor" check has to
+    run as its own step *before* calling up to
+    AccountCreationGateMixin/CreateView's real dispatch() - not after,
+    which would mean the mixin (and, once past it, the full form
+    GET/POST handling) already did its real work for nothing before
+    this got a chance to redirect away from it.
     """
     form_class = AccountCreationForm
     template_name = 'account/create_account.html'
     success_url = reverse_lazy('account')
 
     def dispatch(self, request, *args, **kwargs):
-        if not settings.NGPHYLO_ACCOUNT_CREATION_ENABLED:
-            return render(
-                request, 'account/create_account_disabled.html', status=503)
         if request.user.is_authenticated:
             return redirect('account')
         return super().dispatch(request, *args, **kwargs)
@@ -81,6 +101,43 @@ class AccountCreateView(CreateView):
         login(self.request, self.object,
               backend='django.contrib.auth.backends.ModelBackend')
         return response
+
+
+class AccountPasswordResetView(AccountCreationGateMixin, PasswordResetView):
+    """
+    "Forgot your password?" (GET/POST /account/password-reset) - the
+    first of the 4 stock django.contrib.auth password-reset views
+    (PasswordResetView/-Done/-Confirm/-Complete), wired up with this
+    app's own templates/URL names and gated off together with account
+    creation (AccountCreationGateMixin) - see that mixin's own
+    docstring for why. Sends via settings.DEFAULT_FROM_EMAIL (see
+    settings/base.py) since PasswordResetForm.save() has no other hook
+    for the from address; uses this project's already-configured SMTP
+    settings (NGPHYLO_EMAIL_HOST etc.), same as every other outbound
+    email in this codebase. Deliberately plain text (Django's own
+    default shape), not workspace/emails.py's branded build_branded_
+    html_email() - that helper's inline-CID-image MIME wiring doesn't
+    fit PasswordResetForm.save()'s own email-sending path without
+    overriding it, and this is a low-traffic, currently-disabled
+    utility flow, not worth that extra complexity.
+    """
+    template_name = 'account/password_reset_form.html'
+    email_template_name = 'account/password_reset_email.html'
+    subject_template_name = 'account/password_reset_subject.txt'
+    success_url = reverse_lazy('password_reset_done')
+
+
+class AccountPasswordResetDoneView(AccountCreationGateMixin, PasswordResetDoneView):
+    template_name = 'account/password_reset_done.html'
+
+
+class AccountPasswordResetConfirmView(AccountCreationGateMixin, PasswordResetConfirmView):
+    template_name = 'account/password_reset_confirm.html'
+    success_url = reverse_lazy('password_reset_complete')
+
+
+class AccountPasswordResetCompleteView(AccountCreationGateMixin, PasswordResetCompleteView):
+    template_name = 'account/password_reset_complete.html'
 
 
 class AccountDetailView(LoginRequiredMixin, TemplateView):

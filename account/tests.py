@@ -1,8 +1,12 @@
 from unittest.mock import Mock, patch
 
 from django.contrib.auth.models import User
+from django.contrib.auth.tokens import default_token_generator
+from django.core import mail
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
 
 from galaxy.models import Server
 from workflows.models import Workflow
@@ -175,6 +179,103 @@ class AccountCreationDisabledTest(TestCase):
         response = self.client.get(reverse('login'))
         self.assertContains(response, reverse('create_account'))
         self.assertNotContains(response, 'NGPHYLO_ACCOUNT_CREATION_ENABLED')
+
+
+class PasswordResetGateTest(TestCase):
+    """
+    The password-reset flow (AccountPasswordResetView/-Done/-Confirm/
+    -Complete) is gated off together with account creation
+    (AccountCreationGateMixin, shared with AccountCreateView) - off by
+    default, same 503 "temporarily unavailable" page.
+    """
+
+    def _confirm_url(self):
+        # A syntactically real uidb64/token pair - doesn't need to
+        # correspond to an actual user for this test, since the gate
+        # itself should already 503 before the view ever looks at it.
+        return reverse('password_reset_confirm', kwargs={
+            'uidb64': 'MQ', 'token': 'set-password'})
+
+    def test_all_four_views_503_by_default(self):
+        for url in [reverse('password_reset'), reverse('password_reset_done'),
+                    self._confirm_url(), reverse('password_reset_complete')]:
+            response = self.client.get(url)
+            self.assertEqual(response.status_code, 503, url)
+
+    @override_settings(NGPHYLO_ACCOUNT_CREATION_ENABLED=True)
+    def test_all_four_views_reachable_once_enabled(self):
+        for url in [reverse('password_reset'), reverse('password_reset_done'),
+                    self._confirm_url(), reverse('password_reset_complete')]:
+            response = self.client.get(url)
+            self.assertNotEqual(response.status_code, 503, url)
+
+
+@override_settings(NGPHYLO_ACCOUNT_CREATION_ENABLED=True)
+class PasswordResetFlowTest(TestCase):
+    """
+    End-to-end coverage of the real reset flow (request -> emailed link
+    -> new password actually takes effect), enabled for this class
+    since the gate itself already has its own dedicated test above.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='dave', email='dave@example.org',
+            password='old-genuinely-strong9')
+
+    def test_requesting_a_reset_emails_a_working_link(self):
+        response = self.client.post(
+            reverse('password_reset'), {'email': 'dave@example.org'})
+        self.assertRedirects(response, reverse('password_reset_done'))
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('dave@example.org', mail.outbox[0].to)
+        self.assertIn(reverse('password_reset_confirm', kwargs={
+            'uidb64': urlsafe_base64_encode(force_bytes(self.user.pk)),
+            'token': default_token_generator.make_token(self.user),
+        }), mail.outbox[0].body)
+
+    def test_unknown_email_does_not_error_or_reveal_anything(self):
+        # Standard Django behavior, still worth pinning down given this
+        # is a custom-wired-up flow, not the stock urlconf - a
+        # nonexistent email must look identical to a real one from the
+        # outside (same redirect, no email actually sent).
+        response = self.client.post(
+            reverse('password_reset'), {'email': 'nobody@example.org'})
+        self.assertRedirects(response, reverse('password_reset_done'))
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_following_the_real_link_and_setting_a_new_password_works(self):
+        uidb64 = urlsafe_base64_encode(force_bytes(self.user.pk))
+        token = default_token_generator.make_token(self.user)
+
+        # PasswordResetConfirmView redirects a GET on the real token URL
+        # to the same view with a session-stashed placeholder token
+        # (django.contrib.auth's own anti-token-in-referer-header
+        # mechanism) - following it is what a real browser does too.
+        confirm_url = reverse(
+            'password_reset_confirm', kwargs={'uidb64': uidb64, 'token': token})
+        response = self.client.get(confirm_url, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'name="new_password1"')
+
+        response = self.client.post(response.request['PATH_INFO'], {
+            'new_password1': 'a-brand-new-strong-pass9',
+            'new_password2': 'a-brand-new-strong-pass9',
+        })
+        self.assertRedirects(response, reverse('password_reset_complete'))
+
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password('a-brand-new-strong-pass9'))
+
+    def test_an_invalid_token_does_not_change_the_password(self):
+        uidb64 = urlsafe_base64_encode(force_bytes(self.user.pk))
+        confirm_url = reverse('password_reset_confirm', kwargs={
+            'uidb64': uidb64, 'token': 'not-a-real-token'})
+
+        response = self.client.get(confirm_url, follow=True)
+
+        self.assertContains(response, 'invalid')
+        self.assertTrue(self.user.check_password('old-genuinely-strong9'))
 
 
 class AccountDeleteViewTest(TestCase):

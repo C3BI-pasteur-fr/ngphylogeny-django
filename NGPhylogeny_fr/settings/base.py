@@ -228,6 +228,14 @@ EMAIL_PORT = os.environ.get('NGPHYLO_EMAIL_PORT')
 EMAIL_HOST_USER = os.environ.get('NGPHYLO_EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.environ.get('NGPHYLO_EMAIL_HOST_PASSWORD')
 EMAIL_USE_TLS = (os.environ.get('NGPHYLO_EMAIL_USE_TLS')== 'True')
+# Django's own default ('webmaster@localhost') leaks straight into
+# anything sent without an explicit from_email - notably
+# django.contrib.auth's PasswordResetForm.save() (account/views.py's
+# password-reset flow), which has no other hook for this. Reuses
+# NGPHYLO_REPORT_FROM_EMAIL's own default address/env-var-optional
+# convention rather than introducing a third from-address setting.
+DEFAULT_FROM_EMAIL = os.environ.get(
+    'NGPHYLO_DEFAULT_FROM_EMAIL', 'ngphylogeny@pasteur.fr')
 
 # See NGPhylogeny_fr/middleware.py. Case-insensitive (unlike
 # EMAIL_USE_TLS's exact-'True' check above) since a maintenance toggle
