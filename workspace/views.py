@@ -7,6 +7,7 @@ import requests
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.core import signing
+from django.db.models import Q
 from django.http import HttpResponse
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
@@ -22,7 +23,6 @@ from .tasks import deletegalaxyhistory
 from workflows.tasks import deletegalaxyworkflow
 
 from galaxy.decorator import connection_galaxy
-from .emails import site_url
 from .models import WorkspaceHistory
 from .reports import CATEGORY_LABELS, build_report_web_context
 from .rocrate import build_rocrate_metadata
@@ -692,32 +692,73 @@ class GalaxyErrorView(TemplateView):
 @method_decorator(connection_galaxy, name="dispatch")
 class PreviousHistoryListView(ListView):
     """
-    Display list of Previous analyses stored in the sessions cookies
+    Display list of Previous analyses - the session-based list (the
+    classic behavior: whatever Galaxy history ids this browser session
+    has run, tracked in request.session['histories']) merged with this
+    account's own histories (WorkspaceHistory.user), when logged in.
+    Session-only analyses (anonymous, or run in a different browser/
+    session than the one currently logged in) still show up here too -
+    the two sources are additive, not a replacement of one by the
+    other.
     """
     queryset = WorkspaceHistory.objects.none()
     template_name = 'workspace/previous_analyses.html'
     context_object_name = 'histories'
 
     def get_queryset(self):
-        self.queryset = WorkspaceHistory.objects.filter(history__in=self.request.session.get('histories', [])).filter(deleted=False).order_by("-created_date")
+        session_ids = self.request.session.get('histories', [])
+        history_filter = Q(history__in=session_ids)
+        if self.request.user.is_authenticated:
+            history_filter |= Q(user=self.request.user)
+        self.queryset = WorkspaceHistory.objects.filter(
+            history_filter, deleted=False).order_by("-created_date")
 
-        # update session history
-        self.request.session['histories'] = list(self.queryset.values_list('history', flat=True))
+        # update session history - only reconciles the session's own
+        # list (dropping any id that's since been deleted), same as
+        # before this method also started merging in account-owned
+        # rows. Account rows deliberately aren't added into the session
+        # list itself: they're already reachable independently of the
+        # session (via login), so stuffing them in here would just make
+        # the session cookie grow unboundedly for an active account and
+        # make them show up on the permalink (PreviousHistoryListView.
+        # get_context_data() below) for no real benefit.
+        self.request.session['histories'] = list(
+            self.queryset.filter(history__in=session_ids)
+            .values_list('history', flat=True))
 
         return self.queryset
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         # Permalink to *this* list - see WorkspacePermalinkView below.
-        # Built from the just-cleaned session list (get_queryset() above
-        # already dropped any deleted history), not the raw queryset, so
-        # the token always matches what get_queryset() would itself
-        # filter down to a second time when the permalink is followed.
-        history_ids = self.request.session.get('histories', [])
+        # Built from self.queryset (get_queryset() above - already
+        # deleted=False-filtered and, for a logged-in account, merged
+        # with that account's own WorkspaceHistory.user rows on top of
+        # the session ones), not just the session list on its own - a
+        # permalink shared/reopened elsewhere should restore the exact
+        # same combined view this page is showing right now, not just
+        # its session-based half. Deliberately not restricted to
+        # session_ids the way the session-list-reconciliation step in
+        # get_queryset() is - that step exists to prune stale session
+        # ids, a different concern from what this token should carry.
+        history_ids = list(
+            self.queryset.values_list('history', flat=True))
+        # request.build_absolute_uri(), not site_url() - site_url()
+        # exists for contexts with no request at all (a Celery task
+        # building an email/RO-Crate link - see workspace/emails.py's
+        # own docstring) and falls back to a hardcoded 'ngphylogeny.fr'
+        # host when NGPHYLO_HTTPS_HOST/NGPHYLO_HOST aren't set, which is
+        # wrong here: this is a real view with a real request, so the
+        # actual host (localhost:8000 in local dev, the real domain in
+        # prod) is already known correctly - no env var/fallback guess
+        # needed. Reported live: a local dev instance's permalink
+        # pointed at https://ngphylogeny.fr/workspace/permalink/... - a
+        # real production URL, not this local instance at all.
         context['permalink_url'] = (
-            site_url(reverse('workspace_permalink', kwargs={
-                'token': signing.dumps(history_ids, salt=PERMALINK_SALT),
-            }))
+            self.request.build_absolute_uri(
+                reverse('workspace_permalink', kwargs={
+                    'token': signing.dumps(history_ids, salt=PERMALINK_SALT),
+                }))
             if history_ids else None)
         return context
 
@@ -744,6 +785,16 @@ class WorkspacePermalinkView(View):
     already open that history directly. A permalink bundling several of
     those already-not-secret ids together doesn't introduce a new kind
     of exposure, just a convenient way to share/restore the same list.
+
+    Since PreviousHistoryListView.get_context_data() now builds the
+    token from that page's own merged queryset (session ids union this
+    account's own WorkspaceHistory.user rows, when logged in - see that
+    view's docstring), a permalink generated while logged in carries
+    both halves - following it elsewhere restores the full combined
+    list, not just the session-only part, onto whatever session follows
+    it (regardless of whether *that* session is logged into the same
+    account or not - same not-secret-id reasoning as above, this
+    doesn't grant any access an already-shared history id didn't).
 
     Merges with (rather than replacing) whatever's already in the
     current session, so following a permalink in a browser that already

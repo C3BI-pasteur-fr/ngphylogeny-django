@@ -58,12 +58,7 @@
             {% endblock %}
             {% block nav-workspace %}
                 <li>
-                <a {% if request.session.histories|length >= 1 %}
-                    href="{% url 'previous_analyses' %}"
-                    {% else %}
-                    class="text-muted"
-                    {% endif %}
-                    >
+                <a href="{% url 'previous_analyses' %}">
                     <span class="glyphicon glyphicon-th-list"></span> Workspace
                     <span class="badge">{{ request.session.histories|length }}</span>
                 </a>

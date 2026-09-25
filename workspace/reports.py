@@ -25,6 +25,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
+from django.contrib.auth.models import User
 from django.core.cache import cache
 from django.db.models import Count
 from django.db.models.functions import TruncMonth, TruncWeek
@@ -272,6 +273,53 @@ def gather_period_totals():
     return granularity, totals
 
 
+def gather_user_growth():
+    """
+    Returns (granularity, totals): same weekly/monthly period-bucketing
+    convention as gather_period_totals() above (see
+    WEEKLY_TO_MONTHLY_SPAN_DAYS - shares the same threshold, so a long-
+    lived deployment's user-growth chart degrades to monthly bars for
+    the same "stay readable" reason), but totals is a *cumulative*
+    running total of registered accounts (auth.User.date_joined) as of
+    the end of each period - not new signups per period. "Evolution of
+    the number of accounts" is naturally a growth curve (how many
+    accounts exist by this point), not a bar-per-period signup count.
+    """
+    first = (User.objects.order_by('date_joined')
+              .values_list('date_joined', flat=True).first())
+    if first is None:
+        return 'week', []
+
+    span_days = (timezone.now() - first).days
+    granularity = 'week' if span_days <= WEEKLY_TO_MONTHLY_SPAN_DAYS else 'month'
+    trunc = TruncWeek if granularity == 'week' else TruncMonth
+
+    rows = (
+        User.objects
+        .annotate(period=trunc('date_joined'))
+        .values('period')
+        .annotate(count=Count('id'))
+        .order_by('period')
+    )
+    counts_by_period = {row['period'].date(): row['count'] for row in rows}
+    if not counts_by_period:
+        return granularity, []
+
+    first_period = min(counts_by_period)
+    last_period = max(counts_by_period)
+    advance = (lambda d: d + timedelta(weeks=1)) if granularity == 'week' \
+        else _add_month
+
+    totals = []
+    period = first_period
+    running_total = 0
+    while period <= last_period:
+        running_total += counts_by_period.get(period, 0)
+        totals.append((period, running_total))
+        period = advance(period)
+    return granularity, totals
+
+
 def render_daily_category_chart(days, by_day_category):
     categories = sorted(
         {c for day in by_day_category.values() for c in day} |
@@ -377,6 +425,21 @@ def render_period_chart(granularity, totals):
     return _fig_to_png_bytes(fig)
 
 
+def render_user_growth_chart(granularity, totals):
+    if not totals:
+        return None
+    date_fmt = '%Y-%m-%d' if granularity == 'week' else '%Y-%m'
+    labels = [d.strftime(date_fmt) for d, _ in totals]
+    values = [n for _, n in totals]
+    fig, ax = plt.subplots(figsize=(max(9, 0.35 * len(totals)), 4))
+    ax.plot(labels, values, color='#55A868', marker='o', markersize=3)
+    ax.set_ylabel('Total registered accounts')
+    ax.set_xlabel('Week starting' if granularity == 'week' else 'Month')
+    ax.set_title('Registered accounts over time (cumulative)')
+    plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
+    return _fig_to_png_bytes(fig)
+
+
 # Content-ID names for each chart, referenced from the template as
 # cid:<name> and matched up with the inline MIMEImage attachments built
 # by workspace.tasks.send_daily_report.
@@ -386,6 +449,7 @@ CID_WEEKLY = 'chart_weekly'
 CID_ALLTIME_CATEGORY = 'chart_alltime_category'
 CID_ALLTIME_WORKFLOW = 'chart_alltime_workflow'
 CID_BLAST_LENGTH_HISTOGRAM = 'chart_blast_length_histogram'
+CID_USER_GROWTH = 'chart_user_growth'
 
 
 def build_report_context():
@@ -398,6 +462,7 @@ def build_report_context():
     days, by_day_category, by_day_oneclick_workflow = gather_last_7_days()
     by_category, by_workflow = gather_all_time()
     blast_query_lengths = gather_blast_query_lengths()
+    user_growth_granularity, user_growth_totals = gather_user_growth()
 
     all_categories = sorted(
         {c for day in by_day_category.values() for c in day} |
@@ -427,6 +492,8 @@ def build_report_context():
         CID_ALLTIME_WORKFLOW: render_alltime_workflow_bar(by_workflow),
         CID_BLAST_LENGTH_HISTOGRAM: render_blast_query_length_histogram(
             blast_query_lengths),
+        CID_USER_GROWTH: render_user_growth_chart(
+            user_growth_granularity, user_growth_totals),
     }
     images = {cid: data for cid, data in chart_bytes.items() if data is not None}
 
@@ -455,6 +522,9 @@ def build_report_context():
         'blast_length_chart': (
             CID_BLAST_LENGTH_HISTOGRAM
             if CID_BLAST_LENGTH_HISTOGRAM in images else None),
+        'total_users': User.objects.count(),
+        'user_growth_chart': (
+            CID_USER_GROWTH if CID_USER_GROWTH in images else None),
     }
     return context, images
 
@@ -462,6 +532,7 @@ def build_report_context():
 CHART_CONTEXT_KEYS = [
     'daily_category_chart', 'daily_oneclick_chart', 'weekly_chart',
     'alltime_category_chart', 'alltime_workflow_chart', 'blast_length_chart',
+    'user_growth_chart',
 ]
 
 

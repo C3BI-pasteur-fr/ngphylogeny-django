@@ -190,8 +190,10 @@ class DeleteOldGalaxyWorkflowsTest(TestCase):
             name='PhyML OneClick', category='duplicated',
             description='PhyML OneClick',
             slug='%s_PhyML OneClick_copy' % id_galaxy,
-            # Older than deleteoldgalaxyworkflows()'s 7-day cutoff.
-            date=timezone.now() - timedelta(days=8))
+            # Older than deleteoldgalaxyworkflows()'s cutoff
+            # (Workflow.RETENTION_DAYS - configurable, see CLAUDE.md/
+            # settings/base.py's NGPHYLO_WORKFLOW_RETENTION_DAYS).
+            date=timezone.now() - timedelta(days=Workflow.RETENTION_DAYS + 1))
 
     def test_deletes_orphaned_workflow_on_success(self):
         wf = self._make_orphan_workflow('orphan-ok')
@@ -402,7 +404,8 @@ class WorkflowMakerMissingObjectTest(TestCase):
     known locally as the category='base' row (always excluded here - a
     maker-built workflow is never 'base'), and an id whose duplicated
     row was already cleaned up by workflows.tasks.
-    deleteoldgalaxyworkflows()'s 7-day cutoff (see CLAUDE.md) while a
+    deleteoldgalaxyworkflows()'s own cutoff (Workflow.RETENTION_DAYS -
+    see CLAUDE.md) while a
     stale link/bookmark to it still exists. Fixed with
     get_object_or_404, matching the same pattern already used by
     RerunWorkflow (workflows/views/generic.py) - both should now 404

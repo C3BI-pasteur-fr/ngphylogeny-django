@@ -38,7 +38,18 @@ class BlastRun(models.Model):
         (PASTEUR, 'Pasteur'),
         (NCBI, 'NCBI'),
     )
-    
+
+    # blast.tasks.deleteoldblastruns's own daily cleanup cutoff - defined
+    # here (not just as a local constant in tasks.py) so that task and
+    # anything else that wants to reference it (e.g. a future "days
+    # left" display, matching workspace.models.WorkspaceHistory's own
+    # RETENTION_DAYS) can't drift apart. Reads settings.
+    # NGPHYLO_BLAST_RETENTION_DAYS (settings/base.py) - configurable via
+    # the BLAST_RETENTION_DAYS GitLab CI/CD variable, 7 if unset. Safe to
+    # read at class-body (import) time - see WorkspaceHistory.
+    # RETENTION_DAYS's own note on this.
+    RETENTION_DAYS = settings.NGPHYLO_BLAST_RETENTION_DAYS
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email = models.CharField(null=True, max_length=100)
     # timezone.now, not datetime.now: USE_TZ=True is on, and a naive

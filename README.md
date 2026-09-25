@@ -169,6 +169,28 @@ BLAST server option and deactivates NCBI's public one at the same time -
 the two aren't independently toggleable (see `settings/base.py`'s `BLASTS`
 dict). Off by default, meaning BLAST runs go to NCBI's public server.
 
+`NGPHYLO_WORKSPACE_RETENTION_DAYS` sets how many days a finished analysis
+is kept before `workspace.tasks.deleteoldgalaxyhistory`'s daily cleanup
+removes it (`workspace/models.py`'s `WorkspaceHistory.RETENTION_DAYS`) -
+also what the "days left" estimate on the Workspace/account pages is
+computed from. Defaults to `14` if unset.
+
+A few related, independently configurable cleanup/staleness cutoffs:
+- `NGPHYLO_BLAST_RETENTION_DAYS` - days a BLAST run is kept before
+  `blast.tasks.deleteoldblastruns`'s daily cleanup removes it
+  (`BlastRun.RETENTION_DAYS`). Defaults to `7`.
+- `NGPHYLO_WORKFLOW_RETENTION_DAYS` - days a non-base (per-run
+  duplicated) Galaxy workflow *definition* is kept before
+  `workflows.tasks.deleteoldgalaxyworkflows`'s daily cleanup removes it
+  (`Workflow.RETENTION_DAYS`) - doesn't affect the history's own actual
+  data. Defaults to `14`.
+- `NGPHYLO_WORKFLOW_RUN_STALE_HOURS` - hours a still-running/queued
+  analysis is left alone before it's force-cancelled
+  (`workspace/tasks.py`'s `WORKFLOW_RUN_STALE_AFTER`). Defaults to `24`.
+- `NGPHYLO_PASTEUR_BLAST_STALE_HOURS` - hours a still-running Pasteur
+  BLAST search is polled before it's given up on and marked `ERROR`
+  (`blast/tasks.py`'s `PASTEUR_RUN_STALE_AFTER`). Defaults to `3`.
+
 ## Email: job-completion notices and the daily report
 
 Both job-completion emails and the daily workflow-usage report (HTML, with

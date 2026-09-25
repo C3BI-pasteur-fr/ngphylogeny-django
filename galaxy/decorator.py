@@ -3,7 +3,6 @@ from __future__ import unicode_literals
 import logging
 
 from django.http import Http404, HttpResponseGone
-from django.shortcuts import redirect
 
 from galaxy.models import Server, GalaxyUser
 from galaxy.galaxylib import GalaxyInstance
@@ -44,46 +43,35 @@ def connection_galaxy(view_function):
         request.galaxy_server = galaxy_server
         request.session['galaxy_server'] = galaxy_server.id
 
-        if request.user.is_authenticated:
-            """Try to use related Galaxy user information"""
+        # Every visitor - logged into an NGPhylogeny account or not -
+        # authenticates to Galaxy through the same single, shared API
+        # key (the "anonymous" GalaxyUser row): NGPhylogeny holds one
+        # Galaxy identity, independent of any individual NGPhylogeny
+        # account. This used to differ for authenticated users (each
+        # expected their own personal GalaxyUser/api_key, redirecting
+        # to set one up otherwise) - that redirect target
+        # ('galaxy_account') was itself a dead URL name that's never
+        # existed in this project's URLconf (the real name is
+        # 'account'), so an authenticated user with no personal key
+        # actually got an uncaught NoReverseMatch 500, not a clean
+        # redirect - never caught because nothing exercised that path.
+        # WorkspaceHistory.user (workspace/views.py's create_history())
+        # still correctly tracks the real logged-in NGPhylogeny account
+        # separately from this - this only concerns which Galaxy
+        # credential is used to actually talk to Galaxy.
+        try:
+            gu = GalaxyUser.objects.get(anonymous=True, galaxy_server=galaxy_server)
+            request.galaxy = gu.get_galaxy_instance
 
-            try:
-                """get or create Galaxy user onfly"""
-                gu, created = GalaxyUser.objects.get_or_create(user=request.user, galaxy_server=galaxy_server)
+        except GalaxyUser.DoesNotExist:
+            msg = "NGPhylogeny server is not properly configured, " \
+                  "please ensure that the Galaxy server is correctly set up"
+            logger.exception("Anonymous user not set")
+            raise Http404(msg)
 
-                """If the key api is not defined, prompts the user to define it"""
-                if gu.api_key:
-                    request.galaxy = gu.get_galaxy_instance
-                else:
-                    return redirect('galaxy_account')
-
-            except GalaxyUser.DoesNotExist :
-                msg = "NGPhylogeny server is not properly configured, " \
-                      "please ensure that the Galaxy server is correctly set up"
-                logger.exception("Galaxy User is not set")
-
-                raise Http404(msg)
-
-            except Exception as e:
-                logger.exception("Galaxy account Error")
-                return HttpResponseGone()
-
-        elif request.user.is_anonymous:
-            """If user is not an authenticated, use the anonymous Galaxy user set"""
-            try:
-                gu = GalaxyUser.objects.get(anonymous=True, galaxy_server=galaxy_server)
-                request.galaxy = gu.get_galaxy_instance
-
-            except GalaxyUser.DoesNotExist :
-                msg = "NGPhylogeny server is not properly configured, " \
-                      "please ensure that the Galaxy server is correctly set"
-
-                logger.exception("Anonymous user not set")
-                raise Http404(msg)
-
-            except Exception as e:
-                logger.exception("Galaxy anonymous account Error: "+e)
-                return HttpResponseGone()
+        except Exception as e:
+            logger.exception("Galaxy account error: %s" % e)
+            return HttpResponseGone()
 
         return view_function(request, *args, **kwargs)
 

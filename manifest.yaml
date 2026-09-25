@@ -214,6 +214,14 @@ spec:
             # celery-beat/init, which never touch settings.BLASTS.
             - name: NGPHYLO_PASTEUR_BLAST_ENABLED
               value: "${PASTEUR_BLAST_ENABLED}"
+            # Also set on celery-worker (workspace.tasks.
+            # deleteoldgalaxyhistory, which actually enforces this, runs
+            # there) - not on celery-beat/init, which never evaluate
+            # WorkspaceHistory.RETENTION_DAYS. Left unset/empty (the
+            # default when WORKSPACE_RETENTION_DAYS isn't set),
+            # settings/base.py falls back to 14.
+            - name: NGPHYLO_WORKSPACE_RETENTION_DAYS
+              value: "${WORKSPACE_RETENTION_DAYS}"
             - name: DJANGO_SETTINGS_MODULE
               # Explicit on every single container below, not left to
               # manage.py's own default (settings.local, DEBUG=True) -
@@ -408,6 +416,30 @@ spec:
             # settings.BLASTS['pasteur']['activated'].
             - name: NGPHYLO_PASTEUR_BLAST_ENABLED
               value: "${PASTEUR_BLAST_ENABLED}"
+            # Needed here too, not just on web - workspace.tasks.
+            # deleteoldgalaxyhistory (the daily cleanup that actually
+            # enforces this) runs on this container.
+            - name: NGPHYLO_WORKSPACE_RETENTION_DAYS
+              value: "${WORKSPACE_RETENTION_DAYS}"
+            # Only needed here, unlike NGPHYLO_WORKSPACE_RETENTION_DAYS
+            # above - nothing web-facing reads BlastRun.RETENTION_DAYS/
+            # Workflow.RETENTION_DAYS (no "days left" display for these
+            # yet), only the cleanup tasks themselves
+            # (deleteoldblastruns/deleteoldgalaxyworkflows), which both
+            # route to the default queue this worker consumes.
+            - name: NGPHYLO_BLAST_RETENTION_DAYS
+              value: "${BLAST_RETENTION_DAYS}"
+            - name: NGPHYLO_WORKFLOW_RETENTION_DAYS
+              value: "${WORKFLOW_RETENTION_DAYS}"
+            # workspace.tasks.updateworkspacestatus's cancel_stale_jobs()
+            # (WORKFLOW_RUN_STALE_AFTER) - routed to the "monitor" queue,
+            # also consumed by this same worker (see its -Q args above).
+            - name: NGPHYLO_WORKFLOW_RUN_STALE_HOURS
+              value: "${WORKFLOW_RUN_STALE_HOURS}"
+            # blast.tasks.checkblastruns's own staleness give-up
+            # (PASTEUR_RUN_STALE_AFTER) - default queue, same as above.
+            - name: NGPHYLO_PASTEUR_BLAST_STALE_HOURS
+              value: "${PASTEUR_BLAST_STALE_HOURS}"
             - name: DJANGO_SETTINGS_MODULE
               # Explicit on every single container below, not left to
               # manage.py's own default (settings.local, DEBUG=True) -

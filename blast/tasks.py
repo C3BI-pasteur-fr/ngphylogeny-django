@@ -1,5 +1,6 @@
 from __future__ import absolute_import
 
+from django.conf import settings
 from django.db.models import Q
 from django.core.cache import cache
 from django.utils import timezone
@@ -46,8 +47,12 @@ LOCK_EXPIRE = 60 * 5 # Lock expires in 5 minutes
 # genuinely still computing. 3 hours is a guess at "generous enough for
 # a real, slow-but-legitimate search, bounded enough to actually
 # recover" - adjust based on real observed run times if this turns out
-# to be too tight or too loose.
-PASTEUR_RUN_STALE_AFTER = timedelta(hours=3)
+# to be too tight or too loose. Reads settings.
+# NGPHYLO_PASTEUR_BLAST_STALE_HOURS (settings/base.py) - configurable
+# via the PASTEUR_BLAST_STALE_HOURS GitLab CI/CD variable, 3 if unset
+# (this task's original hardcoded value).
+PASTEUR_RUN_STALE_AFTER = timedelta(
+    hours=settings.NGPHYLO_PASTEUR_BLAST_STALE_HOURS)
 
 
 ## It should be alone on a celery queue with only 1 cpu
@@ -310,12 +315,12 @@ def build_tree(blastrunid):
 @shared_task
 def deleteoldblastruns():
     """
-    Every day at 2am, clears analyses older than 14 days
+    Every day at 2am, clears analyses older than BlastRun.RETENTION_DAYS
     """
     logger.info("Start old blast deletion task")
     # timezone.now, not datetime.now: USE_TZ=True is on - see BlastRun.date's
     # own comment in blast/models.py for the same fix/reasoning.
-    datecutoff = timezone.now() - timedelta(days=14)
+    datecutoff = timezone.now() - timedelta(days=BlastRun.RETENTION_DAYS)
     for e in BlastRun.objects.filter(deleted=False).filter(date__lte=datecutoff):
         if e.history != "":
             # Queued, not called directly - same reasoning as the

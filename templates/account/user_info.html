@@ -1,38 +1,34 @@
 {% extends "base.html" %}
 
-{% block stylesheet %}
-{% load crispy_forms_tags %}
-{% endblock %}
-
 {% block content %}
     <div class="row">
-        <div class="col-md-2"></div>
-        <div class="col-md-8">
-            <h3>Welcome {{ galaxyuser.user }}</h3>
+        <div class="col-md-offset-1">
+            <h3>Welcome {{ request.user }}</h3>
+            {% if galaxy_server %}
             <div class="row alert alert-info" role="alert">
-                <spam class="glyphicon glyphicon-info-sign"></spam>
-                Your(s) job(s) will be executed by <a href="{{ object.galaxy_server.url }}">{{ object.galaxy_server.url }}</a>
-            </div>
-            {% if not galaxyuser.api_key %}
-            <div class="row alert alert-warning" role="alert">
-                <spam class="glyphicon glyphicon-warning-sign"></spam> Please to set up your API Key to continue... (see the Galaxy docs to generate an API Key)
+                <span class="glyphicon glyphicon-info-sign"></span>
+                Your job(s) will be executed by <a href="{{ galaxy_server.url }}">{{ galaxy_server.url }}</a>
             </div>
             {% endif %}
+            {% if messages %}
+                <ul class="messages">
+                    {% for message in messages %}
+                        {{ message }}
+                    {% endfor %}
+                </ul>
+            {% endif %}
 
-            <div class="row">
-                <form action="" method="post">
-                    {% csrf_token %}
-                    {{ form|crispy }}
-                    <button  type="submit" class="btn btn-default">Update</button>
-                </form>
-                {% if messages %}
-                    <ul class="messages">
-                        {% for message in messages %}
-                            {{ message }}
-                        {% endfor %}
-                    </ul>
-                {% endif %}
-            </div>
+            <h3>Your Analyses</h3>
+            <p class="text-muted">
+                Every analysis you ran while logged in, from any browser or
+                device - unlike the session-based
+                <a href="{% url 'previous_analyses' %}">Workspace</a> list,
+                this stays with your account.
+            </p>
+            {% include "workspace/include/history_list_table.html" with empty_message="You have no analyses on this account yet." %}
+
+            <hr>
+            <a class="btn btn-danger" role="button" href="{% url 'delete_account' %}">Delete my account</a>
         </div>
     </div>
 {% endblock %}

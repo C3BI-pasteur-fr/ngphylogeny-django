@@ -35,8 +35,12 @@ LOCK_EXPIRE_SHORT = 9 # Lock expires in 9 seconds
 # gap blast.tasks.checkblastruns() was already fixed for
 # (PASTEUR_RUN_STALE_AFTER); this is that same fix for regular workflow/
 # tool runs. Reference point is WorkspaceHistory.created_date, same
-# choice as BlastRun.date there.
-WORKFLOW_RUN_STALE_AFTER = timedelta(hours=24)
+# choice as BlastRun.date there. Reads settings.
+# NGPHYLO_WORKFLOW_RUN_STALE_HOURS (settings/base.py) - configurable via
+# the WORKFLOW_RUN_STALE_HOURS GitLab CI/CD variable, 24 if unset (this
+# task's original hardcoded value).
+WORKFLOW_RUN_STALE_AFTER = timedelta(
+    hours=settings.NGPHYLO_WORKFLOW_RUN_STALE_HOURS)
 
 
 def flush_transaction():
@@ -191,11 +195,11 @@ def deletegalaxyhistory(historyid):
         return False
 
 
-# Every day at 2am, clears analyses older than 14 days
+# Every day at 2am, clears analyses older than WorkspaceHistory.RETENTION_DAYS
 @shared_task
 def deleteoldgalaxyhistory():
     logger.info("Start old workspace deletion task")
-    datecutoff = timezone.now() - timedelta(days=14)
+    datecutoff = timezone.now() - timedelta(days=WorkspaceHistory.RETENTION_DAYS)
     for e in WorkspaceHistory.objects.filter(deleted=False).filter(finished=True).filter(created_date__lte=datecutoff):
         try:
             workflow_deleted = True

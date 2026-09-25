@@ -203,6 +203,34 @@ build:
 #     ['activated'], off by default) and deactivates NCBI's public server
 #     option at the same time (mutually exclusive, not independently
 #     toggleable - see CLAUDE.md).
+#   - WORKSPACE_RETENTION_DAYS (plain, optional): days a finished
+#     workspace history is kept before workspace.tasks.
+#     deleteoldgalaxyhistory's daily cleanup removes it (workspace/
+#     models.py's WorkspaceHistory.RETENTION_DAYS) - also what the
+#     Workspace/account pages' "days left" estimate is computed from.
+#     Left unset, defaults to 14, this project's original hardcoded
+#     value.
+#   - BLAST_RETENTION_DAYS (plain, optional): days a BlastRun is kept
+#     before blast.tasks.deleteoldblastruns's daily cleanup removes it
+#     (blast/models.py's BlastRun.RETENTION_DAYS) - independent of
+#     WORKSPACE_RETENTION_DAYS above (a different table/task). Left
+#     unset, defaults to 7.
+#   - WORKFLOW_RETENTION_DAYS (plain, optional): days a non-base
+#     (per-run duplicated) Galaxy workflow *definition* is kept before
+#     workflows.tasks.deleteoldgalaxyworkflows's daily cleanup removes
+#     it (workflows/models.py's Workflow.RETENTION_DAYS) - independent
+#     of WORKSPACE_RETENTION_DAYS above (deleting a workflow definition
+#     doesn't touch its history's actual data - see CLAUDE.md). Left
+#     unset, defaults to 14.
+#   - WORKFLOW_RUN_STALE_HOURS (plain, optional): hours a still-running/
+#     queued workspace history is left alone before workspace.tasks.
+#     updateworkspacestatus force-cancels its still-pending Galaxy jobs
+#     (workspace/tasks.py's WORKFLOW_RUN_STALE_AFTER). Left unset,
+#     defaults to 24.
+#   - PASTEUR_BLAST_STALE_HOURS (plain, optional): hours a still-
+#     pending/running Pasteur BLAST run is polled before blast.tasks.
+#     checkblastruns gives up and marks it ERROR (blast/tasks.py's
+#     PASTEUR_RUN_STALE_AFTER). Left unset, defaults to 3.
 #   - INGRESS_CLUSTER_ISSUER / INGRESS_TLS_SECRET_NAME (plain, optional,
 #     deploy-prod only): wires up TLS via cert-manager's ingress-shim -
 #     see the deploy job's own "TLS via cert-manager" script comment.

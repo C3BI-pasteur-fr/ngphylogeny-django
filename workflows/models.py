@@ -3,6 +3,7 @@ from __future__ import unicode_literals
 import collections
 import json
 
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
@@ -26,6 +27,20 @@ class Workflow(models.Model):
     # Date added
     date = models.DateTimeField(default=timezone.now, blank=True)
     deleted = models.BooleanField(default=False)
+
+    # workflows.tasks.deleteoldgalaxyworkflows's own daily cleanup cutoff
+    # for non-base (per-run duplicated) workflow *definitions* - defined
+    # here, not just as a local constant in tasks.py, same reasoning as
+    # workspace.models.WorkspaceHistory.RETENTION_DAYS. Reads settings.
+    # NGPHYLO_WORKFLOW_RETENTION_DAYS (settings/base.py) - configurable
+    # via the WORKFLOW_RETENTION_DAYS GitLab CI/CD variable, defaulting
+    # to the same 14 days as WorkspaceHistory.RETENTION_DAYS's own
+    # default (independently configurable from it though - deleting a
+    # workflow definition and deleting its history's actual data are
+    # different cleanups, see deleteoldgalaxyworkflows's own docstring).
+    # Safe to read at class-body (import) time - see WorkspaceHistory.
+    # RETENTION_DAYS's own note on this.
+    RETENTION_DAYS = settings.NGPHYLO_WORKFLOW_RETENTION_DAYS
     tooldesc = models.CharField(max_length=250,blank=True, default="")
     # Json representation of the workflow
     json =  None

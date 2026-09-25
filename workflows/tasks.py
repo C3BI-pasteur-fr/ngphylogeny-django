@@ -38,8 +38,8 @@ def deletegalaxyworkflow(workflow_galaxyid):
 
 # Every day at 2am (same schedule as workspace.tasks.deleteoldgalaxyhistory's
 # own per-history workflow cleanup, see below), remove every non-base
-# workflow older than 7 days from Galaxy - regardless of whether it was
-# ever actually run. This used to only catch workflows with zero
+# workflow older than Workflow.RETENTION_DAYS from Galaxy - regardless of
+# whether it was ever actually run. This used to only catch workflows with zero
 # associated WorkspaceHistory (created but never run) on a 1-day cutoff -
 # anything that WAS run stayed in Galaxy forever unless its own specific
 # linked WorkspaceHistory happened to independently satisfy
@@ -63,7 +63,7 @@ def deletegalaxyworkflow(workflow_galaxyid):
 @shared_task
 def deleteoldgalaxyworkflows():
     logger.info("Start old workflow deletion task")
-    datecutoff = timezone.now() - timedelta(days=7)
+    datecutoff = timezone.now() - timedelta(days=Workflow.RETENTION_DAYS)
     for w in Workflow.objects.exclude(category='base').filter(date__lte=datecutoff).filter(deleted=False):
         try:
             if deletegalaxyworkflow(w.id_galaxy):

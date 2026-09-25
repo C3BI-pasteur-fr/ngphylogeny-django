@@ -51,6 +51,31 @@ x-django-env: &django-env
   # (blast/views.py's BlastView.dispatch()) - this alone won't bring it
   # back.
   NGPHYLO_PASTEUR_BLAST_ENABLED: "${NGPHYLO_PASTEUR_BLAST_ENABLED:-False}"
+  # Days a finished workspace history is kept before
+  # workspace.tasks.deleteoldgalaxyhistory's daily cleanup removes it -
+  # see workspace/models.py's WorkspaceHistory.RETENTION_DAYS.
+  NGPHYLO_WORKSPACE_RETENTION_DAYS: "${NGPHYLO_WORKSPACE_RETENTION_DAYS:-14}"
+  # Days a BlastRun is kept before blast.tasks.deleteoldblastruns's
+  # daily cleanup removes it - see blast/models.py's
+  # BlastRun.RETENTION_DAYS. Independently configurable from
+  # NGPHYLO_WORKSPACE_RETENTION_DAYS above (a different table/task);
+  # defaults to a shorter 7 days.
+  NGPHYLO_BLAST_RETENTION_DAYS: "${NGPHYLO_BLAST_RETENTION_DAYS:-7}"
+  # Days a non-base (per-run duplicated) Galaxy workflow *definition* is
+  # kept before workflows.tasks.deleteoldgalaxyworkflows's daily cleanup
+  # removes it - see workflows/models.py's Workflow.RETENTION_DAYS.
+  # Independently configurable from NGPHYLO_WORKSPACE_RETENTION_DAYS
+  # above (deleting a workflow definition doesn't touch its history's
+  # actual data), defaulting to the same 14 days.
+  NGPHYLO_WORKFLOW_RETENTION_DAYS: "${NGPHYLO_WORKFLOW_RETENTION_DAYS:-14}"
+  # Hours a still-running/queued workspace history is left alone before
+  # workspace.tasks.updateworkspacestatus force-cancels its still-
+  # pending Galaxy jobs - see workspace/tasks.py's WORKFLOW_RUN_STALE_AFTER.
+  NGPHYLO_WORKFLOW_RUN_STALE_HOURS: "${NGPHYLO_WORKFLOW_RUN_STALE_HOURS:-24}"
+  # Hours a still-pending/running Pasteur BLAST run is polled before
+  # blast.tasks.checkblastruns gives up and marks it ERROR - see
+  # blast/tasks.py's PASTEUR_RUN_STALE_AFTER.
+  NGPHYLO_PASTEUR_BLAST_STALE_HOURS: "${NGPHYLO_PASTEUR_BLAST_STALE_HOURS:-3}"
 
 services:
   db:

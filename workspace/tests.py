@@ -23,7 +23,8 @@ from workspace.models import WorkspaceHistory
 from workspace.reports import (WEEKLY_TO_MONTHLY_SPAN_DAYS,
                                 build_report_context, build_report_web_context,
                                 gather_all_time, gather_last_7_days,
-                                gather_period_totals, render_report_html)
+                                gather_period_totals, gather_user_growth,
+                                render_report_html)
 from workspace.tasks import (deleteoldgalaxyhistory, send_daily_report,
                               updateworkspacestatus)
 from workspace.rocrate import build_rocrate_metadata
@@ -395,6 +396,56 @@ class DailyReportTest(TestCase):
                               else d1.replace(month=d1.month + 1))
             self.assertEqual(d2, expected_next)
 
+    _user_counter = 0
+
+    def _make_user(self, days_ago=0):
+        DailyReportTest._user_counter += 1
+        u = User.objects.create_user(
+            username='report-user-%d' % DailyReportTest._user_counter)
+        if days_ago:
+            # date_joined defaults to timezone.now() at creation but,
+            # unlike WorkspaceHistory.created_date, isn't auto_now_add -
+            # a plain .update() after the fact works the same way this
+            # file's other backdating helpers (_make_history above)
+            # already rely on.
+            User.objects.filter(pk=u.pk).update(
+                date_joined=timezone.now() - timedelta(days=days_ago))
+        return u
+
+    def test_gather_user_growth_is_a_cumulative_running_total(self):
+        # Two accounts land in the same week's bucket; a third, 3 weeks
+        # earlier, leaves at least one fully-empty week in between -
+        # the running total must still carry forward across it (stay at
+        # 1, not reset to 0), same "no gaps silently dropped" concern
+        # as gather_period_totals().
+        self._make_user(days_ago=0)
+        self._make_user(days_ago=0)
+        self._make_user(days_ago=21)
+
+        granularity, weekly_totals = gather_user_growth()
+
+        self.assertEqual(granularity, 'week')
+        # Cumulative, not per-period: the running total only ever goes
+        # up (or stays flat across an empty period), ending at the
+        # grand total of 3.
+        self.assertEqual(weekly_totals[-1][1], 3)
+        for (_, n1), (_, n2) in zip(weekly_totals, weekly_totals[1:]):
+            self.assertGreaterEqual(n2, n1)
+        self.assertIn(1, [n for _, n in weekly_totals])
+
+    def test_gather_user_growth_switches_to_monthly_for_long_spans(self):
+        self._make_user(days_ago=WEEKLY_TO_MONTHLY_SPAN_DAYS + 30)
+        self._make_user(days_ago=0)
+
+        granularity, monthly_totals = gather_user_growth()
+
+        self.assertEqual(granularity, 'month')
+        self.assertEqual(monthly_totals[-1][1], 2)
+
+    def test_gather_user_growth_handles_no_users(self):
+        # DailyReportTest's own setUp() creates no User at all.
+        self.assertEqual(gather_user_growth(), ('week', []))
+
     def test_single_tool_runs_use_workflow_steps_not_a_workflow_fk(self):
         """
         Regression guard: 'Tool' category WorkspaceHistory rows never get
@@ -422,14 +473,16 @@ class DailyReportTest(TestCase):
             name='PhyML OneClick', category='duplicated',
             description='PhyML OneClick', slug='wf2-copy')
         self._make_history('OneClick', workflow=wf)
+        self._make_user()
 
         context, images = build_report_context()
 
         self.assertEqual(context['alltime_total'], 1)
         self.assertEqual(context['week_total'], 1)
+        self.assertEqual(context['total_users'], 1)
         expected_charts = ['daily_category_chart', 'daily_oneclick_chart',
                             'alltime_category_chart', 'alltime_workflow_chart',
-                            'weekly_chart']
+                            'weekly_chart', 'user_growth_chart']
         for key in expected_charts:
             cid = context[key]
             self.assertIsNotNone(cid, key)
@@ -451,6 +504,8 @@ class DailyReportTest(TestCase):
         self.assertIsNone(context['weekly_chart'])
         self.assertIsNone(context['blast_length_chart'])
         self.assertEqual(context['blast_length_count'], 0)
+        self.assertIsNone(context['user_growth_chart'])
+        self.assertEqual(context['total_users'], 0)
         self.assertEqual(images, {})
         # Must still render without error - the template has to handle
         # every chart being None gracefully.
@@ -1881,3 +1936,240 @@ class WorkspacePermalinkTest(TestCase):
             follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'invalid')
+
+
+class WorkspaceHistoryDaysUntilDeletionTest(TestCase):
+    """
+    WorkspaceHistory.days_until_deletion - the estimate shown on the
+    Workspace/account pages of how long until workspace.tasks.
+    deleteoldgalaxyhistory's daily cleanup removes this history, using
+    the exact same RETENTION_DAYS/created_date basis that task itself
+    filters on (see that task's own docstring).
+    """
+
+    def setUp(self):
+        with patch('galaxy.models.requests.get',
+                   return_value=Mock(status_code=200,
+                                      json=lambda: {'version_major': '25.1'})):
+            self.server = Server.objects.create(
+                url='http://fake-galaxy.example.org', current=True)
+
+    def _make_history(self, age_days):
+        h = WorkspaceHistory.objects.create(
+            history='h-%s' % age_days, name='test', email='',
+            monitored=True, finished=True, deleted=False,
+            source_ip='127.0.0.1', workflow_category='OneClick',
+            workflow_steps='', galaxy_server=self.server)
+        # created_date is auto_now_add - only settable via a direct
+        # update() after creation, same approach already established
+        # elsewhere in this file for backdating a fixture.
+        WorkspaceHistory.objects.filter(pk=h.pk).update(
+            created_date=timezone.now() - timedelta(days=age_days))
+        h.refresh_from_db()
+        return h
+
+    def test_a_fresh_history_has_the_full_retention_window_left(self):
+        h = self._make_history(age_days=0)
+        self.assertEqual(h.days_until_deletion, WorkspaceHistory.RETENTION_DAYS)
+
+    def test_counts_down_as_the_history_ages(self):
+        h = self._make_history(age_days=5)
+        self.assertEqual(
+            h.days_until_deletion, WorkspaceHistory.RETENTION_DAYS - 5)
+
+    def test_clamped_to_zero_once_past_the_cutoff(self):
+        h = self._make_history(age_days=WorkspaceHistory.RETENTION_DAYS + 3)
+        self.assertEqual(h.days_until_deletion, 0)
+
+    def test_retention_days_is_wired_to_the_configurable_setting(self):
+        # WorkspaceHistory.RETENTION_DAYS is read from settings.
+        # NGPHYLO_WORKSPACE_RETENTION_DAYS at class-definition (import)
+        # time - configurable via the WORKSPACE_RETENTION_DAYS GitLab
+        # CI/CD variable / NGPHYLO_WORKSPACE_RETENTION_DAYS env var (see
+        # settings/base.py), not re-read per request. This guards
+        # against a future edit silently reintroducing a bare literal
+        # here instead - override_settings() can't retroactively change
+        # the already-evaluated class attribute (same as every other
+        # settings-derived class constant in this codebase, e.g.
+        # GalaxyUser.GALAXY_REQUEST_TIMEOUT), so this checks the wiring
+        # itself rather than the env var's live effect.
+        from django.conf import settings
+        self.assertEqual(
+            WorkspaceHistory.RETENTION_DAYS,
+            settings.NGPHYLO_WORKSPACE_RETENTION_DAYS)
+
+
+class WorkspaceHistoryTypeAndStepsTest(TestCase):
+    """
+    WorkspaceHistory.type_label/steps_done/steps_total - the "Type"/
+    "Steps done" columns on the Workspace/account history tables
+    (templates/workspace/include/history_list_table.html), computed the
+    same way workspace.views.running_jobs_view already does for its own
+    identically-named columns (CATEGORY_LABELS-mapped workflow_category,
+    a count of 'ok'-state entries in history_content_json).
+    """
+
+    def setUp(self):
+        with patch('galaxy.models.requests.get',
+                   return_value=Mock(status_code=200,
+                                      json=lambda: {'version_major': '25.1'})):
+            self.server = Server.objects.create(
+                url='http://fake-galaxy.example.org', current=True)
+
+    def _make_history(self, workflow_category, history_content_json='[]'):
+        return WorkspaceHistory.objects.create(
+            history='h1', name='test', email='', monitored=True,
+            finished=True, deleted=False, source_ip='127.0.0.1',
+            workflow_category=workflow_category, workflow_steps='',
+            galaxy_server=self.server,
+            history_content_json=history_content_json)
+
+    def test_type_label_maps_known_categories(self):
+        h = self._make_history('duplicated')
+        self.assertEqual(h.type_label, 'Advanced')
+
+    def test_type_label_falls_back_to_unknown_for_empty_category(self):
+        h = self._make_history('')
+        self.assertEqual(h.type_label, 'Unknown')
+
+    def test_steps_done_counts_only_ok_state_entries(self):
+        content = json.dumps([
+            {'state': 'ok'}, {'state': 'ok'},
+            {'state': 'running'}, {'state': 'new'},
+        ])
+        h = self._make_history('OneClick', history_content_json=content)
+        self.assertEqual(h.steps_done, 2)
+        self.assertEqual(h.steps_total, 4)
+
+    def test_malformed_history_content_degrades_to_zero_steps(self):
+        h = self._make_history('OneClick', history_content_json='not json')
+        self.assertEqual(h.steps_done, 0)
+        self.assertEqual(h.steps_total, 0)
+
+
+class PreviousHistoryListViewAccountMergeTest(TestCase):
+    """
+    PreviousHistoryListView (/workspace/histories, "Workspace") now
+    also shows this account's own WorkspaceHistory rows (user=request.
+    user) alongside the classic session-based list, when logged in -
+    additive, not a replacement: a session-only analysis (anonymous, or
+    from a different session) still shows up too.
+    """
+
+    def setUp(self):
+        with patch('galaxy.models.requests.get',
+                   return_value=Mock(status_code=200,
+                                      json=lambda: {'version_major': '25.1'})):
+            self.server = Server.objects.create(
+                url='http://fake-galaxy.example.org', current=True)
+        # previous_analyses is connection_galaxy-decorated (see
+        # galaxy/decorator.py) - needs the shared anonymous GalaxyUser
+        # fixture, same as every other decorated-view test in this file.
+        shared_owner = User.objects.create_user(username='ngphylo-shared')
+        GalaxyUser.objects.create(
+            user=shared_owner, galaxy_server=self.server,
+            api_key='fakekey', anonymous=True)
+        self.user = User.objects.create_user(
+            username='alice', password='secretpass')
+        self.other_user = User.objects.create_user(
+            username='bob', password='secretpass')
+
+    def _make_history(self, history_id, user=None):
+        # A user-owned row now falls back to the shared anonymous
+        # GalaxyUser (see WorkspaceHistory.get_galaxy_user()), which
+        # this fixture gives a real (fake) api_key - rename() would
+        # otherwise try a real outbound HTTP call on save(). Patched
+        # out the same way AccountPageOwnHistoriesTest (galaxy/tests.py)
+        # already does - rename()'s own Galaxy-side behavior isn't what
+        # this test class is about.
+        with patch('workspace.models.WorkspaceHistory.rename'):
+            return WorkspaceHistory.objects.create(
+                history=history_id, name='Analyse ' + history_id, email='',
+                monitored=True, finished=True, deleted=False,
+                source_ip='127.0.0.1', workflow_category='OneClick',
+                workflow_steps='', galaxy_server=self.server, user=user)
+
+    def _set_session_histories(self, history_ids):
+        session = self.client.session
+        session['histories'] = history_ids
+        session.save()
+
+    def test_logged_out_only_sees_the_session_list(self):
+        self._make_history('session1')
+        self._make_history('mine1', user=self.user)
+        self._set_session_histories(['session1'])
+
+        response = self.client.get(reverse('previous_analyses'))
+
+        self.assertEqual(
+            [h.history for h in response.context['histories']],
+            ['session1'])
+
+    def test_logged_in_sees_session_list_plus_own_account_histories(self):
+        self._make_history('session1')
+        self._make_history('mine1', user=self.user)
+        self._make_history('not-mine', user=self.other_user)
+        self._set_session_histories(['session1'])
+
+        self.client.login(username='alice', password='secretpass')
+        response = self.client.get(reverse('previous_analyses'))
+
+        self.assertEqual(
+            {h.history for h in response.context['histories']},
+            {'session1', 'mine1'})
+
+    def test_a_history_both_in_session_and_owned_is_not_duplicated(self):
+        self._make_history('mine1', user=self.user)
+        self._set_session_histories(['mine1'])
+
+        self.client.login(username='alice', password='secretpass')
+        response = self.client.get(reverse('previous_analyses'))
+
+        self.assertEqual(
+            [h.history for h in response.context['histories']], ['mine1'])
+
+    def test_account_histories_are_not_added_to_the_session_list(self):
+        self._make_history('mine1', user=self.user)
+
+        self.client.login(username='alice', password='secretpass')
+        self.client.get(reverse('previous_analyses'))
+
+        self.assertEqual(self.client.session.get('histories', []), [])
+
+    def test_permalink_carries_both_session_and_account_histories(self):
+        # PreviousHistoryListView.get_context_data()'s permalink_url
+        # used to be built strictly from the session's own history list
+        # - once this page started also showing account-owned rows (see
+        # the tests above), a permalink built only from session_ids
+        # silently dropped the account half every time, even though the
+        # page visibly showed it. The token should carry the exact same
+        # combined list the page itself is rendering.
+        self._make_history('session1')
+        self._make_history('mine1', user=self.user)
+        self._set_session_histories(['session1'])
+
+        self.client.login(username='alice', password='secretpass')
+        response = self.client.get(reverse('previous_analyses'))
+
+        token = response.context['permalink_url'].rsplit('/', 1)[-1]
+        decoded = signing.loads(token, salt=PERMALINK_SALT)
+        self.assertEqual(set(decoded), {'session1', 'mine1'})
+
+    def test_following_that_permalink_restores_both_into_a_fresh_session(self):
+        self._make_history('session1')
+        self._make_history('mine1', user=self.user)
+        self._set_session_histories(['session1'])
+
+        self.client.login(username='alice', password='secretpass')
+        response = self.client.get(reverse('previous_analyses'))
+        token = response.context['permalink_url'].rsplit('/', 1)[-1]
+
+        from django.test import Client
+        fresh_client = Client()
+        fresh_response = fresh_client.get(
+            reverse('workspace_permalink', kwargs={'token': token}),
+            follow=True)
+
+        self.assertEqual(fresh_response.status_code, 200)
+        self.assertEqual(
+            set(fresh_client.session['histories']), {'session1', 'mine1'})

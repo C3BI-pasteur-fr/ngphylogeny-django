@@ -16,7 +16,15 @@ import os
 BASE_DIR = os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__))))
 
-LOGIN_URL = '/galaxy/login'
+# Real production bug, found while adding login_required-protected
+# account-page tests (galaxy.tests.AccountPageOwnHistoriesTest): this
+# used to be '/galaxy/login' - galaxy/urls.py has always been an empty
+# urlpatterns = [] (mounted at /galaxy/), so every @login_required view
+# in the app (including /account itself) redirected an anonymous
+# visitor to a dead 404 instead of the real login form. The actual
+# login page has always lived at /account/login (account/urls.py's own
+# name='login').
+LOGIN_URL = '/account/login'
 LOGIN_REDIRECT_URL = '/'
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/1.11/howto/deployment/checklist/
@@ -261,6 +269,61 @@ NGPHYLO_CONTACT_FORM_RECIPIENTS = [
     os.environ.get('NGPHYLO_CONTACT_FORM_RECIPIENTS', '').split(',')
     if r.strip()
 ]
+
+# Days a finished WorkspaceHistory is kept before workspace.tasks.
+# deleteoldgalaxyhistory's daily cleanup removes it - see workspace/
+# models.py's WorkspaceHistory.RETENTION_DAYS, which reads this (also
+# what the Workspace/account pages' "days left" estimate is computed
+# from). `or '14'`, not just a plain default= on .get(): docker-compose.
+# yml/docker-compose.standalone.yml pass a real "14" through their own
+# "${NGPHYLO_WORKSPACE_RETENTION_DAYS:-14}" shell default, but
+# manifest.yaml's "${WORKSPACE_RETENTION_DAYS}" is substituted by
+# envsubst (no bash-style ":-" default support) - an unset GitLab CI/CD
+# variable there becomes a genuinely empty string, and int('') raises
+# ValueError.
+NGPHYLO_WORKSPACE_RETENTION_DAYS = int(
+    os.environ.get('NGPHYLO_WORKSPACE_RETENTION_DAYS') or '14')
+
+# Days a BlastRun is kept before blast.tasks.deleteoldblastruns's daily
+# cleanup removes it - see blast/models.py's BlastRun.RETENTION_DAYS,
+# which reads this. Independently configurable from
+# NGPHYLO_WORKSPACE_RETENTION_DAYS above (a different table, a
+# different cleanup task) - defaults to 7, not 14, per this project's
+# own choice of a shorter default retention for BLAST runs specifically.
+# Same empty-string-safety reasoning as NGPHYLO_WORKSPACE_RETENTION_DAYS
+# above.
+NGPHYLO_BLAST_RETENTION_DAYS = int(
+    os.environ.get('NGPHYLO_BLAST_RETENTION_DAYS') or '7')
+
+# Days a non-base (per-run duplicated) Galaxy workflow *definition* is
+# kept before workflows.tasks.deleteoldgalaxyworkflows's daily cleanup
+# removes it - see workflows/models.py's Workflow.RETENTION_DAYS, which
+# reads this. Independently configurable from
+# NGPHYLO_WORKSPACE_RETENTION_DAYS above (deleting a workflow definition
+# doesn't touch its associated history's actual data - see that task's
+# own docstring) - defaults to 14, matching
+# NGPHYLO_WORKSPACE_RETENTION_DAYS's own default, though the two aren't
+# tied together beyond that shared default value. Same empty-string-
+# safety reasoning as NGPHYLO_WORKSPACE_RETENTION_DAYS above.
+NGPHYLO_WORKFLOW_RETENTION_DAYS = int(
+    os.environ.get('NGPHYLO_WORKFLOW_RETENTION_DAYS') or '14')
+
+# Hours a still-running/queued WorkspaceHistory is left alone before
+# workspace.tasks.updateworkspacestatus's own cancel_stale_jobs() gives
+# up and force-cancels its still-pending Galaxy jobs - see workspace/
+# tasks.py's WORKFLOW_RUN_STALE_AFTER, which reads this. Defaults to 24,
+# this task's original hardcoded value. Same empty-string-safety
+# reasoning as NGPHYLO_WORKSPACE_RETENTION_DAYS above.
+NGPHYLO_WORKFLOW_RUN_STALE_HOURS = int(
+    os.environ.get('NGPHYLO_WORKFLOW_RUN_STALE_HOURS') or '24')
+
+# Hours a still-pending/running Pasteur BLAST run is polled before
+# blast.tasks.checkblastruns gives up and marks it ERROR - see
+# blast/tasks.py's PASTEUR_RUN_STALE_AFTER, which reads this. Defaults
+# to 3, this task's original hardcoded value. Same empty-string-safety
+# reasoning as NGPHYLO_WORKSPACE_RETENTION_DAYS above.
+NGPHYLO_PASTEUR_BLAST_STALE_HOURS = int(
+    os.environ.get('NGPHYLO_PASTEUR_BLAST_STALE_HOURS') or '3')
 
 # CELERY SETTINGS
 #

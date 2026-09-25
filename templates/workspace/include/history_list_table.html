@@ -1,0 +1,88 @@
+<!--
+Shared by templates/workspace/previous_analyses.html ("Workspace") and
+templates/account/user_info.html ("Your Analyses") - same table look as
+workspace/running_jobs.html (.history-table-card/.history-table/
+.status-pill, all global via assets/css/custom.css - see CLAUDE.md's
+"Running Jobs" and "Dataset table redesign" sections), reused here
+rather than duplicated a second time now a second/third page wants it.
+
+Expects `histories` (a WorkspaceHistory queryset/list, both callers
+already pass this under that name) and `empty_message` (the text shown
+when the list is empty - the two pages' own reasons for an empty list
+differ, see each caller).
+-->
+<div class="history-table-card">
+  <table class="history-table">
+    <colgroup>
+      <!-- No explicit width on Name - in table-layout: fixed, it takes
+           whatever's left after the columns below are subtracted (same
+           convention as running_jobs.html/the dataset table - see
+           CLAUDE.md's "Actions column ... clipped" note on why a fixed
+           column needs real headroom, not a share that can be squeezed
+           to nothing on a narrower page/container). Trimmed to each
+           column's actual real content width (a status pill, "NN / NN",
+           a date, "NN days") rather than generously round numbers, to
+           leave Name as much room as possible. -->
+      <col>
+      <col style="width: 90px;">
+      <col style="width: 100px;">
+      <col style="width: 70px;">
+      <col style="width: 130px;">
+      <col style="width: 110px;">
+      <col style="width: 50px;">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Source</th>
+        <th>Type</th>
+        <th>Steps done</th>
+        <th>Created</th>
+        <th>Days remaining</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for history in histories %}
+      <tr>
+        <td class="col-tool" title="{{ history.name }}">
+          <a href="{% url 'history_detail' history.history %}">{{ history.name }}</a>
+        </td>
+        <td>
+          {% if request.user.is_authenticated and history.user_id == request.user.id %}
+          <span class="status-pill status-pill-ok" title="Tied to your account - stays in this list even from a different browser or after clearing cookies"><span class="dot"></span>Account</span>
+          {% else %}
+          <span class="status-pill status-pill-pending" title="Only in this browser's session - lost if cookies are cleared, unless you also copy the permalink"><span class="dot"></span>Session</span>
+          {% endif %}
+        </td>
+        <td class="col-tool" title="{{ history.type_label }}">{{ history.type_label }}</td>
+        <td class="col-step">{{ history.steps_done }} / {{ history.steps_total }}</td>
+        <td class="col-step">{{ history.created_date|date:"Y-m-d H:i" }}</td>
+        <td class="col-step">
+          <span class="status-pill {% if history.days_until_deletion <= 2 %}status-pill-error{% elif history.days_until_deletion <= 5 %}status-pill-running{% else %}status-pill-ok{% endif %}"
+                title="Automatically deleted after {{ history.RETENTION_DAYS }} days">
+            <span class="dot"></span>{% if history.days_until_deletion > 0 %}{{ history.days_until_deletion }} day{{ history.days_until_deletion|pluralize }}{% else %}pending{% endif %}
+          </span>
+        </td>
+        <td class="actions">
+          <a class="icon-btn danger" title="Delete" data-toggle="tooltip" data-placement="left"
+             href="{% url 'history_delete' history.history %}">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+              <path d="M10 11v6M14 11v6"/>
+              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+            </svg>
+          </a>
+        </td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="7" style="text-align:center;color:#8a94a6;padding:24px;">
+          {{ empty_message }}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

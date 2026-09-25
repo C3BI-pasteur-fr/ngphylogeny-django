@@ -171,6 +171,26 @@ class StaticPagesSmokeTest(TestCase):
                 response.status_code, 200,
                 "GET %s returned %s" % (path, response.status_code))
 
+    def test_workspace_nav_link_is_always_clickable(self):
+        """
+        Regression test: templates/base.html's "Workspace" nav link used
+        to only get a real href when request.session['histories'] had
+        at least one entry - an empty session (a brand new visitor, or
+        a logged-in account whose analyses only exist as
+        WorkspaceHistory.user rows, not session ids - see
+        PreviousHistoryListView, workspace/views.py) rendered it as
+        plain muted, unclickable text instead. The Workspace page itself
+        already handles an empty/account-only case gracefully (its own
+        {% empty %} block, or the account-owned rows merged in by
+        PreviousHistoryListView), so gating the link itself on session
+        state was never actually necessary - just made the page
+        unreachable from the nav in exactly the cases where a logged-in
+        user would most want to reach it from a fresh session.
+        """
+        response = self.client.get('/')
+        self.assertContains(response, 'href="/workspace/histories"')
+        self.assertNotContains(response, 'text-muted')
+
     def test_feedback_form_renders_exactly_one_captcha_widget(self):
         """
         Regression test: surveys.forms.FeedbackForm used to append a

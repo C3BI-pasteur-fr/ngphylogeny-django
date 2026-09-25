@@ -83,3 +83,13 @@ already in context.
     <p class="report-empty">No BLAST searches with a known query length yet.</p>
   {% endif %}
 </div>
+
+<div class="report-card">
+  <h2>Users ({{ total_users }} registered account{{ total_users|pluralize }})</h2>
+
+  {% if user_growth_chart %}
+    <img class="report-chart" src="{{ user_growth_chart }}" alt="Registered accounts over time">
+  {% else %}
+    <p class="report-empty">No registered accounts yet.</p>
+  {% endif %}
+</div>

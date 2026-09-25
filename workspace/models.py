@@ -1,7 +1,12 @@
 from __future__ import unicode_literals
 
+import json
+
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.db import models
+from django.utils import timezone
+from django.utils.functional import cached_property
 
 from galaxy.models import Server, GalaxyUser
 from workflows.models import Workflow
@@ -47,10 +52,128 @@ class WorkspaceHistory(models.Model):
     history_content = None
     history_info = None
 
+    # workspace.tasks.deleteoldgalaxyhistory's own daily cleanup cutoff -
+    # defined here (not just as a local constant in tasks.py) so the
+    # "days until deletion" estimate shown on the workspace/account pages
+    # (days_until_deletion below) can't drift out of sync with the value
+    # that cleanup task actually uses. Reads settings.
+    # NGPHYLO_WORKSPACE_RETENTION_DAYS (see settings/base.py) rather than
+    # a bare literal, so a deployment can configure this via the
+    # WORKSPACE_RETENTION_DAYS GitLab CI/CD variable / NGPHYLO_WORKSPACE_
+    # RETENTION_DAYS env var without a code change - 14 if unset, this
+    # project's original hardcoded value. Safe to read at class-body
+    # (i.e. import) time: Django only imports app models after settings
+    # are fully configured, same as GalaxyUser.GALAXY_REQUEST_TIMEOUT's
+    # own class-level constant elsewhere in this codebase.
+    RETENTION_DAYS = settings.NGPHYLO_WORKSPACE_RETENTION_DAYS
+
+    @property
+    def days_until_deletion(self):
+        """
+        Days left before workspace.tasks.deleteoldgalaxyhistory's daily
+        2am cleanup removes this history - same RETENTION_DAYS cutoff,
+        same created_date reference point that task itself filters on.
+        That task only actually acts on finished=True rows, but every
+        history gets there eventually (either normally, or forced via
+        the 24h stale-job cancellation - see that task's own docstring),
+        and the cutoff is always measured from created_date regardless,
+        so this stays a meaningful estimate even for a still-running
+        history. Clamped to 0 rather than going negative once past the
+        cutoff (deletion is a daily batch job, not instantaneous - a
+        history can briefly sit at "0 days left" for up to a day before
+        that job actually runs, or longer still if a transient Galaxy
+        failure left it deleted=False for a retry - see that task's own
+        notes on this).
+        """
+        days_left = self.RETENTION_DAYS - (timezone.now() - self.created_date).days
+        return max(0, days_left)
+
+    @property
+    def type_label(self):
+        """
+        Human-readable workflow_category label ('duplicated' ->
+        'Advanced', etc.) for the Workspace/account history tables' own
+        "Type" column - the exact same mapping workspace.views.
+        running_jobs_view and workspace.reports already use
+        (workspace.reports.CATEGORY_LABELS, via its own _category_label
+        helper). Local import, not a module-level one: workspace.reports
+        itself imports WorkspaceHistory, so importing reports at this
+        module's top level would be circular.
+        """
+        from .reports import _category_label
+        return _category_label(self.workflow_category)
+
+    @cached_property
+    def _history_content_steps(self):
+        """
+        The dict-shaped entries of history_content_json - same tolerant
+        parsing convention as running_jobs_view/WorkspaceHistoryObjectMixin
+        (a malformed/non-list value degrades to "0 steps" rather than
+        crashing whatever's rendering it). Cached per-instance since both
+        steps_done and steps_total below read this on every access -
+        rendering a table row needs both, not just one.
+        """
+        try:
+            content = json.loads(self.history_content_json or '[]')
+        except (ValueError, TypeError):
+            content = []
+        return [f for f in content if isinstance(f, dict)]
+
+    @property
+    def steps_done(self):
+        return sum(
+            1 for f in self._history_content_steps
+            if 'ok' in (f.get('state') or ''))
+
+    @property
+    def steps_total(self):
+        return len(self._history_content_steps)
+
     def get_galaxy_user(self):
-        if self.user:
-            return GalaxyUser.objects.get(user=self.user,
-                                          galaxy_server=self.galaxy_server)
+        """
+        Every authenticated visitor now authenticates to Galaxy through
+        the same single, shared key regardless of which NGPhylogeny
+        account owns this history (see galaxy.decorator.
+        connection_galaxy) - nothing creates a personal, per-user
+        GalaxyUser row anymore, so an authenticated owner's own row
+        almost never exists. Falls back to the shared anonymous
+        GalaxyUser instead of raising GalaxyUser.DoesNotExist (a plain
+        .get() used to do exactly that) - rename() below calls this on
+        every single save(), so that used to mean every save() of a
+        history owned by a real account would crash outright once this
+        fell back to the shared key elsewhere. A personal row is still
+        preferred first if one happens to exist (e.g. from before this
+        change), for backwards compatibility.
+
+        Deliberately still returns None (no fallback at all) for a
+        history with no self.user - i.e. a session-only, not-logged-in
+        submission - preserving this method's pre-existing behavior for
+        that case exactly (the previous version had no else branch
+        here at all, so rename() below already silently no-ops for
+        every anonymous-visitor history and always has; that's
+        unrelated to the shared-key change and not something to alter
+        as a side effect of it).
+
+        Only prefers a personal row when it actually has an api_key -
+        caught live against the real local dev DB: it still had two
+        personal GalaxyUser rows with a blank api_key, artifacts of the
+        old (now-removed) connection_galaxy code path that used to
+        get_or_create() one for every authenticated visitor regardless
+        of whether they'd ever set a key. Without this check, `if gu:`
+        alone treats that empty-key row as "found" and returns it
+        straight away, never reaching the shared-key fallback below -
+        exactly the ValueError('API key must be set') this whole
+        change exists to prevent, just for a different reason (a stale
+        row instead of no row at all).
+        """
+        if not self.user:
+            return None
+        gu = GalaxyUser.objects.filter(
+            user=self.user, galaxy_server=self.galaxy_server).first()
+        if gu and gu.api_key:
+            return gu
+        return GalaxyUser.objects.filter(
+            anonymous=True, galaxy_server=self.galaxy_server).first()
 
     def rename(self):
         """Rename history galaxy"""
