@@ -1,0 +1,212 @@
+# Fully self-contained stack for testing NGPhylogeny.fr from scratch: the
+# Django app, Postgres, Redis, AND a Galaxy server with NGPhylogeny's own
+# tools/workflows installed - no already-running Galaxy needed.
+#
+# This is an alternative to docker-compose.yml, not an overlay for it - run
+# one or the other, don't combine them with `-f`. See README.md.
+#
+# Requires the NGPhylogeny_fr_galaxytools repo cloned as a sibling directory
+# (../NGPhylogeny_fr_galaxytools by default - override with GALAXYTOOLS_DIR):
+#
+#   git clone https://github.com/C3BI-pasteur-fr/ngphylogeny-galaxy.git ../NGPhylogeny_fr_galaxytools
+#   docker compose -f docker-compose.standalone.yml up -d
+#
+# Everything (Postgres/Redis/Galaxy startup, building the PhyML-SMS/Noisy
+# combined images, importing the 4 base workflows, then NGPhylogeny's own
+# migrations/tool import) is wired through depends_on conditions - one
+# command, wait for it, done. NGPhylogeny comes up on http://localhost:8000,
+# Galaxy itself on http://localhost:8080 (not needed for normal use, but
+# useful to poke at directly).
+name: ngphylo-standalone
+
+x-django-env: &django-env
+  DJANGO_SETTINGS_MODULE: "${NGPHYLO_SETTINGS_MODULE:-NGPhylogeny_fr.settings.local}"
+  NGPHYLO_DATABASE_ENGINE: django.db.backends.postgresql
+  NGPHYLO_DATABASE_NAME: ngphylo
+  NGPHYLO_DATABASE_USER: ngphylo
+  NGPHYLO_DATABASE_PASSWORD: ngphylo_local_dev
+  NGPHYLO_DATABASE_HOST: db
+  NGPHYLO_DATABASE_PORT: "5432"
+  NGPHYLO_REDIS_URL: redis://redis:6379/0
+  NGPHYLO_GALAXY_URL: "http://galaxy:80"
+  NGPHYLO_GALAXY_KEY: "${GALAXY_ADMIN_KEY:-standalonegalaxyadminkey}"
+  NGPHYLO_ADMIN_USER: "${NGPHYLO_ADMIN_USER:-admin}"
+  NGPHYLO_ADMIN_EMAIL: "${NGPHYLO_ADMIN_EMAIL:-admin@example.org}"
+  NGPHYLO_ADMIN_PASSWORD: "${NGPHYLO_ADMIN_PASSWORD:-password}"
+  # See docker-compose.yml for what these do - same SMTP/report config,
+  # same optional-by-default behavior.
+  NGPHYLO_EMAIL_HOST: "${NGPHYLO_EMAIL_HOST:-}"
+  NGPHYLO_EMAIL_PORT: "${NGPHYLO_EMAIL_PORT:-}"
+  NGPHYLO_EMAIL_HOST_USER: "${NGPHYLO_EMAIL_HOST_USER:-}"
+  NGPHYLO_EMAIL_HOST_PASSWORD: "${NGPHYLO_EMAIL_HOST_PASSWORD:-}"
+  NGPHYLO_EMAIL_USE_TLS: "${NGPHYLO_EMAIL_USE_TLS:-False}"
+  NGPHYLO_REPORT_RECIPIENTS: "${NGPHYLO_REPORT_RECIPIENTS:-}"
+  NGPHYLO_REPORT_FROM_EMAIL: "${NGPHYLO_REPORT_FROM_EMAIL:-ngphylogeny@pasteur.fr}"
+  NGPHYLO_CONTACT_FORM_RECIPIENTS: "${NGPHYLO_CONTACT_FORM_RECIPIENTS:-}"
+  # See docker-compose.yml for what these do.
+  NGPHYLO_MAINTENANCE_MODE: "${NGPHYLO_MAINTENANCE_MODE:-False}"
+  NGPHYLO_PASTEUR_BLAST_ENABLED: "${NGPHYLO_PASTEUR_BLAST_ENABLED:-False}"
+  NGPHYLO_ACCOUNT_CREATION_ENABLED: "${NGPHYLO_ACCOUNT_CREATION_ENABLED:-False}"
+  NGPHYLO_WORKSPACE_RETENTION_DAYS: "${NGPHYLO_WORKSPACE_RETENTION_DAYS:-14}"
+  NGPHYLO_BLAST_RETENTION_DAYS: "${NGPHYLO_BLAST_RETENTION_DAYS:-7}"
+  NGPHYLO_WORKFLOW_RETENTION_DAYS: "${NGPHYLO_WORKFLOW_RETENTION_DAYS:-14}"
+  NGPHYLO_WORKFLOW_RUN_STALE_HOURS: "${NGPHYLO_WORKFLOW_RUN_STALE_HOURS:-24}"
+  NGPHYLO_PASTEUR_BLAST_STALE_HOURS: "${NGPHYLO_PASTEUR_BLAST_STALE_HOURS:-3}"
+
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: ngphylo
+      POSTGRES_PASSWORD: ngphylo_local_dev
+      POSTGRES_DB: ngphylo
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ngphylo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - ngphylo-standalone-db:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+
+  # Same image/config as NGPhylogeny_fr_galaxytools/docker-compose.yml -
+  # kept in sync manually since it's a separate repo. See that repo's
+  # README.md for what each of these does.
+  galaxy:
+    image: quay.io/bgruening/galaxy:latest
+    container_name: ngphylo-standalone-galaxy
+    privileged: true
+    ports:
+      - "8080:80"
+    volumes:
+      - ${GALAXYTOOLS_DIR:-../NGPhylogeny_fr_galaxytools}/tools:/local_tools
+      - ngphylo-standalone-galaxy-export:/export
+      - ngphylo-standalone-galaxy-docker:/var/lib/docker
+      - ngphylo-standalone-galaxy-data:/data
+    environment:
+      GALAXY_CONFIG_TOOL_CONFIG_FILE: "/etc/galaxy/tool_conf.xml,/local_tools/tool_conf.xml"
+      GALAXY_CONFIG_CONDA_AUTO_INSTALL: "True"
+      GALAXY_DESTINATIONS_DEFAULT: "docker_dispatch"
+      GALAXY_DESTINATIONS_DOCKER_DEFAULT: "slurm_cluster_docker"
+      GALAXY_DESTINATIONS_NO_DOCKER_DEFAULT: "slurm_cluster"
+      GALAXY_DOCKER_SET_USER: "1450:1450"
+      # Not needed for a running Galaxy at all normally - only set here so
+      # NGPhylogeny's own init step (and the two one-shot setup services
+      # below) have an admin account/API key to use without any manual
+      # step. GALAXY_DEFAULT_ADMIN_KEY and GALAXY_CONFIG_BOOTSTRAP_ADMIN_API_KEY
+      # must stay different values - see CLAUDE.md/IFB_CLOUD.md: setting
+      # both to the same secret breaks Galaxy's own auth (requests get
+      # routed through the bootstrap path instead of the real admin user,
+      # and e.g. /api/workflows/ 500s).
+      GALAXY_DEFAULT_ADMIN_USER: "${NGPHYLO_ADMIN_USER:-admin}"
+      GALAXY_DEFAULT_ADMIN_EMAIL: "${NGPHYLO_ADMIN_EMAIL:-admin@example.org}"
+      GALAXY_DEFAULT_ADMIN_PASSWORD: "${GALAXY_ADMIN_PASSWORD:-password}"
+      GALAXY_DEFAULT_ADMIN_KEY: "${GALAXY_ADMIN_KEY:-standalonegalaxyadminkey}"
+      GALAXY_CONFIG_BOOTSTRAP_ADMIN_API_KEY: "${GALAXY_BOOTSTRAP_KEY:-standalonegalaxybootstrapkey}"
+    healthcheck:
+      # No curl/wget guaranteed in this image - Galaxy is itself a Python
+      # app in this same container, so use that instead of assuming one.
+      test: ["CMD", "python3", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost/api/version', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 60s
+
+  # One-shot: builds the local/phyml-sms-full and local/noisy-full images
+  # (no bioconda package for either - see NGPhylogeny_fr_galaxytools's
+  # README.md) inside Galaxy's own internal Docker daemon, by reusing that
+  # repo's own docker/build-combined-images.sh rather than duplicating its
+  # logic here. Needs the host's Docker socket to reach into the galaxy
+  # container from outside (the "sibling containers" / Docker-outside-of-
+  # Docker pattern) - this container never runs anything from the image
+  # itself beyond the docker CLI.
+  galaxy-build-images:
+    image: docker:27-cli
+    depends_on:
+      galaxy:
+        condition: service_healthy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${GALAXYTOOLS_DIR:-../NGPhylogeny_fr_galaxytools}:/galaxytools:ro
+    entrypoint: ["sh", "-c"]
+    command:
+      - "apk add --no-cache bash >/dev/null && bash /galaxytools/docker/build-combined-images.sh ngphylo-standalone-galaxy"
+
+  # One-shot: imports the 4 base "<Tool> OneClick" workflows (docker/
+  # import_base_workflows.py) so NGPhylogeny's own importworkflows command
+  # (run by init below) has something to find - a brand new Galaxy starts
+  # with zero workflows. Uses this repo's own image since it already has
+  # bioblend as a dependency.
+  galaxy-import-workflows:
+    build: .
+    depends_on:
+      galaxy:
+        condition: service_healthy
+    volumes:
+      - ${GALAXYTOOLS_DIR:-../NGPhylogeny_fr_galaxytools}/workflows:/galaxytools/workflows:ro
+    environment:
+      GALAXY_URL: "http://galaxy:80"
+      GALAXY_KEY: "${GALAXY_ADMIN_KEY:-standalonegalaxyadminkey}"
+      WORKFLOWS_DIR: /galaxytools/workflows
+    entrypoint: ["python", "docker/import_base_workflows.py"]
+
+  # One-shot: migrations, admin user, Galaxy server linking, and tool/
+  # workflow import into NGPhylogeny itself - see docker/init.sh. Same
+  # role as in docker-compose.yml, just now with a guaranteed Galaxy to
+  # link against instead of an optional external one.
+  init:
+    build: .
+    command: ["docker/init.sh"]
+    environment: *django-env
+    # See docker-compose.yml for why this is needed - collectstatic
+    # (docker/init.sh) writes to STATIC_ROOT in this container's own
+    # filesystem, which web (a separate container) never sees otherwise.
+    # Only bites under DEBUG=False; harmless to have either way.
+    volumes:
+      - ngphylo-standalone-static:/home/ngphylo/static
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      galaxy-build-images:
+        condition: service_completed_successfully
+      galaxy-import-workflows:
+        condition: service_completed_successfully
+
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    environment: *django-env
+    volumes:
+      - ngphylo-standalone-static:/home/ngphylo/static
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
+  celery-worker:
+    build: .
+    command: ["celery", "-A", "NGPhylogeny_fr.celery:app", "worker", "-l", "INFO", "-Q", "default,monitor,ncbi_blast"]
+    environment: *django-env
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
+  celery-beat:
+    build: .
+    command: ["celery", "-A", "NGPhylogeny_fr.celery:app", "beat", "-l", "INFO"]
+    environment: *django-env
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
+volumes:
+  ngphylo-standalone-db:
+  ngphylo-standalone-static:
+  ngphylo-standalone-galaxy-export:
+  ngphylo-standalone-galaxy-docker:
+  ngphylo-standalone-galaxy-data:

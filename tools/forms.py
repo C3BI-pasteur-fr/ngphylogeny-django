@@ -169,7 +169,7 @@ class ToolForm(forms.Form):
         """
         outlist = []
         if self.session_files:
-            for key, sf in self.session_files.iteritems():
+            for key, sf in self.session_files.items():
                 if sf.get('ext') in extensions:
                     outlist.append(sf)
         return outlist

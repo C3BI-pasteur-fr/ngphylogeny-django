@@ -19,11 +19,12 @@ def get_request_cache(func):
         params = dict(kwargs.get('params') or {})
         params['key'] = self.key
         pre_req = Request('GET', url, params=params).prepare()
+
         c = cache.get(pre_req.url)
         if c:
             return c
         else:
-            r = func(self, url, headers={'x-api-key':self.key},**kwargs)
+            r = func(self, url, **kwargs)
             cache.set(r.url, r)
         return r
     return wrapper
@@ -46,8 +47,13 @@ class GalaxyInstanceAnonymous(GalaxyInstance):
 
     def __init__(self, url, galaxysession):
         super(GalaxyInstanceAnonymous, self).__init__(url, key=None, email=None, password=None)
-        self.json_header['x-api-key'] = self.key
         self.galaxysession = galaxysession
+        # bioblend >=1.0 dropped GalaxyClient.default_params along with
+        # query-string ?key= auth (replaced by the x-api-key header).
+        # This class never had an API key to begin with - it
+        # authenticates via the galaxysession cookie instead - so this
+        # preserves the previous (effectively no-op) fallback exactly.
+        self.default_params = {'key': self.key}
 
     def make_post_request(self, url, payload, params=None, files_attached=False, ):
         if params is not None and params.get('key', False) is False:
@@ -79,14 +85,13 @@ class GalaxyInstanceAnonymous(GalaxyInstance):
 
     def make_get_request(self, url, **kwargs):
         params = kwargs.get('params')
-        headers=self.json_headers
         if params is not None and params.get('key', False) is False:
             params['key'] = self.key
-            headers['x-api-key']=self.key
         else:
             params = self.default_params
+
         kwargs['cookies'] = dict(galaxysession=self.galaxysession)
         kwargs['params'] = params
         kwargs.setdefault('verify', self.verify)
-        r = requests.get(url, headers=headers, **kwargs)
+        r = requests.get(url, **kwargs)
         return r

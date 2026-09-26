@@ -13,13 +13,12 @@ Including another URLconf
     1. Import the include() function: from django.conf.urls import url, include
     2. Add a URL to urlpatterns:  url(r'^blog/', include('blog.urls'))
 """
-from django.conf.urls import url
-from django.conf.urls import include
+from django.urls import include, re_path
 
 from .views import FeedbackCreateView, FeedbackSuccessView
 
 urlpatterns = [
-    url(r'feedback$', FeedbackCreateView.as_view(), name="feedback"),
-    url(r'feedback/thankyou$', FeedbackSuccessView.as_view(), name="feedback_success"),
-    url(r'^captcha/', include('captcha.urls')),
+    re_path(r'feedback$', FeedbackCreateView.as_view(), name="feedback"),
+    re_path(r'feedback/thankyou$', FeedbackSuccessView.as_view(), name="feedback_success"),
+    re_path(r'^captcha/', include('captcha.urls')),
 ]

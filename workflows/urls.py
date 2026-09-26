@@ -14,7 +14,7 @@ Including another URLconf
     2. Add a URL to urlpatterns:  url(r'^blog/', include('blog.urls'))
 """
 
-from django.conf.urls import url
+from django.urls import re_path
 
 from .views.generic import RerunWorkflow
 from .views.wkoneclick import WorkflowOneClickListView
@@ -25,19 +25,19 @@ from .views.wkmaker import WorkflowMakerView
 from .views.wkmaker import workflows_alacarte_build
 
 urlpatterns = [
-    url(r'^oneclick/$', WorkflowOneClickListView.as_view(),
+    re_path(r'^oneclick/$', WorkflowOneClickListView.as_view(),
         name="workflow_oneclick_list"),
-    url(r'^oneclick/(?P<slug>[\w-]+)$', WorkflowOneClickFormView.as_view(),
+    re_path(r'^oneclick/(?P<slug>[\w-]+)$', WorkflowOneClickFormView.as_view(),
         name="workflow_oneclick_form"),
-    url(r'^advanced/$', WorkflowAdvancedListView.as_view(),
+    re_path(r'^advanced/$', WorkflowAdvancedListView.as_view(),
         name="workflows_advanced"),
-    url(r'^advanced/(?P<slug>[\w-]+)$',
+    re_path(r'^advanced/(?P<slug>[\w-]+)$',
         WorkflowAdvancedFormView.as_view(),
         name="workflows_advanced_fullsteps"),
-    url(r'^alacarte$', workflows_alacarte_build,
+    re_path(r'^alacarte$', workflows_alacarte_build,
         name="workflows_alacarte"),
-    url(r'^rerun/(?P<id>[\w-]+)$', RerunWorkflow.as_view(),
+    re_path(r'^rerun/(?P<id>[\w-]+)$', RerunWorkflow.as_view(),
         name="workflow_rerun"),
-    url(r'^wkmake/(?P<id>[\w-]+)$', WorkflowMakerView.as_view(),
+    re_path(r'^wkmake/(?P<id>[\w-]+)$', WorkflowMakerView.as_view(),
         name="workflow_maker_form"),
 ]

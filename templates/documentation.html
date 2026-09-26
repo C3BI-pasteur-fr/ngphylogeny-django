@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load markdown_deux_tags %}
+{% load markdown_extras %}
 {% load static %}
 {% block title %}Documentation{% endblock %}
 {% block content %}
@@ -294,6 +294,29 @@ This sequences can be used as input of any phylogenetic workflows by selecting t
 <center>![Blast Run as Input]({% static 'images/doc/blast_run_as_input.png' %})</center>
 
 
+## Browser Extension <span class="badge-new">New</span>
+
+The [NGPhylogeny.fr Firefox extension](https://github.com/C3BI-pasteur-fr/ngphylogeny-browser-extension) detects sequences (nucleotide or protein) on the web page you're viewing, fetches one directly by NCBI/UniProt accession number, or pulls a whole set of orthologs from [OrthoDB](https://www.orthodb.org/) by gene name and taxonomy level - then formats them as FASTA and pastes them into a One Click or BLAST-Search form, without having to save them to a file first.
+
+[Install it for Firefox](https://github.com/C3BI-pasteur-fr/ngphylogeny-browser-extension/releases/download/v0.5.1/4d1996c9cfc44481a440-0.5.1.xpi) - Firefox should show an "Add extension?" prompt automatically.
+
+### From a page
+
+1. Open a page containing sequences (NCBI, UniProt, an online FASTA file, an article...). Optionally select just the text you want first.
+2. Click the extension icon: the detected sequences are listed (editable name, DNA/RNA/protein type, length). Untick anything you don't want.
+3. Choose a destination: **One Click** (several sequences, via checkboxes) or **Blast** (a single sequence, via a radio button).
+4. Click "Send to NGPhylogeny"/"Send to Blast": a new tab opens with the corresponding NGPhylogeny.fr form, pre-filled with the sequences in FASTA format (also copied to the clipboard as a safety net).
+5. The form is never submitted automatically - review it, then start the analysis yourself.
+
+### By accession or ortholog search
+
+Don't have the sequence open in a tab? Type one or more accession numbers (space, comma or newline separated) into the popup's "Fetch by accession" box and click **Fetch** - each is tried against NCBI and UniProt until one answers.
+
+Building a species tree instead? Use "Fetch orthologs (OrthoDB)": type a gene/protein name (e.g. `TRIM5`) and, optionally, a taxonomy level (e.g. `Primates`) to control how broad the search is, then pick one of the matching orthologous groups to fetch every ortholog in it in one go, one sequence per species.
+
+Fetched sequences land alongside the page-detected ones and are sent the same way.
+
+
 ## Typical analysis
 
 Once the phylogenetic workflow is configured and launched, user is redirected to a waiting page giving informations about the run:
@@ -309,37 +332,30 @@ Once a step executed, corresponding result files are downloadable or viewable de
 
 ## Run NGPhylogeny.fr locally (Docker)
 
-It is possible to run NGPhylogeny.fr via two docker images:
+NGPhylogeny.fr can be run locally with [Docker Compose](https://docs.docker.com/compose/).
 
-1. [NGphylgeny.fr docker image](https://hub.docker.com/r/evolbioinfo/ngphylogeny/) running a python/django web server;
-2. [Galaxy docker image](https://hub.docker.com/r/evolbioinfo/ngphylogeny-galaxy/) with all tools and workflows already installed (see this [github repo](https://github.com/C3BI-pasteur-fr/ngphylogeny-galaxy)).
+If you already have a Galaxy server running somewhere, with NGPhylogeny's tools and workflows installed (see the [NGPhylogeny_fr_galaxytools](https://github.com/C3BI-pasteur-fr/ngphylogeny-galaxy) repository), point NGPhylogeny.fr at it and start it:
 
+<pre>NGPHYLO_GALAXY_URL=http://host.docker.internal:8080 \
+NGPHYLO_GALAXY_KEY=&lt;galaxy admin api key&gt; \
+docker compose up -d</pre>
 
-* Starting Galaxy
+This starts the Django app (on [http://localhost:8000](http://localhost:8000)) together with Postgres, Redis, and a Celery worker/beat, plus a one-shot service that runs migrations and creates an admin user (`admin` / `password` by default - override with the `NGPHYLO_ADMIN_USER`/`NGPHYLO_ADMIN_EMAIL`/`NGPHYLO_ADMIN_PASSWORD` environment variables).
 
-`docker run --privileged=true -p 8080:80 -p 8121:21 -p 8122:22 evolbioinfo/ngphylogeny-galaxy`
+Don't have a Galaxy server available? `docker-compose.standalone.yml` brings up NGPhylogeny.fr *and* a full Galaxy server - with NGPhylogeny's own tools and workflows already installed - in one command:
 
-* Starting NGPhylogeny.fr (MacOS)
+<pre>git clone https://github.com/C3BI-pasteur-fr/ngphylogeny-galaxy.git ../NGPhylogeny_fr_galaxytools
+docker compose -f docker-compose.standalone.yml up -d</pre>
 
-`docker run -p 8000:8000 evolbioinfo/ngphylogeny admin admin@admin http://host.docker.internal:8080 admin`
+First boot takes a few minutes (pulling images, installing tool dependencies). NGPhylogeny.fr then comes up at [http://localhost:8000](http://localhost:8000), Galaxy itself at [http://localhost:8080](http://localhost:8080).
 
-* Starting NGPhylogeny.fr (Linux)
-
-`docker run -p 8000:8000 --net=host evolbioinfo/ngphylogeny admin admin@admin http://localhost:8080 admin`
-
-* Then open your browser at [http://127.0.0.1:8000](http://127.0.0.1:8000)
+See the project's [README](https://github.com/C3BI-pasteur-fr/ngphylogeny-django#docker) for the full set of configuration options (maintenance mode, BLAST server selection, email notifications).
 
 ## Dataset size limitation
 
 NGPhylogeny can handle large datasets. However, on the public server, we implemented limitations on the number and length of sequences that depend on the running tool. An error is displayed if the dataset is too large to be analyzed with the public instance of NGPhylogeny.fr.
 
 In contrast, these limitations are not activated if you run NGPhylogeny.fr locally using Docker.
-
-## Example video
-<video width="800" controls="controls">
-  <source src="https://ngphylogeny.fr/static/NGPhylo_doc.mp4" type="video/mp4" />
-  <source src="https://ngphylogeny.fr/static/NGPhylo_doc.webm" type="video/webm" />
-</video>
 
 {% endmarkdown %}
 {% endblock %}

@@ -1,18 +1,12 @@
-import urllib
+from urllib.error import HTTPError, URLError
+from urllib.parse import urljoin
+from urllib.request import urlopen, Request
 import json
-from urllib2 import Request, urlopen
-
-try:
-    # Python 3:
-    from urllib.parse import urlparse
-
-except ImportError:
-    # Python 2:
-    import urlparse
 
 import tempfile
 import requests
 from django.http import StreamingHttpResponse
+from django.http import HttpResponse
 from django.http import JsonResponse
 from django.shortcuts import render, redirect
 from django.urls import reverse_lazy
@@ -23,6 +17,35 @@ from .forms import UploadForm
 from galaxy.decorator import connection_galaxy
 from workspace.views import get_or_create_history
 from blast.models import BlastRun
+from utils import biofile
+
+
+def _open_galaxy_download_url(gi, dlurl):
+    """
+    Raw (non-bioblend) fetch of a dataset's actual file content, once
+    show_dataset() has already succeeded and handed back a download_url
+    (see CLAUDE.md's "x-api-key header" note on why this bypasses
+    bioblend entirely). show_dataset() succeeding doesn't guarantee this
+    still will: workspace.tasks.deleteoldgalaxyhistory() purges a
+    history's actual files on Galaxy (delete_history(..., purge=True))
+    while the dataset's own metadata row can remain queryable - and none
+    of download_file/tree_visualization/export_to_itol have an ownership
+    check, so an old dataset id stays directly reachable long after its
+    real data is gone (a real production 500: urllib.error.HTTPError:
+    HTTP Error 404: Not Found, uncaught). Raises HTTPError/URLError
+    uncaught by design - callers render a clean error page instead.
+    """
+    url = urljoin(gi.base_url, dlurl)
+    req = Request(url, headers={'x-api-key': gi.key})
+    return urlopen(req)
+
+
+def _galaxy_download_error_response(request, exc):
+    return render(request, 'error.html', {
+        'errortitle': 'Error downloading file',
+        'errormessage': 'This file is no longer available on the Galaxy '
+                         'server (%s).' % exc})
+
 
 class UploadMixin(object):
     def upload_content(self, content, history_id=None, name="pasted_data"):
@@ -33,6 +56,16 @@ class UploadMixin(object):
             self.history_id = history_id
         else:
             self.history_id = get_or_create_history(self.request)
+
+        # Rewrite sequence ids to something every downstream Galaxy
+        # tool in the pipeline (MAFFT, PhyML/PhyML-SMS, newick_utilities'
+        # nw_display, ...) will tokenize identically - see
+        # biofile.sanitize_fasta_content's own docstring for the real
+        # production bug this prevents from recurring, and
+        # sanitize_sequence_content's for why this dispatches on
+        # detected format rather than calling sanitize_fasta_content
+        # directly (PHYLIP input is a real, supported path here too).
+        content = biofile.sanitize_sequence_content(content)
 
         return self.request.galaxy.tools.paste_content(content=content, file_name=name,
                                                        history_id=self.history_id)
@@ -45,6 +78,15 @@ class UploadMixin(object):
         tmpfile = tempfile.NamedTemporaryFile()
         for chunk in file.chunks():
             tmpfile.write(chunk)
+        tmpfile.flush()
+
+        # Same sanitization as upload_content() above - see
+        # biofile.sanitize_sequence_content's own docstring.
+        tmpfile.seek(0)
+        sanitized = biofile.sanitize_sequence_content(tmpfile.read())
+        tmpfile.seek(0)
+        tmpfile.truncate()
+        tmpfile.write(sanitized)
         tmpfile.flush()
 
         if history_id:
@@ -78,7 +120,7 @@ class UploadView(UploadMixin, FormView):
 
         if self.request.session.get('files'):
             compatibleinputs = []
-            for key, sf in self.request.session.get('files').iteritems():
+            for key, sf in self.request.session.get('files').items():
                 if sf.get('ext') == 'fasta':
                     compatibleinputs.append(sf)
             kwargs['compatibleinputs'] = compatibleinputs
@@ -101,7 +143,7 @@ class UploadView(UploadMixin, FormView):
 
         self.success_url = reverse_lazy("history_detail", kwargs={'history_id': self.history_id}, )
 
-        return super(UploadView, self).form_valid()
+        return super(UploadView, self).form_valid(form)
     
 
 @connection_galaxy
@@ -118,17 +160,26 @@ def download_file(request, file_id):
         if not name:
             name = "download"
         if dlurl:
-            url = urlparse.urljoin(gi.base_url, dlurl)
-            req = Request(url)
-            req.add_header('x-api-key', gi.key)
-            response = urlopen(req)
-            stream_response = StreamingHttpResponse(response.read())
+            try:
+                response = _open_galaxy_download_url(gi, dlurl)
+            except (HTTPError, URLError) as e:
+                return _galaxy_download_error_response(request, e)
+            # HttpResponse, not StreamingHttpResponse: response.read()
+            # already reads the whole thing into memory, so there's no
+            # actual streaming happening here - and passing bytes
+            # straight to StreamingHttpResponse is broken under Python 3
+            # regardless (iterating a bytes object yields ints, one per
+            # byte, which StreamingHttpResponse then writes out each as
+            # its own chunk - "Hello World" came out as
+            # "721011081081113287111114108100", each byte's decimal
+            # value concatenated, instead of the actual content).
+            stream_response = HttpResponse(response.read())
             stream_response['Content-Disposition'] = 'attachment; filename=' + name
         else:
-            stream_response = StreamingHttpResponse("No file download URL corresponds to the given dataset id " + file_id)
+            stream_response = HttpResponse("No file download URL corresponds to the given dataset id " + file_id)
 
     else:
-        stream_response = StreamingHttpResponse(data)
+        stream_response = HttpResponse(data)
     return stream_response
 
 @connection_galaxy
@@ -147,7 +198,7 @@ def display_file(request, file_id):
     if isinstance(data, dict):
         historyid = data.get('history_id')
         if historyid:
-            if request.is_ajax():
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                 return display_raw(request, file_id)
             else:
                 return render(request, 'display.html', {'history_id': historyid})
@@ -161,7 +212,7 @@ def display_params(request, file_id):
     if isinstance(data, dict):
         job_id = data.get('creating_job')
         if job_id:
-            if request.is_ajax():
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                 job = gi.jobs.show_job(job_id)
                 return JsonResponse(job)
             else:
@@ -176,7 +227,7 @@ def display_msa(request, file_id):
     if isinstance(data, dict):
         historyid = data.get('history_id')
         if historyid:
-            if request.is_ajax():
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                 return display_raw(request, file_id)
             else:
                 return render(request, 'msaviz/msa.html', {'history_id': historyid})
@@ -192,13 +243,20 @@ def tree_visualization(request, file_id):
         dlurl = data.get('download_url')
         historyid = data.get('history_id')
         if dlurl and historyid:
-            url = urlparse.urljoin(gi.base_url, dlurl)
-            req = Request(url)
-            req.add_header('x-api-key', gi.key)
-            response = urlopen(req)
+            try:
+                response = _open_galaxy_download_url(gi, dlurl)
+            except (HTTPError, URLError) as e:
+                return _galaxy_download_error_response(request, e)
+            # .decode(): the template embeds this in a JS string literal
+            # via {{ newick_tree|escapejs }} (see treeviz/tree.html) -
+            # passing raw bytes through, Django's template rendering
+            # calls str() on it, which for bytes produces the Python
+            # repr ("b'(A:0.1,B:0.2);\\n'", literal b-quote-backslash-n
+            # and all) instead of the actual tree text, breaking every
+            # tree visualization.
             return render(request,
                           template_name='treeviz/tree.html',
-                          context={'newick_tree': response.read(),
+                          context={'newick_tree': response.read().decode('utf-8'),
                                    'history_id': historyid})
     return render(request, 'error.html', {'errortitle': 'Error querying galaxy', 'errormessage': data})
 
@@ -212,10 +270,10 @@ def export_to_itol(request, file_id):
     if isinstance(data, dict):
         dlurl = data.get('download_url')
         if dlurl:
-            url = urlparse.urljoin(gi.base_url, dlurl)
-            req = Request(url)
-            req.add_header('x-api-key', gi.key)
-            response = urlopen(req)
+            try:
+                response = _open_galaxy_download_url(gi, dlurl)
+            except (HTTPError, URLError) as e:
+                return _galaxy_download_error_response(request, e)
             tmpfile = tempfile.NamedTemporaryFile()
             tmpfile.write(response.read())
             tmpfile.flush()
@@ -261,8 +319,6 @@ def add_file_to_session(request, file_id):
             request.session['files']={}
         fdict = request.session['files']
         if file_id not in fdict:
-            print "data:"
-            print json.dumps(data)
             fdict[file_id]={'id': file_id, 'ext' : data.get('file_ext'), 'history' : data.get('history_id'), 'name': data.get('name')}
         return redirect('history_detail', history_id=data.get('history_id'))
     return render(request, 'error.html', {'errortitle': 'Error while adding file to session', 'errormessage': 'File id does not exist'})

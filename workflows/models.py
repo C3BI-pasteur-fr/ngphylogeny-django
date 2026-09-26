@@ -3,11 +3,12 @@ from __future__ import unicode_literals
 import collections
 import json
 
+from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 from galaxy.models import Server
 from tools.models import Tool, ToolOutputData
-from datetime import datetime
 
 
 class Workflow(models.Model):
@@ -24,8 +25,22 @@ class Workflow(models.Model):
     slug = models.SlugField(max_length=100, unique=True)
     rank = models.IntegerField(default=999, help_text="Workflows order")
     # Date added
-    date = models.DateTimeField(default=datetime.now, blank=True)
+    date = models.DateTimeField(default=timezone.now, blank=True)
     deleted = models.BooleanField(default=False)
+
+    # workflows.tasks.deleteoldgalaxyworkflows's own daily cleanup cutoff
+    # for non-base (per-run duplicated) workflow *definitions* - defined
+    # here, not just as a local constant in tasks.py, same reasoning as
+    # workspace.models.WorkspaceHistory.RETENTION_DAYS. Reads settings.
+    # NGPHYLO_WORKFLOW_RETENTION_DAYS (settings/base.py) - configurable
+    # via the WORKFLOW_RETENTION_DAYS GitLab CI/CD variable, defaulting
+    # to the same 14 days as WorkspaceHistory.RETENTION_DAYS's own
+    # default (independently configurable from it though - deleting a
+    # workflow definition and deleting its history's actual data are
+    # different cleanups, see deleteoldgalaxyworkflows's own docstring).
+    # Safe to read at class-body (import) time - see WorkspaceHistory.
+    # RETENTION_DAYS's own note on this.
+    RETENTION_DAYS = settings.NGPHYLO_WORKFLOW_RETENTION_DAYS
     tooldesc = models.CharField(max_length=250,blank=True, default="")
     # Json representation of the workflow
     json =  None
@@ -108,7 +123,10 @@ class WorkflowStepInformation(object):
         _tools = self.get_tools()
 
         # remove unknown tools
-        for nbstep, step in self.steps_tooldict.items():
+        # list(...items()) is required here: items() is a live view in
+        # Python 3 (unlike Python 2's list snapshot), and the loop body
+        # deletes from self.steps_tooldict while iterating it.
+        for nbstep, step in list(self.steps_tooldict.items()):
             for tool in _tools:
                 if tool.id_galaxy in step.get('tool_idgalaxy'):
                     step['tool'] = tool
@@ -150,7 +168,7 @@ class WorkflowStepInformation(object):
 
         self.steps_tooldict = ord_step
         self.sorted_tool_list = list(
-            (k, v.get('tool')) for k, v in ord_step.iteritems() if v and 'tool' in v)
+            (k, v.get('tool')) for k, v in ord_step.items() if v and 'tool' in v)
 
 
 class WorkflowGalaxyFactory(object):
@@ -176,8 +194,11 @@ class WorkflowGalaxyFactory(object):
     def build(self, galaxy_instance, list_tools, history_id):
         self.set_steps(galaxy_instance, list_tools, history_id)
         if self.valid:
-            print self.to_json()
-            wkgi = galaxy_instance.workflows.import_workflow_json(self.to_json())
+            # import_workflow_json (which took a JSON string) was
+            # removed from bioblend; to_json() already returns a dict
+            # (via ast.literal_eval), so import_workflow_dict is the
+            # direct replacement, not a behavior change.
+            wkgi = galaxy_instance.workflows.import_workflow_dict(self.to_json())
             wk_id = wkgi.get('id')
             self.id_galaxy = wk_id
         return self.valid
@@ -254,7 +275,6 @@ class WorkflowGalaxyFactory(object):
 
     def to_json(self):
         import ast
-        print(str(self))
         return ast.literal_eval(str(self))
 
 
@@ -341,8 +361,12 @@ class WorkflowToolInformation(object):
 
     def set_tool_state(self, tool, gi, history_id):
 
+        # Client instances no longer expose a precomputed .url attribute
+        # (bioblend >=1.0) - compose it the same way Client._make_url()
+        # does internally: <galaxy_instance_url>/<module>/<id>/...
+        tools_url = '/'.join((gi.url, gi.tools.module))
         tool_build = gi.make_get_request(
-            url=gi.tools.url + '/' + tool.id_galaxy + '/build',
+            url=tools_url + '/' + tool.id_galaxy + '/build',
             params=dict(history_id=history_id))
 
         tool_state = tool_build.json()['state_inputs']

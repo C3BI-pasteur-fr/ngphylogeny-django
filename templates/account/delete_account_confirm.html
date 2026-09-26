@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row">
+  <div class="col-md-offset-1">
+    <p class="lead">Do you really want to delete your account?</p>
+    <p class="text-muted">
+      This deletes your NGPhylogeny.fr account and every analysis tied
+      to it (both on this app and on the Galaxy server) - this cannot
+      be undone.
+    </p>
+    <form method="post">{% csrf_token %}
+      <div>
+        <input type="submit" name="yes" class="btn btn-danger" value="Yes, delete my account"/>
+        <input type="submit" name="no" class="btn btn-outline-info" value="No, take me back"/>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

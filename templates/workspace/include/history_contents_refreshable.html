@@ -1,0 +1,452 @@
+{% load static %}
+{% comment %}
+The part of the history detail page that actually changes as a run
+progresses - reloaded every 10s via jQuery's .load()
+(workspace.views.HistoryContentRefreshView, see
+history_contents_provenance_ajax.html's own refresh() script) instead of
+a full page reload. .load() executes the <script> tags below on every
+reload, same as a real page load would, so this fragment is fully
+self-contained: nothing outside it needs to re-run anything for this
+content to work correctly, whether this is the very first render
+(included directly into #history-refreshable-region by
+history_contents_provenance_ajax.html, staging=False) or a later polled
+one (loaded into the hidden #history-refreshable-staging container,
+staging=True via ?staging=1 - see HistoryContentRefreshView).
+
+Two states, chosen the same way history.html used to choose between two
+entirely separate templates (history_contents_provenance_ajax.html vs.
+the now-deleted history_wait.html): fewer than 2 datasets yet (a run
+just starting - Galaxy hasn't queued the rest of the workflow's steps
+yet, see CLAUDE.md's step-chain section for why 2+ datasets is when a
+real chain exists at all) shows a "please wait" message instead of the
+step chain/table. Unifying both states into this one fragment means the
+"please wait" state gets the exact same background-staged polling as the
+real one for free, rather than needing its own separate full-page-reload
+timer - previously the entire reason the two behaved differently.
+
+Tool-name resolution (per dataset and per tool group, for the step
+chain, the table, and the citations list) used to be three independent
+rounds of client-side AJAX calls against Galaxy-backed endpoints, every
+10s - slow enough to visibly flash while rebuilding, and (see CLAUDE.md's
+step-chain section) a real contributor to a production incident where
+that call volume, during a Galaxy outage, exhausted the app's own web
+worker pool and got the pod itself killed and restarted. Now resolved
+once, server-side, in workspace.views.HistoryContentRefreshView.
+get_context_data() (dataset_tool_ids/tool_names/citations below) and
+just read directly by the scripts here - no AJAX calls left in this
+fragment at all. A staged render still builds entirely inside the
+hidden staging container ($root, below) and only swaps itself into the
+live region (bottom of this file, staging-only) once done, since
+resolving from already-fetched data is effectively instant but still
+happens inside a script tag executed asynchronously relative to
+`.load()` itself.
+{% endcomment %}
+<script>
+    // Scopes every selector below to wherever this particular render
+    // actually lives, so it can never be confused by the OTHER copy
+    // that may simultaneously exist elsewhere in the document (the live
+    // region while this one is still being staged, or vice versa) -
+    // #workflow-step-chain/#myTable/a dataset's own id are not unique
+    // across the two at that point. jQuery's scoped .find("#id") stays
+    // correct even then: the getElementById-based fast path it normally
+    // uses for id selectors only applies when the search context is the
+    // document itself, so scoping to a plain element context (as $root
+    // is here) falls through to a real, properly-scoped querySelectorAll
+    // search instead - verified in Sizzle's own source, not assumed.
+    var $root = {% if staging %}$('#history-refreshable-staging'){% else %}$('#history-refreshable-region'){% endif %};
+
+    // Resolved once this render's own async work (tool-name resolution
+    // for both the step chain and the table) is completely done - only
+    // consulted by the staging-swap script at the very bottom, and only
+    // when staging (see above). Resolved immediately, with nothing to
+    // wait for, in the "please wait" state below.
+    window.__historyStepChainReady = $.Deferred();
+    window.__historyTableReady = $.Deferred();
+</script>
+<script>
+    // References of tools to cite (#pub-container, in the outer shell -
+    // not part of $root/duplicated between staging and live, so a plain
+    // global selector is fine here regardless of staging). Computed
+    // server-side (HistoryContentRefreshView.get_context_data, reusing
+    // the same dataset_tool_ids this render already resolves for the
+    // step chain/table below) and just written into the DOM here - no
+    // AJAX call needed. Runs on every render, not just the very first
+    // one, so it still picks up citations from tools that have run
+    // since - this used to be fetched once only, from
+    // history_contents_provenance_ajax.html's own $(document).ready
+    // (missing anything from a page loaded during the "please wait"
+    // state - see this file's top comment), then its own separate
+    // per-poll AJAX call once moved here.
+    $(function () {
+	var citationItems = [
+	    {% for citation in citations %}
+	    "{{ citation|escapejs }}",
+	    {% endfor %}
+	];
+	$("#pub-container").html(citationItems.map(function (c) {
+	    return "<li>" + c + "</li>";
+	}).join(""));
+    });
+</script>
+{% if object.history_content and object.history_content|dictsortreversed:"hid"|length > 1 %}
+<script>
+    // Graphical step-by-step view of the run, above the detailed table -
+    // one box per tool step (consecutive datasets from the same tool
+    // collapsed into one, exactly like the table's own Tool column
+    // grouping below - kept as a separate DOM-building pass, so this
+    // can't regress the existing table logic, but the underlying
+    // dataset->tool_id/tool_id->name data IS now shared between them -
+    // see datasetToolIds/toolNames below, both resolved once server-side
+    // rather than independently re-fetched by each via their own AJAX
+    // calls the way both used to). Builds from historySteps (this run's
+    // datasets, oldest first - a left-to-right chain reads naturally as
+    // progress through the pipeline, the reverse of the table's own
+    // newest-first ordering) rather than scraping the table.
+    var historySteps = [
+	{% for file in object.history_content|dictsort:"hid" %}
+	{id: "{{ file.id|escapejs }}", name: "{{ file.name|escapejs }}", state: "{{ file.state|escapejs }}"},
+	{% endfor %}
+    ];
+    // {dataset_id: tool_id} / {tool_id: name} - resolved once,
+    // server-side, by HistoryContentRefreshView.get_context_data (see
+    // workspace.views.resolve_dataset_tools) and shared with the table
+    // script below instead of each independently re-deriving the same
+    // data via its own AJAX calls every poll.
+    var datasetToolIds = {
+	{% for dataset_id, tool_id in dataset_tool_ids.items %}
+	"{{ dataset_id|escapejs }}": "{{ tool_id|escapejs }}",
+	{% endfor %}
+    };
+    var toolNames = {
+	{% for tool_id, name in tool_names.items %}
+	"{{ tool_id|escapejs }}": "{{ name|default:""|escapejs }}",
+	{% endfor %}
+    };
+    // First finished nhx/nwk dataset in this history, if any - same
+    // dataset the table's iTOL/"Interactive Tree visualisation" buttons
+    // below appear for (workspace.views.WorkspaceHistoryObjectMixin.
+    // get_context_data). Building (fetch + d3 layout) happens at most
+    // once per history - see maybeBuildTreePreview/
+    // placeTreePreviewIntoLiveRegion in history_contents_provenance_
+    // ajax.html, the outer shell #tree-preview-wrapper actually lives
+    // in.
+    var treePreviewDatasetId = "{{ tree_preview_dataset_id|default:""|escapejs }}";
+    var treePreviewUrl = "{{ tree_preview_url|default:""|escapejs }}";
+
+    $(function () {
+	$root.find('[data-toggle="tooltip"]').tooltip();
+
+	window.maybeBuildTreePreview(treePreviewDatasetId, treePreviewUrl);
+	// Only relocate the (possibly already-built, from an earlier poll)
+	// preview into this render's own anchor when it's landed in the
+	// live DOM already - i.e. not for a staged build, which is still
+	// sitting hidden in #history-refreshable-staging at this point.
+	// Moving the wrapper here for a staged render would rip it out of
+	// the still-visible live region early, flashing it away for
+	// however long staging takes - the swap script at the bottom of
+	// this file does the equivalent move instead, at the same instant
+	// the rest of the staged content actually goes live.
+	{% if not staging %}
+	window.placeTreePreviewIntoLiveRegion();
+	{% endif %}
+
+	if (historySteps.length === 0) {
+	    window.__historyStepChainReady.resolve();
+	    return;
+	}
+
+	// Collapse consecutive datasets sharing the same tool_id into
+	// one step - a tool with multiple outputs (e.g. a log file
+	// alongside its main result) shouldn't show as multiple steps.
+	var groups = [];
+	$.each(historySteps, function (index, step) {
+	    var toolId = datasetToolIds[step.id];
+	    var last = groups[groups.length - 1];
+	    if (last && last.tool_id === toolId) {
+		last.states.push(step.state);
+	    } else {
+		groups.push({tool_id: toolId, name: step.name, states: [step.state]});
+	    }
+	});
+
+	function statusClass(states) {
+	    if (states.indexOf('error') !== -1) {
+		return 'workflow-step-error';
+	    }
+	    if (states.indexOf('running') !== -1) {
+		return 'workflow-step-running';
+	    }
+	    var allOk = $.grep(states, function (s) { return s.indexOf('ok') === -1; }).length === 0;
+	    if (allOk) {
+		return 'workflow-step-finished';
+	    }
+	    // queued / new / paused / anything else not yet resolved
+	    return 'workflow-step-pending';
+	}
+
+	var $chain = $root.find('#workflow-step-chain');
+	$.each(groups, function (index, group) {
+	    if (index > 0) {
+		$chain.append($('<div class="workflow-step-connector"></div>'));
+	    }
+	    // Falls back to the dataset's own name - the same placeholder
+	    // the old AJAX-based version showed before its response came
+	    // back - if the tool couldn't be resolved (a transient Galaxy
+	    // failure - see resolve_dataset_tools).
+	    var label = toolNames[group.tool_id] || group.name;
+	    var $box = $('<div class="workflow-step-box"></div>')
+		.addClass(statusClass(group.states))
+		.text(label);
+	    $chain.append($('<div class="workflow-step"></div>').append($box));
+	});
+
+	window.__historyStepChainReady.resolve();
+    });
+</script>
+
+<script>
+    $(function () {
+	// Same datasetToolIds/toolNames the step chain above already
+	// embeds - fill in each cell's own data attribute from it instead
+	// of a per-dataset AJAX call.
+	$root.find("[data]").each(function (index, el) {
+	    var toolId = datasetToolIds[$(el).attr('id')];
+	    if (toolId) {
+		$(el).attr('data', toolId);
+	    }
+	});
+
+	// group dataset by tool
+	var id_tool = '';
+	var first_dataset = '';
+	var cmpt = 1;
+
+	$root.find("[data]").each(function (index, el) {
+	    var toolId = $(el).attr('data');
+	    // An unresolved dataset's own cell stays at its default
+	    // data='' (never overwritten above, since there was nothing
+	    // to set) - never treat that as "the same tool" as some
+	    // other unresolved dataset, or every such row collapses into
+	    // one (id_tool also starts as '', so '' === '' would
+	    // otherwise match on the very first row already) and gets
+	    // removed instead of staying its own visible row with just a
+	    // blank Tool label - the correct degraded state when a
+	    // dataset's tool genuinely couldn't be resolved (a transient
+	    // Galaxy failure - see resolve_dataset_tools).
+	    if (toolId !== '' && id_tool === toolId) {
+		cmpt++;
+		$(el).remove();
+	    } else {
+		cmpt = 1;
+		first_dataset = $(el).attr('id');
+		id_tool = toolId;
+		$(el).text(toolNames[toolId] || '');
+	    }
+	    $root.find('#' + first_dataset).attr('rowspan', cmpt);
+	});
+
+	window.__historyTableReady.resolve();
+    });
+</script>
+{% else %}
+<script>
+    // "Please wait" state (see this file's top comment) - nothing async
+    // to build, so both deferreds resolve immediately and a staging swap
+    // never has to wait on this branch.
+    window.__historyStepChainReady.resolve();
+    window.__historyTableReady.resolve();
+</script>
+{% endif %}
+
+{% if object.finished %}
+<script>
+    // history_contents_provenance_ajax.html's own script keeps
+    // window.historyRefreshTimer and reloads this fragment every 10s
+    // (not a full page reload) - stop once a fresh render of this
+    // fragment (the very first one, or a later staged one) reports the
+    // run as done. Runs immediately, independent of
+    // __historyStepChainReady/__historyTableReady below - whether to
+    // keep polling is already known from the server-side state, no need
+    // to wait for the chain/table to finish visually building first.
+    if (window.historyRefreshTimer) {
+	clearInterval(window.historyRefreshTimer);
+    }
+</script>
+{% endif %}
+
+{% if staging %}
+<script>
+    // Everything above just got built inside the hidden $root
+    // (#history-refreshable-staging) - swap it into the visible
+    // #history-refreshable-region only now that both the step chain and
+    // the table are fully resolved (real tool names included, not just
+    // placeholder text), so the live page never shows a half-built
+    // chain or a flash of placeholder text. Duplicate ids (shared with
+    // whatever's still live in #history-refreshable-region up to this
+    // point) stop mattering the instant this runs - .contents() just
+    // moves the already-finished nodes over wholesale.
+    $.when(window.__historyStepChainReady, window.__historyTableReady).done(function () {
+	$('#history-refreshable-region').empty().append($root.contents());
+	// Now that the fresh #tree-preview-anchor placeholder (part of the
+	// content just appended above) actually exists in the live region,
+	// relocate the persistent, already-built preview into it - a plain
+	// reparent of the existing SVG/d3 tree, not a rebuild (see
+	// maybeBuildTreePreview above). A no-op if nothing's been built yet
+	// (window.treePreviewRendered still false) - retried on a later
+	// poll instead, once a fetch this render or a later one kicks off
+	// actually succeeds.
+	window.placeTreePreviewIntoLiveRegion();
+	if (window.historyRefreshWatchdog) {
+	    clearTimeout(window.historyRefreshWatchdog);
+	}
+	window.historyRefreshInFlight = false;
+    });
+</script>
+{% endif %}
+
+{% if object.history_content and object.history_content|dictsortreversed:"hid"|length > 1 %}
+<div class="row">
+  <div class="col-md-12">
+    <div id="workflow-step-chain" class="workflow-step-chain"></div>
+  </div>
+</div>
+<div class="row">
+  <div class="col-md-12">
+    <!-- Placeholder only - the actual tree preview (#tree-preview-wrapper,
+         built at most once, see maybeBuildTreePreview above) lives outside
+         this auto-refreshed fragment and is moved in here on each render
+         that already has it built, rather than being rebuilt from this
+         markup every poll. -->
+    <div id="tree-preview-anchor"></div>
+  </div>
+</div>
+<div class="row">
+  <div class="col-md-12">
+    <div class="history-table-card">
+      <table id="myTable" class="history-table">
+        <colgroup>
+          <col style="width: 140px;">
+          <col style="width: 50px;">
+          <col>
+          <col style="width: 90px;">
+          <col style="width: 280px;">
+        </colgroup>
+        <thead>
+          <tr>
+            <th>Tool</th>
+            <th>Step</th>
+            <th>File name</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for file in object.history_content|dictsortreversed:"hid" %}
+          <tr {% if not file.visible %}class='hidden' {% endif %}>
+            <td id="{{ file.id }}" class="col-tool" data=''></td>
+            <td class="col-step">{{ file.hid }}</td>
+            <td class="col-filename" title="{{ file.name }}">{{ file.name }}</td>
+            <td id="state_{{ file.id }}">
+              {% if 'ok' in file.state %}
+              <span class="status-pill status-pill-ok" data-toggle="tooltip" data-placement="right" title="Success!">
+                <span class="dot"></span>Done
+              </span>
+              {% elif 'queued' in file.state or 'new' in file.state %}
+              <span class="status-pill status-pill-pending" data-toggle="tooltip" data-placement="right" title="Waiting to be launch">
+                <span class="dot"></span>Waiting
+              </span>
+              {% elif "running" in file.state %}
+              <span class="status-pill status-pill-running" data-toggle="tooltip" data-placement="right" title="Your job is running">
+                <span class="dot"></span>Running
+              </span>
+              {% else %}
+              <span class="status-pill status-pill-error" data-toggle="tooltip" data-placement="right" title="Your job fail">
+                <span class="dot"></span>Error
+              </span>
+              {% endif %}
+            </td>
+            <td id="action_{{ file.id }}" class="actions">
+              {% if 'ok' in file.state %}
+              {% if file.id in request.session.files %}
+              <a class="icon-btn" title="Remove file from session" data-toggle="tooltip" data-placement="left"
+                 href="{% url 'remove_file_from_session' file.id %}">&#8722;</a>
+              {% else %}
+              <a class="icon-btn" title="Add file to session to use it as input of another tool or workflow" data-toggle="tooltip" data-placement="left"
+                 href="{% url 'add_file_to_session' file.id %}">&#43;</a>
+              {% endif %}
+              <a class="icon-btn" title="Run parameters" data-toggle="tooltip" data-placement="left"
+                 href="{% url 'display_params' file.id %}">&#9881;</a>
+              <a class="icon-btn" title="Show stdout" data-toggle="tooltip" data-placement="left"
+                 href="{% url 'galaxy_error_url' file.id %}">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
+              </a>
+              <a class="icon-btn primary" title="Download the file" data-toggle="tooltip" data-placement="left"
+                 href="{% url 'download_file' file.id %}">&#8681;</a>
+              <a class="icon-btn viewer" title="Display this file in your web browser" data-toggle="tooltip" data-placement="left"
+                 href="{% url 'display_file' file.id %}">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/>
+                </svg>
+              </a>
+              {% if file.extension in "nhx,nwk" %}
+              <a class="icon-btn viewer" title="Open Interactive Tree visualisation" data-toggle="tooltip" data-placement="left"
+                 href="{% url 'display_tree' file.id %}">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+                  <line x1="3" y1="12" x2="7" y2="12"/><line x1="7" y1="5" x2="7" y2="19"/>
+                  <line x1="7" y1="5" x2="11" y2="5"/><line x1="7" y1="19" x2="11" y2="19"/>
+                  <line x1="11" y1="2" x2="11" y2="8"/><line x1="11" y1="16" x2="11" y2="22"/>
+                  <line x1="11" y1="2" x2="21" y2="2"/><line x1="11" y1="8" x2="21" y2="8"/>
+                  <line x1="11" y1="16" x2="21" y2="16"/><line x1="11" y1="22" x2="21" y2="22"/>
+                </svg>
+              </a>
+              <a class="icon-btn warn itol-badge" title="Export your newick tree into iTOL, external tree viewer" target="_blank"
+                 data-toggle="tooltip" data-placement="left" href="{% url 'export_to_itol' file.id %}">
+                <svg viewBox="0 0 34 34" width="22" height="22">
+                  <circle cx="17" cy="17" r="12" fill="none" stroke="currentColor" stroke-width="1.4"/>
+                  <g stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+                    <line x1="17" y1="2.5" x2="17" y2="5.5"/><line x1="27.6" y1="6.4" x2="25.4" y2="8.6"/>
+                    <line x1="31.5" y1="17" x2="28.5" y2="17"/><line x1="27.6" y1="27.6" x2="25.4" y2="25.4"/>
+                    <line x1="17" y1="31.5" x2="17" y2="28.5"/><line x1="6.4" y1="27.6" x2="8.6" y2="25.4"/>
+                    <line x1="2.5" y1="17" x2="5.5" y2="17"/><line x1="6.4" y1="6.4" x2="8.6" y2="8.6"/>
+                  </g>
+                  <text x="17" y="20.5" text-anchor="middle" font-size="8.5" font-weight="700" fill="currentColor" font-family="Arial, Helvetica, sans-serif" stroke="none">iTOL</text>
+                </svg>
+              </a>
+              {% elif file.extension in "fasta,fsa,msa,fna" %}
+              <a class="icon-btn viewer" title="Multiple sequences viewer" data-toggle="tooltip" data-placement="left"
+                 href="{% url 'display_msa' file.id %}">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+                  <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="17" y2="12"/><line x1="3" y1="18" x2="19" y2="18"/>
+                </svg>
+              </a>
+              <span class="action-slot wide"></span>
+              {% else %}
+              <span class="action-slot"></span>
+              <span class="action-slot wide"></span>
+              {% endif %}
+              {% elif 'error' in file.state %}
+              <span class="action-slot"></span>
+              <span class="action-slot"></span>
+              <a class="icon-btn danger" title="Show messages" data-toggle="tooltip" data-placement="left"
+                 href="{% url 'galaxy_error_url' file.id %}">&#9888;</a>
+              <span class="action-slot"></span>
+              <span class="action-slot"></span>
+              <span class="action-slot"></span>
+              <span class="action-slot wide"></span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% else %}
+<div class="row">
+  <div class="col-md-12 text-center">
+    <h4>Analysis is being initialized on the Galaxy server, please wait a few seconds</h4>
+    <span class="glyphicon glyphicon-refresh spin" style="font-size:24px"></span>
+  </div>
+</div>
+{% endif %}

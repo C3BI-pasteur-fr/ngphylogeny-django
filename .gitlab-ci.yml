@@ -1,0 +1,292 @@
+# GitLab CI/CD for NGPhylogeny_fr_django.
+#
+# lint + test (Python 3.8 / Django 4.2), then build (Docker image, pushed
+# to this project's own GitLab registry) and deploy (Kubernetes, via
+# kubectl) - see CLAUDE.md's "Kubernetes deployment" section and
+# manifest.yaml/manifest_datastores.yaml for the actual resources.
+# Structure mirrors drmab-web's own .gitlab-ci.yml.
+#
+# NOTE: if your GitLab runners are tag-scoped, add a `tags:` list to each
+# job below matching your runner setup - this file intentionally leaves
+# that unset since it can't be discovered from the repo.
+
+image: python:3.8-buster
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    # This repo's default branch is `master` (the old pre-rewrite
+    # codebase, kept as-is - see CLAUDE.md's "upgrade vs the old master
+    # branch") - without this rule, pipelines never ran at all on
+    # `upgrade`, which is where every actual deployment in this repo's
+    # history has come from. Adjust if/when `upgrade` is promoted to the
+    # project's actual default branch instead.
+    - if: '$CI_COMMIT_BRANCH == "upgrade"'
+
+stages:
+  - lint
+  - test
+  - build
+  - deploy
+
+variables:
+  DJANGO_SETTINGS_MODULE: "NGPhylogeny_fr.settings.local"
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+cache:
+  key:
+    files:
+      - requirement.txt
+  paths:
+    - .cache/pip
+
+before_script:
+  - apt-get update -qq && apt-get install -y -qq libpq-dev libmagic1
+  - pip install -r requirement.txt
+
+lint:
+  stage: lint
+  script:
+    - pip install flake8
+    # Start narrow: fail only on syntax errors / undefined names, not on
+    # pre-existing style debt in this legacy codebase. Tighten over time.
+    - flake8 --select=E9,F63,F7,F82 --exclude=migrations .
+
+test:
+  stage: test
+  script:
+    # Migrations aren't committed to this repo (see .gitignore), so they
+    # need to be (re)generated before every run, same as Dockerfile/startup.sh.
+    - python manage.py makemigrations
+    - python manage.py migrate
+    - python manage.py check
+    - python manage.py test
+
+build:
+  image: docker:24.0.9
+  stage: build
+  services:
+    - docker:24.0.9-dind
+  variables:
+    # The dind service generates TLS certs by default and listens on
+    # 2376, but nothing here shares that cert dir with this job's own
+    # container -- hence "x509: certificate signed by unknown authority
+    # ... docker:dind CA" on docker login/build. The dind service is only
+    # reachable within this job's own isolated network, not exposed
+    # externally, so drop TLS for it instead of wiring up a shared certs
+    # volume. DOCKER_TLS_VERIFY/DOCKER_CERT_PATH must also be cleared
+    # explicitly -- the runner predefines them (pointing at
+    # /client/ca.pem), and DOCKER_TLS_CERTDIR="" alone only stops the
+    # dind *service* from generating certs, it doesn't stop the *client*
+    # from still trying to verify against a cert path that now has
+    # nothing in it. Same setup as drmab-web's own build job.
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+    DOCKER_TLS_VERIFY: ""
+    DOCKER_CERT_PATH: ""
+  before_script:
+    # The dind service container starting doesn't mean its dockerd is
+    # already accepting connections yet -- GitLab's `services:` has no
+    # readiness check for this, so a job that immediately runs `docker
+    # login`/`build` can hit "Cannot connect to the Docker daemon at
+    # tcp://docker:2375" as a transient startup race. Wait for it.
+    - |
+      for i in $(seq 1 30); do
+          docker info >/dev/null 2>&1 && break
+          echo "Waiting for the docker daemon to be ready ($i/30)..."
+          sleep 1
+      done
+      docker info >/dev/null 2>&1 || (echo "docker daemon never became ready" && exit 1)
+  script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
+    - docker build --cache-from "$CI_REGISTRY_IMAGE:latest" --cache-from "$CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG" --tag "$CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG" --tag "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA" --tag "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA" .
+    - docker push "$CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG"
+    - docker push "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA"
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "upgrade"'
+
+.deploy: &deploy
+  stage: deploy
+  image: registry-gitlab.pasteur.fr/dsi-tools/docker-images:docker_kubernetes_image
+  # Override the global before_script (pip install -r requirement.txt) -
+  # this job's image is kubectl/yum-based, not Python, and doesn't need
+  # this repo's Python deps at all. Without this override it inherits the
+  # global one and fails immediately with "pip: command not found" before
+  # ever reaching `script:` (the `build` job avoids this the same way, via
+  # its own dind-readiness before_script).
+  before_script: []
+  script:
+    # Fail fast with a clear message if a required CI/CD variable isn't
+    # actually reaching this job (wrong name, wrong Environment scope, or
+    # a Protected variable on an unprotected branch all look identical
+    # from here) - without this, a missing variable instead surfaces many
+    # steps later as a cryptic kubectl error (e.g. "flag docker-username
+    # is required" for an empty $DEPLOY_USER).
+    - |
+      missing=""
+      for var in NAMESPACE PUBLIC_URL INGRESS_CLASS DEPLOY_USER DEPLOY_TOKEN GALAXY_URL ADMIN_USER ADMIN_EMAIL POSTGRES_PASSWORD DJANGO_SECRET_KEY ADMIN_PASSWORD GALAXY_KEY; do
+        eval "val=\${$var:-}"
+        if [ -z "$val" ]; then missing="$missing $var"; fi
+      done
+      if [ -n "$missing" ]; then
+        echo "Missing required CI/CD variable(s):$missing"
+        echo "Check they're set in Settings -> CI/CD -> Variables, scoped to this job's Environment (${CI_ENVIRONMENT_NAME:-unset}) or 'All environments', and that Protected variables are allowed on this branch."
+        exit 1
+      fi
+    - yum install gettext -y
+    - kubectl delete secret registry-gitlab -n $NAMESPACE --ignore-not-found=true || true
+    - kubectl create secret docker-registry -n ${NAMESPACE} registry-gitlab --docker-server=registry-gitlab.pasteur.fr --docker-username=${DEPLOY_USER} --docker-password=${DEPLOY_TOKEN} --docker-email=kubernetes@pasteur.fr --dry-run -o yaml | kubectl apply -n ${NAMESPACE} -f -
+    - envsubst < manifest_datastores.yaml | kubectl apply -n ${NAMESPACE} -f -
+    - kubectl wait --for=condition=available --timeout=600s deployment/postgres -n ${NAMESPACE}
+    - kubectl wait --for=condition=available --timeout=600s deployment/redis -n ${NAMESPACE}
+    # Jobs are immutable once created - delete the previous run's before
+    # applying this one, same idiom as the registry secret above.
+    - kubectl delete job ngphylogeny-init -n $NAMESPACE --ignore-not-found=true || true
+    - envsubst < manifest.yaml | kubectl apply -n ${NAMESPACE} -f -
+    - kubectl wait --for=condition=complete --timeout=600s job/ngphylogeny-init -n ${NAMESPACE}
+    # Forces a rollout even though the image tag itself
+    # (${CI_COMMIT_REF_SLUG}) doesn't change between deploys - without
+    # this, imagePullPolicy: Always still only re-pulls on a pod's next
+    # *natural* restart, not on demand. Same trick as drmab-web.
+    - kubectl patch deployment -n ${NAMESPACE} ngphylogeny-web -p "{\"spec\":{\"template\":{\"metadata\":{\"labels\":{\"date\":\"`date +'%s'`\"}}}}}"
+    - kubectl patch deployment -n ${NAMESPACE} ngphylogeny-celery-worker -p "{\"spec\":{\"template\":{\"metadata\":{\"labels\":{\"date\":\"`date +'%s'`\"}}}}}"
+    - kubectl patch deployment -n ${NAMESPACE} ngphylogeny-celery-beat -p "{\"spec\":{\"template\":{\"metadata\":{\"labels\":{\"date\":\"`date +'%s'`\"}}}}}"
+    # TLS via cert-manager, prod only: manifest.yaml is shared with dev
+    # through plain envsubst (no conditionals), so baking a tls: block in
+    # there directly would apply to dev too, with an empty secretName -
+    # untested, and dev's ingress may already handle TLS some other way
+    # at the "internal" ingress class level. This patch is a no-op
+    # whenever INGRESS_TLS_SECRET_NAME isn't set, which deploy-dev's own
+    # variables never do. cert-manager's ingress-shim watches for the
+    # cluster-issuer annotation and creates/renews the Certificate (and
+    # populates secretName) on its own once this lands - secretName
+    # itself doesn't need to (and shouldn't) already exist.
+    - |
+      if [ -n "${INGRESS_TLS_SECRET_NAME:-}" ]; then
+        kubectl patch ingress ngphylogeny-web -n ${NAMESPACE} --type=merge -p "{\"metadata\":{\"annotations\":{\"cert-manager.io/cluster-issuer\":\"${INGRESS_CLUSTER_ISSUER}\"}},\"spec\":{\"tls\":[{\"hosts\":[\"${PUBLIC_URL}\"],\"secretName\":\"${INGRESS_TLS_SECRET_NAME}\"}]}}"
+      fi
+
+# deploy-dev's namespace/domain are real and confirmed (2026-09: the
+# ngphylogenyfr-dev namespace + Deploy Token + kubectl context for the
+# runner already exist). deploy-prod's are real too (2026-09): namespace
+# ngphylogenyfr-prod, domain ngphylogeny.fr, external ingress class,
+# TLS via cert-manager (see the deploy-prod block's own
+# INGRESS_CLUSTER_ISSUER/INGRESS_TLS_SECRET_NAME).
+#
+# Every job scoped to each deploy's "Environment" (Settings -> CI/CD ->
+# Variables in GitLab) needs:
+#   - DEPLOY_USER / DEPLOY_TOKEN: a GitLab Deploy Token (read_registry
+#     scope) for the `registry-gitlab` imagePullSecret.
+#   - Plain (unmasked) values, envsubst'd straight into manifest.yaml:
+#     GALAXY_URL, ADMIN_USER, ADMIN_EMAIL, EMAIL_HOST, EMAIL_PORT,
+#     EMAIL_HOST_USER, EMAIL_USE_TLS, REPORT_RECIPIENTS, REPORT_FROM_EMAIL,
+#     CONTACT_FORM_RECIPIENTS (comma-separated addresses the contact form
+#     - surveys.views.FeedbackCreateView - notifies in addition to saving
+#     the Feedback row; left unset, no email is sent, same no-op
+#     convention as REPORT_RECIPIENTS above).
+#   - GALAXY_WORKFLOW_IDS (plain, optional): comma-separated known Galaxy
+#     workflow ids for the init Job's importworkflows --wfids call - skips
+#     GALAXY_URL's /api/workflows/ listing entirely and imports exactly
+#     these. Left unset, importworkflows falls back to its previous
+#     name-based listing behavior instead. See CLAUDE.md's "Kubernetes
+#     deployment" section for the actual galaxy.pasteur.fr ids in use.
+#   - MAINTENANCE (plain, optional): "true" puts the site into maintenance
+#     mode (every request gets templates/maintenance.html, 503, instead
+#     of routing normally - see NGPhylogeny_fr/middleware.py). Left
+#     unset/anything else, maintenance mode stays off. Takes effect on
+#     the next deploy - re-run/retry the deploy job to flip it either way,
+#     changing the GitLab CI/CD variable alone doesn't affect an
+#     already-running pod.
+#   - PASTEUR_BLAST_ENABLED (plain, optional): "true" activates the
+#     Pasteur Galaxy BLAST server option (settings.BLASTS['pasteur']
+#     ['activated'], off by default) and deactivates NCBI's public server
+#     option at the same time (mutually exclusive, not independently
+#     toggleable - see CLAUDE.md).
+#   - ACCOUNT_CREATION_ENABLED (plain, optional): "true" re-enables
+#     public account sign-up (account.views.AccountCreateView) - off by
+#     default for now (see that view's own docstring). Left unset/
+#     anything else, GET/POST /account/create both serve a 503
+#     "temporarily unavailable" page instead.
+#   - WORKSPACE_RETENTION_DAYS (plain, optional): days a finished
+#     workspace history is kept before workspace.tasks.
+#     deleteoldgalaxyhistory's daily cleanup removes it (workspace/
+#     models.py's WorkspaceHistory.RETENTION_DAYS) - also what the
+#     Workspace/account pages' "days left" estimate is computed from.
+#     Left unset, defaults to 14, this project's original hardcoded
+#     value.
+#   - BLAST_RETENTION_DAYS (plain, optional): days a BlastRun is kept
+#     before blast.tasks.deleteoldblastruns's daily cleanup removes it
+#     (blast/models.py's BlastRun.RETENTION_DAYS) - independent of
+#     WORKSPACE_RETENTION_DAYS above (a different table/task). Left
+#     unset, defaults to 7.
+#   - WORKFLOW_RETENTION_DAYS (plain, optional): days a non-base
+#     (per-run duplicated) Galaxy workflow *definition* is kept before
+#     workflows.tasks.deleteoldgalaxyworkflows's daily cleanup removes
+#     it (workflows/models.py's Workflow.RETENTION_DAYS) - independent
+#     of WORKSPACE_RETENTION_DAYS above (deleting a workflow definition
+#     doesn't touch its history's actual data - see CLAUDE.md). Left
+#     unset, defaults to 14.
+#   - WORKFLOW_RUN_STALE_HOURS (plain, optional): hours a still-running/
+#     queued workspace history is left alone before workspace.tasks.
+#     updateworkspacestatus force-cancels its still-pending Galaxy jobs
+#     (workspace/tasks.py's WORKFLOW_RUN_STALE_AFTER). Left unset,
+#     defaults to 24.
+#   - PASTEUR_BLAST_STALE_HOURS (plain, optional): hours a still-
+#     pending/running Pasteur BLAST run is polled before blast.tasks.
+#     checkblastruns gives up and marks it ERROR (blast/tasks.py's
+#     PASTEUR_RUN_STALE_AFTER). Left unset, defaults to 3.
+#   - INGRESS_CLUSTER_ISSUER / INGRESS_TLS_SECRET_NAME (plain, optional,
+#     deploy-prod only): wires up TLS via cert-manager's ingress-shim -
+#     see the deploy job's own "TLS via cert-manager" script comment.
+#     Left unset (dev never sets these), the whole patch step is a
+#     no-op - dev's ingress is untouched.
+#   - Masked + protected values, envsubst'd into the two Secrets in
+#     manifest.yaml/manifest_datastores.yaml (stringData, never committed):
+#     POSTGRES_PASSWORD, DJANGO_SECRET_KEY (generate with
+#     `python -c "import secrets; print(secrets.token_urlsafe(48))"`),
+#     ADMIN_PASSWORD, GALAXY_KEY (a Pasteur Galaxy admin API key),
+#     EMAIL_HOST_PASSWORD (leave unset/empty if email isn't needed yet -
+#     sending just no-ops, same as every other deployment in this repo).
+# See CLAUDE.md's "Kubernetes deployment" section for more detail.
+deploy-dev:
+  <<: *deploy
+  variables:
+    NAMESPACE: "ngphylogenyfr-dev"
+    PUBLIC_URL: "ngphylogenyfr.dev.pasteur.cloud"
+    INGRESS_CLASS: "internal"
+  environment:
+    name: k8sdev-01-ngphylogenyfr-dev
+    url: https://ngphylogenyfr.dev.pasteur.cloud
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "upgrade"'
+
+deploy-prod:
+  <<: *deploy
+  variables:
+    NAMESPACE: "ngphylogenyfr-prod"
+    PUBLIC_URL: "ngphylogeny.fr"
+    INGRESS_CLASS: "external"
+    # Confirmed by the cluster operator - cert-manager is already
+    # installed cluster-wide with this ClusterIssuer. secretName is not
+    # a pre-existing secret (unlike the wildcard-pasteur-tls one first
+    # suggested, which turned out not to cover ngphylogeny.fr at all -
+    # this one is a fresh name cert-manager creates/populates itself).
+    # ClusterIssuer name confirmed as "letsencrypt" by the operator -
+    # the first deploy used "letsencrypt-prod" (a guess at the likely
+    # name, following a common naming convention), which doesn't exist
+    # on this cluster: cert-manager reported
+    # `clusterissuer.cert-manager.io "letsencrypt-prod" not found` and
+    # the CertificateRequest never got past that (no Order/Challenge
+    # were ever created).
+    INGRESS_CLUSTER_ISSUER: "letsencrypt"
+    INGRESS_TLS_SECRET_NAME: "ngphylogeny-fr-tls"
+  environment:
+    name: k8sprod-02-ngphylogenyfr
+    url: https://ngphylogeny.fr
+  rules:
+    # Manual, not automatic on every push - unlike dev, a production
+    # rollout should be a deliberate action even once this pipeline is
+    # otherwise green. Trigger it from the pipeline's own page in GitLab.
+    - if: '$CI_COMMIT_BRANCH == "upgrade"'
+      when: manual

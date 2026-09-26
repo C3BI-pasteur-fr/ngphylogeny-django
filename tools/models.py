@@ -1,14 +1,19 @@
 import ast
+import logging
 import requests
 import bibtexparser
+from bibtexparser.bparser import BibTexParser
+from bibtexparser.customization import convert_to_unicode
 
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.functional import cached_property
-from django.utils.translation import ugettext as _
+from django.utils.translation import gettext as _
 
 from data.models import ExampleFile
 from galaxy.models import Server
+
+logger = logging.getLogger(__name__)
 
 
 class Tool(models.Model):
@@ -66,19 +71,19 @@ class Tool(models.Model):
         """
         if (self.max_nbseq > 0 and
             ((nseq > self.max_nbseq) or
-             (seqaa and nseq > self.max_nbseq/self.aa_scale_factor))):
+             (seqaa and nseq > self.max_nbseq//self.aa_scale_factor))):
             return False
         if self.max_boot > 0 and nboot > self.max_boot :
             return False
         if (self.max_lengthxnbseqsquared > 0 and
             ((length*nseq > self.max_lengthxnbseqsquared) or
-             (seqaa and length*nseq > self.max_lengthxnbseqsquared/self.aa_scale_factor))):
+             (seqaa and length*nseq > self.max_lengthxnbseqsquared//self.aa_scale_factor))):
             return False
         if self.max_nbseqsquaredxboot > 0 and nseq*nboot > self.max_nbseqsquaredxboot:
             return False
         if (self.max_lengthxnbseqsquaredxboot > 0 and
             ((length*nseq*nboot > self.max_lengthxnbseqsquaredxboot) or
-             (seqaa and length*nseq*nboot > self.max_lengthxnbseqsquaredxboot/self.aa_scale_factor))):
+             (seqaa and length*nseq*nboot > self.max_lengthxnbseqsquaredxboot//self.aa_scale_factor))):
             return False
         return True
 
@@ -256,21 +261,37 @@ class Tool(models.Model):
                 t, created = Tool.objects.get_or_create(
                     id_galaxy=id_tool, galaxy_server=galaxy_server)
                 t.save()
-
                 if force:
                     t.import_tool_io(t.tool_json)
                 if created or force:
-                    tools_import_report['new'].append(t)
+                    # Citations are only (re-)fetched for newly-created or
+                    # force-reimported tools - but docker/init.sh always
+                    # calls importtools with --force on every container
+                    # start, so this branch runs on every single redeploy
+                    # for every tool. Replace (clear then re-insert)
+                    # rather than blindly append: appending here used to
+                    # duplicate every Citation row on every redeploy -
+                    # real production tools ended up with 25-75 duplicate
+                    # rows of the same 1-3 actual citations.
                     cite_url = '%s/%s/%s/%s/%s' % (galaxy_server.url, 'api', 'tools', id_tool, 'citations')
                     connection = requests.get(cite_url)
                     citations = connection.json()
+                    t.citation_set.all().delete()
                     for cite in citations:
-                        c = Citation(reference=cite.get('content','').encode('iso-8859-1').decode('utf8'), tool=t)
+                        # No encode/decode roundtrip needed: unlike Python 2's
+                        # requests/json stack (which this iso-8859-1->utf8
+                        # roundtrip used to correct for), Python 3's
+                        # requests.json() already returns correctly-decoded
+                        # text - re-encoding it as iso-8859-1 just raises
+                        # UnicodeEncodeError on any citation containing a
+                        # character outside Latin-1 (en dashes, curly quotes,
+                        # ...), which is common in real citation text.
+                        c = Citation(reference=cite.get('content',''), tool=t)
                         c.save()
+                    tools_import_report['new'].append(t)
                 else:
                     tools_import_report['already_exist'].append(t)
-            except (ValueError, ValidationError) as e:
-                print e
+            except (ValueError, ValidationError):
                 tools_import_report['error'].append(id_tool)
         return tools_import_report
 
@@ -298,7 +319,7 @@ class Tool(models.Model):
 
         return Tool.objects.filter(pk__in=tools_compatible)
 
-    def __unicode__(self):
+    def __str__(self):
         return "{} - {}".format(self.name, self.version)
 
 
@@ -321,7 +342,7 @@ class ToolInputData(ToolData):
     """
     edam_formats = models.CharField(max_length=250, null=True, blank=True)
     extensions = models.CharField(max_length=100)
-    examplefile = models.ForeignKey(ExampleFile, null=True, blank=True)
+    examplefile = models.ForeignKey(ExampleFile, null=True, blank=True, on_delete=models.SET_NULL)
     # Wether this field may be linked to the first input data step
     # in the workflow maker.
     # Avoids to link input data to all input file fields in PhyML for example
@@ -342,12 +363,11 @@ class ToolInputData(ToolData):
 
         l_ext = self.get_extensions()
         l_ext_filtered = [ext for ext in l_ext if ext not in ignore]
-        print l_ext_filtered
         galaxy_server = self.tool.galaxy_server
         return ToolOutputData.objects.filter(extension__in=l_ext_filtered,
                                              tool__galaxy_server=galaxy_server)
 
-    def __unicode__(self):
+    def __str__(self):
         return "%s | %s: %s" % (self.tool, self.name, self.extensions)
 
     class Meta:
@@ -367,7 +387,7 @@ class ToolOutputData(ToolData):
     def search_compatible_inputs(self):
         return ToolInputData.objects.filter(extensions__contains=self.extension)
 
-    def __unicode__(self):
+    def __str__(self):
         return "%s | %s: %s" % (self.tool, self.name, self.extension)
 
     class Meta:
@@ -377,17 +397,101 @@ class Citation(models.Model):
     """
     Tool references
     """
-    reference = models.CharField(max_length=1000, null=True, blank=True)
+    # TextField, not a length-bounded CharField: this stores raw BibTeX
+    # citation text straight from Galaxy's /api/tools/{id}/citations
+    # (import_tools() in this module) - real citations (long abstracts,
+    # many authors) routinely exceed any fixed length, and Postgres
+    # enforces a CharField's max_length as a hard varchar() constraint at
+    # the DB level, aborting the whole importtools run with
+    # "value too long for type character varying(N)" the moment one
+    # citation is too long, rather than failing just that one tool.
+    reference = models.TextField(null=True, blank=True)
     tool = models.ForeignKey(Tool, on_delete=models.CASCADE)
 
+    @staticmethod
+    def _bibtex_parser():
+        """
+        bibtexparser.loads() with no parser at all extracts a field's raw
+        text with zero LaTeX interpretation - accented author names
+        (Guindon et al.'s PhyML citation: "St{\\'{e}}phane"/
+        "Jean-Fran{\\c{c}}ois") and brace-protected capitalization
+        ("{PhyML}") both showed up completely unresolved and literal on
+        the rendered page. convert_to_unicode (via bibtexparser's own
+        latex_to_unicode) converts the whole standard set of LaTeX accent
+        commands to real Unicode and strips any braces left over
+        afterward - covers this class of artifact generally, rather than
+        hand-rolling substitutions for every possible accented letter.
+        """
+        parser = BibTexParser()
+        parser.customization = convert_to_unicode
+        return parser
+
+    @staticmethod
+    def _resolve_latex_escapes(reference):
+        """
+        Applied to the RAW BibTeX source text before parsing, not to
+        already-parsed field values - and that ordering matters.
+        convert_to_unicode (see _bibtex_parser()) only knows standard
+        LaTeX commands, not $\\less$/$\\greater$ (a real but non-standard
+        LaTeX-escaped way some bibliography tools wrap a small-caps tag
+        to protect a word's capitalization from BibTeX's automatic
+        title-casing - the Newick Utilities citation: "Unix" as
+        U$\\less$scp$\\greater$nix$\\less$/scp$\\greater$, meaning
+        U<scp>nix</scp>). Worse, run on the *parsed* field value,
+        convert_to_unicode's own LaTeX interpretation reads \\l (inside
+        \\less) as the real, standard LaTeX command for "ł" and silently
+        mangles $\\less$ into $łess$ first - verified directly against
+        bibtexparser 1.4.4, not assumed - so by the time a post-parse
+        cleanup step would run, the pattern it's looking for is already
+        gone. Resolving these escapes on the raw text first avoids the
+        collision entirely: a bare "<"/">" character has no LaTeX meaning
+        for convert_to_unicode to misinterpret.
+        """
+        if not reference:
+            return reference
+        return reference.replace('$\\less$', '<').replace('$\\greater$', '>')
+
+    @staticmethod
+    def _strip_scp_tags(text):
+        """
+        The only thing _resolve_latex_escapes' </>-resolution is ever
+        used to wrap here is a <scp>...</scp> small-caps tag (see that
+        method's docstring). Strip the tags themselves, applied to
+        already-parsed field values, rather than leave literal tag markup
+        in txt()'s plain-text output or rely on format()'s HTML output
+        silently ignoring an unrecognized tag.
+        """
+        if not text:
+            return text
+        return text.replace('<scp>', '').replace('</scp>', '')
+
     def format(self):
-        bib_database = bibtexparser.loads(self.reference)
+        reference = self._resolve_latex_escapes(self.reference)
+        try:
+            bib_database = bibtexparser.loads(reference, parser=self._bibtex_parser())
+        except Exception:
+            # Raw BibTeX straight from Galaxy's /api/tools/{id}/citations
+            # (see the reference field's own docstring) - a real one hit
+            # live: a bare, non-standard month value ("month = june,"
+            # rather than the 3-letter "jun" bibtexparser's common-strings
+            # table actually knows, or a quoted/braced string) makes
+            # bibtexparser try to resolve it as a @string macro reference
+            # and raise bibtexparser.bibdatabase.UndefinedString - which,
+            # unhandled, 500'd the entire history detail page over one
+            # malformed citation on one tool. Caught broadly (not just
+            # UndefinedString) since this is arbitrary external BibTeX
+            # text with no schema guarantee - any other parse failure
+            # shouldn't crash the page either.
+            logger.warning(
+                "Could not parse BibTeX citation %s for tool %s",
+                self.pk, self.tool_id, exc_info=True)
+            return []
         f = []
-        for k, v in bib_database.entries_dict.iteritems():
-            journal = v.get('journal','')
-            title = v.get('title','')
+        for k, v in bib_database.entries_dict.items():
+            journal = self._strip_scp_tags(v.get('journal',''))
+            title = self._strip_scp_tags(v.get('title',''))
             year = v.get('year','')
-            authors = v.get('author','')
+            authors = self._strip_scp_tags(v.get('author',''))
             doi = v.get('doi','')
             volume = v.get('volume','')
             pages = v.get('pages','')
@@ -405,13 +509,21 @@ class Citation(models.Model):
         return f
 
     def txt(self):
-        bib_database = bibtexparser.loads(self.reference)
+        reference = self._resolve_latex_escapes(self.reference)
+        try:
+            bib_database = bibtexparser.loads(reference, parser=self._bibtex_parser())
+        except Exception:
+            # Same malformed-BibTeX defense as format() above.
+            logger.warning(
+                "Could not parse BibTeX citation %s for tool %s",
+                self.pk, self.tool_id, exc_info=True)
+            return ""
         f = ""
-        for k, v in bib_database.entries_dict.iteritems():
-            journal = v.get('journal','')
-            title = v.get('title','')
+        for k, v in bib_database.entries_dict.items():
+            journal = self._strip_scp_tags(v.get('journal',''))
+            title = self._strip_scp_tags(v.get('title',''))
             year = v.get('year','')
-            authors = v.get('author','')
+            authors = self._strip_scp_tags(v.get('author',''))
             doi = v.get('doi','')
             volume = v.get('volume','')
             pages = v.get('pages','')
@@ -430,7 +542,7 @@ class ToolFlag(models.Model):
     tool = models.ManyToManyField(Tool)
     rank = models.IntegerField(default=999, help_text="flags order")
 
-    def __unicode__(self):
+    def __str__(self):
         return self.verbose_name
 
     class Meta:
@@ -476,7 +588,7 @@ class ToolFieldWhiteList(models.Model):
     def get_json_params(self):
         return self.tool.get_params_detail
 
-    def __unicode__(self):
+    def __str__(self):
         return "%s ,%s" % (self.tool.name, self.DICT_CONTEXT_CHOICES.get(self.context))
 
     class Meta:

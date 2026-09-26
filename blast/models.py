@@ -5,15 +5,15 @@ import os
 
 from django.db import models
 from django.conf import settings
+from django.utils import timezone
 
 from Bio.Phylo.TreeConstruction import DistanceTreeConstructor, DistanceMatrix
 from Bio import Phylo
 
-from datetime import datetime
 import uuid
 import textwrap
 import logging
-import StringIO
+from io import StringIO
 
 import re
 
@@ -36,26 +36,78 @@ class BlastRun(models.Model):
     NCBI = 'ncbi'
     BLASTSERVERS =(
         (PASTEUR, 'Pasteur'),
-        (NCBI, 'Pasteur'),
+        (NCBI, 'NCBI'),
     )
-    
+
+    # blast.tasks.deleteoldblastruns's own daily cleanup cutoff - defined
+    # here (not just as a local constant in tasks.py) so that task and
+    # anything else that wants to reference it (e.g. a future "days
+    # left" display, matching workspace.models.WorkspaceHistory's own
+    # RETENTION_DAYS) can't drift apart. Reads settings.
+    # NGPHYLO_BLAST_RETENTION_DAYS (settings/base.py) - configurable via
+    # the BLAST_RETENTION_DAYS GitLab CI/CD variable, 7 if unset. Safe to
+    # read at class-body (import) time - see WorkspaceHistory.
+    # RETENTION_DAYS's own note on this.
+    RETENTION_DAYS = settings.NGPHYLO_BLAST_RETENTION_DAYS
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email = models.CharField(null=True, max_length=100)
-    date = models.DateTimeField(default=datetime.now, blank=True)
+    # timezone.now, not datetime.now: USE_TZ=True is on, and a naive
+    # datetime here throws "RuntimeWarning: DateTimeField BlastRun.date
+    # received a naive datetime while time zone support is active" on
+    # every save - same bug class already fixed for Workflow.date (see
+    # CLAUDE.md's "Workflow duplicates and the Celery cleanup jobs").
+    # default= is Python-side only, not part of the DB schema, so this
+    # needs no migration/manual ALTER TABLE on an already-deployed DB.
+    date = models.DateTimeField(default=timezone.now, blank=True)
     query_id = models.CharField(null=True, max_length=1000)
     query_seq = models.TextField(null=True)
+    # Set at submission time (blast/tasks.py's launch_ncbi_blast/
+    # launch_pasteur_blast) and re-derived defensively at cleanup time
+    # (deleteoldblastruns(), right before query_seq is cleared to free
+    # space) so the sequence length survives even once the sequence
+    # itself doesn't - null=True since existing rows predate this field
+    # and are never backfilled (migrations aren't committed/data-
+    # migrated in this project - see CLAUDE.md).
+    query_length = models.PositiveIntegerField(null=True, blank=True)
     evalue = models.FloatField(default=0.00001)
     coverage = models.FloatField(default=0.8)
     maxseqs = models.PositiveIntegerField(default=10)
     database = models.CharField(max_length=100, default='swissprot')
     blastprog = models.CharField(max_length=100, default='blastp')
-    history = models.CharField(max_length=20) # If pasteur blast: galaxy history id
-    history_fileid= models.CharField(max_length=20) # If pasteur blast: output file galaxy id 
+    # max_length=250, not 20: matches workflows.Workflow.id_galaxy's
+    # existing convention for the same kind of value (an opaque
+    # Galaxy-provided encoded id). 20 was too tight for this Galaxy
+    # server's actual dataset ids - launch_pasteur_blast() would run the
+    # blast job for real, then crash saving the result:
+    # "django.db.utils.DataError: value too long for type character
+    # varying(20)" on history_fileid, leaving the run stuck showing
+    # PENDING in NGPhylogeny while it kept running/finished on Galaxy.
+    history = models.CharField(max_length=250) # If pasteur blast: galaxy history id
+    history_fileid= models.CharField(max_length=250) # If pasteur blast: output file galaxy id
     status = models.CharField(max_length=1, default=PENDING, choices=RUNSTATUS)
     server = models.CharField(max_length=50, default=NCBI, choices=BLASTSERVERS)
     message = models.TextField(null=True)
     deleted = models.BooleanField(default=False)
     tree = models.TextField(null=True)
+
+    class Meta:
+        indexes = [
+            # Same reasoning as WorkspaceHistory's own
+            # wsph_running_jobs_idx (see workspace/models.py) -
+            # workspace.views.running_jobs_view's BlastRun query filters
+            # on exactly these two columns, with no index. A partial
+            # index over just the still-pending/running rows stays tiny
+            # regardless of how large blast_blastrun grows overall.
+            models.Index(
+                fields=['date'],
+                # Literal 'P'/'R', not the PENDING/RUNNING class
+                # constants - a nested Meta class body doesn't have
+                # access to BlastRun's own namespace, only the module's.
+                condition=models.Q(status__in=['P', 'R'], deleted=False),
+                name='blastrun_running_idx',
+            ),
+        ]
 
     def format_sequence(self):
         return re.sub("\*$","",('\n'.join(textwrap.wrap(self.query_seq, 60)))).rstrip()
@@ -82,8 +134,16 @@ class BlastRun(models.Model):
         return 'Error'
 
     def server_str(self):
+        # Was comparing against self.status (a RUNSTATUS code, e.g. 'P'/
+        # 'R') instead of self.server (a BLASTSERVERS code, 'pasteur'/
+        # 'ncbi') - two entirely different code spaces that can never
+        # match, so this always fell through to 'Error' regardless of
+        # the actual server. No current caller (found while fixing the
+        # BLASTSERVERS mislabeling right above - both NCBI and Pasteur
+        # runs displayed as "Pasteur" anywhere that used it), but worth
+        # fixing alongside rather than leaving broken next to the fix.
         for (code, desc) in self.BLASTSERVERS:
-            if self.status == code:
+            if self.server == code:
                 return desc
         return 'Error'
 
@@ -105,7 +165,7 @@ class BlastRun(models.Model):
         dm = self.distance_matrix()
         constructor = DistanceTreeConstructor()
         tree = constructor.nj(dm)
-        treeio = StringIO.StringIO()
+        treeio = StringIO()
         Phylo.write(tree, treeio, 'newick')
         treestr = treeio.getvalue()
         treeio.close()

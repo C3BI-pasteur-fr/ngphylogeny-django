@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title-block %} - Daily Workflow Report{% endblock %}
+{% block stylesheet %}
+{% include "workspace/_report_styles.html" %}
+{% endblock %}
+{% block content %}
+<div class="report-wrapper">
+<p class="report-subtitle" style="text-align:right;margin-top:0;">
+  Cached for up to 15 minutes -
+  <a href="?refresh=1">refresh now</a>
+</p>
+{% include "workspace/_report_body.html" %}
+</div>
+{% endblock %}

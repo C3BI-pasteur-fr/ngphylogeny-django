@@ -23,5 +23,5 @@ class Command(BaseCommand):
             tool_outputs = t_input.search_compatible_outputs(ignore=ignored_ext)
 
             for t_output in tool_outputs:
-                print str(t_input) + " -> " + str(t_output)
+                print(str(t_input) + " -> " + str(t_output))
                 t_output.compatible_inputs.add(t_input)

@@ -4,18 +4,19 @@ from django.shortcuts import render
 from django.views.generic import View
 from django.views.generic.detail import SingleObjectMixin
 from django.core.files.uploadedfile import InMemoryUploadedFile, TemporaryUploadedFile
-from django.core.urlresolvers import reverse_lazy
+from django.urls import reverse_lazy
 from django.http import HttpResponseRedirect
 
 import tempfile
-import StringIO
 
 from galaxy.decorator import connection_galaxy
 from tools.models import Tool
 from tools.models import ToolFieldWhiteList
 from tools.forms import ToolForm
 from workspace.views import create_history, delete_history
-from workflows.views.generic import WorkflowListView
+from workflows.views.generic import (
+    GALAXY_UNREACHABLE_EXCEPTIONS, WorkflowListView,
+    galaxy_unavailable_response)
 from workflows.exceptions import WorkflowInvalidFormError
 from workflows.models import Workflow
 from workflows.exceptions import WorkflowInputFileFormatError
@@ -89,7 +90,10 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
     restricted_toolset = Tool.objects.filter(toolflag__name=WORKFLOW_ADV_FLAG)
 
     def get(self, request, *args, **kwargs):
-        context = self.get_context_data(object=self.object)
+        try:
+            context = self.get_context_data(object=self.object)
+        except GALAXY_UNREACHABLE_EXCEPTIONS:
+            return galaxy_unavailable_response(request)
         return render(request, self.template_name, context)
 
 
@@ -100,7 +104,7 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
         """
         outlist = []
         if files:
-            for key, sf in files.iteritems():
+            for key, sf in files.items():
                 if sf.get('ext') in extensions:
                     outlist.append(sf)
         return outlist
@@ -154,12 +158,48 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
                 tmp_file.write(chunk)
             tmp_file.flush()
         else:
+            # Reached for pasted text (request.POST.get("file") is a plain
+            # str, unlike the uploaded-file case above) and BlastRun.to_fasta()
+            # results - NamedTemporaryFile() defaults to binary mode, and
+            # tmp_file.write(file_to_upload) here used to crash outright
+            # under Python 3 ("a bytes-like object is required, not 'str'")
+            # for any str input - only caught by actually pasting text
+            # through the live A La Carte / advanced form, not by any
+            # existing test.
             tmp_file = tempfile.NamedTemporaryFile()
-            tmp_file.write(file_to_upload)
+            data = file_to_upload
+            if isinstance(data, str):
+                data = data.encode('utf-8')
+            tmp_file.write(data)
             tmp_file.flush()
 
+        # Rewrite sequence ids to something every downstream Galaxy tool
+        # in the pipeline (MAFFT, PhyML/PhyML-SMS, newick_utilities'
+        # nw_display, ...) will tokenize identically - see
+        # biofile.sanitize_fasta_content's own docstring for the real
+        # production bug (a non-breaking space survived alignment/tree
+        # building untouched, then broke the Newick Display step) this
+        # is here to prevent from recurring. sanitize_sequence_content,
+        # not sanitize_fasta_content directly, for consistency with the
+        # other call sites even though this specific path only accepts
+        # FASTA past the valid_fasta() check right below.
+        tmp_file.seek(0)
+        sanitized = biofile.sanitize_sequence_content(tmp_file.read())
+        tmp_file.seek(0)
+        tmp_file.truncate()
+        tmp_file.write(sanitized)
+        tmp_file.flush()
+
         # Check that input file is Fasta and is not empty
-        nseq, length, seqaa = biofile.valid_fasta(open(tmp_file.name))
+        # open() in binary mode, not text mode: valid_fasta() branches
+        # on isinstance(raw, bytes) to decode with errors='replace' -
+        # but a plain open(tmp_file.name) (text mode, the default)
+        # already tries to decode as UTF-8 *inside* .read() itself,
+        # before valid_fasta() ever gets a chance to handle it, and
+        # raises UnicodeDecodeError uncaught for any non-UTF-8 upload
+        # (e.g. a real UTF-16 fasta file saved from Windows Notepad/
+        # Excel - 0xFF as the very first byte is a UTF-16LE BOM).
+        nseq, length, seqaa = biofile.valid_fasta(open(tmp_file.name, 'rb'))
         if nseq < 4 :
             raise WorkflowInputFileFormatError(
                 "Input data is malformed or contain less than 4 sequences"
@@ -213,7 +253,7 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
                     # send file to galaxy
                     outputs = gi.tools.upload_file(
                         path=tmp_file.name,
-                        file_name=uploaded_file.name.encode('ascii','ignore'),
+                        file_name=uploaded_file.name.encode('ascii','ignore').decode('ascii'),
                         history_id=wksph.history)
                     file_id = outputs.get('outputs')[0].get('id')
                     tool_inputs.set_dataset_param(
@@ -271,7 +311,7 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
         # tool params
         params = {}
         # Workflow inputs
-        i_input = workflow.json['inputs'].keys()[0]
+        i_input = list(workflow.json['inputs'].keys())[0]
 
         # Handle workflow main input file
         # before creating the workspace etc.
@@ -294,7 +334,7 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
                 workflow.delete_from_galaxy(gi)
                 return render(request, self.template_name, context)
             elif isinstance(uploaded_file, InMemoryUploadedFile) or isinstance(uploaded_file, TemporaryUploadedFile):
-                upload_filename = uploaded_file.name.encode('ascii','ignore')
+                upload_filename = uploaded_file.name.encode('ascii','ignore').decode('ascii')
             else:
                 upload_filename = "uploaded_content"
                 
@@ -309,7 +349,6 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
                 workflow.delete_from_galaxy(gi)
                 return render(request, self.template_name, context)
 
-        print(galaxy_file)
         # We check form validity
         if not self.check_form_validity(request, context):
             workflow.delete_from_galaxy(gi)
@@ -342,7 +381,7 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
         except WorkflowInvalidFormError as e:
             # if one form is not valid
             workflow.delete_from_galaxy(gi)
-            delete_history(wksph.history)
+            delete_history(request, wksph.history)
             return self.get(request, *args, **kwargs)
         except WorkflowInputFileFormatError as e:
             context = self.get_context_data(object=self.object)
@@ -371,7 +410,24 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
             return HttpResponseRedirect(self.succes_url)
 
         except Exception:
-            delete_history(wksph.history)
+            # Real production bug: this used to call delete_history
+            # (workspace/views.py, @connection_galaxy-decorated,
+            # signature (request, history_id)) as delete_history(
+            # wksph.history) - a single positional string arg, which
+            # bound the history id string to the *request* parameter
+            # instead. connection_galaxy's wrapper then crashed with
+            # AttributeError: 'str' object has no attribute 'session' on
+            # request.session.get(...) - caught by the decorator's own
+            # broad except Exception (logged, HttpResponseGone
+            # returned), so the AttributeError never surfaced directly,
+            # but the cleanup silently never ran either: every failed
+            # Advanced-workflow submission (e.g. a tool parameter Galaxy
+            # rejects, like the real "randstart" out-of-range case that
+            # surfaced this) left its just-created WorkspaceHistory row
+            # and local session state uncleaned. tools/views.py's own
+            # call site already used the correct (request, history_id)
+            # form - matched here.
+            delete_history(request, wksph.history)
             raise
         #finally:
             # delete the workflow copy of oneclick workflow when

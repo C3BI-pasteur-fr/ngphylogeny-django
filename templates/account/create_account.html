@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block stylesheet %}
+{% load crispy_forms_tags %}
+{% endblock %}
+
+{% block content %}
+    <div class="row">
+        <div class="col-md-2"></div>
+        <div class="col-md-8">
+            <h2>Create an account</h2>
+            <p class="text-muted">
+                An account isn't required to run analyses - but lets you find
+                them again from any browser or device, on your
+                <a href="{% url 'account' %}">account page</a>.
+            </p>
+            {% crispy form %}
+        </div>
+    </div>
+{% endblock %}

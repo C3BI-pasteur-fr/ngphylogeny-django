@@ -1,86 +1,73 @@
 # NGPhylogeny.fr
 # https://ngphylogeny.fr
-
-# base image: python 2.7.14-jessie
-FROM python:2.7.14-jessie
-
-# File Author / Maintainer
-MAINTAINER Frederic Lemoine <frederic.lemoine@pasteur.fr>
-
-COPY . /home/ngphylo
-WORKDIR /home/ngphylo/
-
-RUN apt-get update --fix-missing \
-    && apt-get install -y libpq-dev postgresql-client
-
-# Install REDIS-SERVER
-RUN wget http://download.redis.io/redis-stable.tar.gz \
-    && tar xvzf redis-stable.tar.gz \
-    && cd redis-stable \
-    && make \
-    && cp src/redis-server /usr/local/bin/ \
-    && cp src/redis-cli /usr/local/bin/ \
-    && mkdir /etc/redis \
-    && mkdir -p /home/ngphylo/redis \
-    && cp utils/redis_init_script /etc/init.d/redis_6379 \
-    && mv /home/ngphylo/docker/redis.conf /etc/redis/6379.conf \
-    && mkdir /home/ngphylo/redis/6379 \
-    && cd .. && rm -rf redis-stable* \
-    && touch /var/log/redis_6379.log
-
-# Celeryd / Celerybeat init scripts
-COPY docker/celeryd /etc/init.d/celeryd
-COPY docker/celerybeat /etc/init.d/celerybeat
-COPY docker/celeryd.default /etc/default/celeryd
-RUN chmod 640  /etc/default/celeryd \
-    && chmod +x /etc/init.d/celery* \
-    && mkdir /var/run/celery
-
-# uwsgi init script
-COPY docker/uwsgi.init /etc/init/uwsgi.conf
-RUN chmod +x /etc/init/uwsgi.conf
-
-# INSTALL NGINX
-COPY docker/nginx /etc/init.d/nginx
-COPY docker/nginx.default /etc/default/nginx
-COPY docker/ngphylogeny_nginx.conf /etc/nginx/nginx.conf
-RUN wget http://nginx.org/download/nginx-1.15.0.tar.gz \
-    && tar -xzvf nginx-1.15.0.tar.gz \
-    && cd nginx-1.15.0 \
-    && ./configure \
-    --prefix=/usr/share/nginx \
-    --sbin-path=/usr/sbin/nginx \
-    --conf-path=/etc/nginx/nginx.conf \
-    --pid-path=/var/run/nginx.pid \
-    --lock-path=/var/lock/nginx.lock \
-    --error-log-path=/var/log/nginx/error.log \
-    --http-log-path=/var/log/access.log \
-    --user=root \
-    --group=root \
-    --without-mail_pop3_module \
-    --without-mail_imap_module \
-    --without-mail_smtp_module \
-    --without-http_scgi_module \
-    --without-http_memcached_module \
-    --with-ipv6 \
-    --with-http_ssl_module \
-    --with-http_stub_status_module \
-    --with-http_gzip_static_module \
-    && make && make install \
-    && cd .. && rm -rf nginx-1.15.0* \
-    && chmod +x /etc/init.d/nginx \
-    && chmod 640  /etc/default/nginx
-
-RUN wget -O /usr/local/bin/jq https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64 \
-    && chmod +x /usr/local/bin/jq
-
-RUN pip install -r requirement.txt
-
-#RUN python manage.py collectstatic --noinput \
-#    && python manage.py makemigrations \
-#    && python manage.py migrate --run-syncdb \
-#    && python manage.py createcachetable \
-#    && python manage.py 
 #
+# One image, reused for the web (runserver), celery-worker, and celery-beat
+# services in docker-compose.yml (each just overrides the command). Postgres
+# and Redis run as their own separate compose services rather than being
+# built into this image.
 
-ENTRYPOINT ["/home/ngphylo/startup.sh"]
+FROM python:3.8-buster
+
+LABEL maintainer="Frederic Lemoine <frederic.lemoine@pasteur.fr>"
+
+WORKDIR /home/ngphylo
+
+# Debian buster is EOL: deb.debian.org no longer mirrors it. Point apt at
+# the snapshot.debian.org archive already listed (commented out) in this
+# base image's sources.list, and drop the security repo line - its snapshot
+# is old enough to report as expired and fail `apt-get update` outright.
+RUN sed -i \
+        -e 's|^deb http://deb\.debian\.org|# deb http://deb.debian.org|' \
+        -e 's|^# deb http://snapshot\.debian\.org|deb http://snapshot.debian.org|' \
+        -e '/debian-security/d' \
+        /etc/apt/sources.list \
+    && apt-get update --fix-missing \
+    && apt-get install -y libpq-dev postgresql-client libmagic1 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirement.txt .
+# numpy must land before biopython, which needs it at build time and doesn't
+# declare it - a plain `pip install -r requirement.txt` can fail on a clean
+# env depending on pip's resolution order.
+RUN pip install numpy==1.24.4 \
+    && pip install -r requirement.txt
+
+# Debian Buster's ca-certificates package (20200601~deb10u2, frozen since
+# Buster went EOL - see the apt sources fix above) predates newer root CAs
+# such as HARICA TLS RSA Root CA 2021, which e.g. smtp.pasteur.fr's
+# certificate chains through - TLS connections to servers using such a CA
+# fail with CERTIFICATE_VERIFY_FAILED. certifi ships Mozilla's current CA
+# bundle and gets regular updates on PyPI independent of Buster's own
+# frozen apt archive; use it as the system bundle.
+#
+# Just overwriting /etc/ssl/certs/ca-certificates.crt isn't enough on its
+# own: this image's Python was built with no working default `cafile`
+# (`ssl.get_default_verify_paths()` reports one that doesn't exist on
+# disk), so verification falls back to `capath` - a *directory* of
+# individual certs plus OpenSSL hash-named symlinks maintained by
+# `update-ca-certificates`, not a single concatenated file - and dropping
+# one file there doesn't regenerate those symlinks. SSL_CERT_FILE is the
+# one override `ssl.get_default_verify_paths()` explicitly documents
+# (`openssl_cafile_env`): set it to force every TLS connection in this
+# container to use the up-to-date single-file bundle as `cafile` directly,
+# sidestepping the capath/hash-symlink path entirely.
+RUN CERTIFI_PATH=$(python -c "import certifi; print(certifi.where())") \
+    && cp "$CERTIFI_PATH" /etc/ssl/certs/ca-certificates.crt
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+
+COPY . .
+
+RUN chmod +x docker/init.sh
+
+# Baked in at build time, not run by docker/init.sh alone: on Kubernetes,
+# the one-shot init Job and the web Deployment are separate pods with no
+# shared filesystem by default (unlike docker-compose.yml's
+# ngphylo-static volume) - collectstatic here means every container from
+# this image already has STATIC_ROOT populated, no shared volume needed.
+# Doesn't need real secrets/DB connectivity: collectstatic only reads
+# each app's own static/ directory and settings.STATIC_ROOT, and
+# NGPHYLO_SECRET_KEY/DATABASES both have safe fallback defaults (see
+# settings/base.py) that let Django's settings module load at all.
+RUN python manage.py collectstatic --noinput
+
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
