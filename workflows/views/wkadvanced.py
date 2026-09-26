@@ -179,9 +179,12 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
         # biofile.sanitize_fasta_content's own docstring for the real
         # production bug (a non-breaking space survived alignment/tree
         # building untouched, then broke the Newick Display step) this
-        # is here to prevent from recurring.
+        # is here to prevent from recurring. sanitize_sequence_content,
+        # not sanitize_fasta_content directly, for consistency with the
+        # other call sites even though this specific path only accepts
+        # FASTA past the valid_fasta() check right below.
         tmp_file.seek(0)
-        sanitized = biofile.sanitize_fasta_content(tmp_file.read())
+        sanitized = biofile.sanitize_sequence_content(tmp_file.read())
         tmp_file.seek(0)
         tmp_file.truncate()
         tmp_file.write(sanitized)

@@ -133,8 +133,13 @@ def tool_exec_view(request, pk, store_output=None):
                         # tests.ProcessFileToUploadTest for the same
                         # sanitize_fasta_content() call proven correct
                         # against the other two submission paths.
+                        # sanitize_sequence_content, not
+                        # sanitize_fasta_content directly - this view
+                        # explicitly accepts "phylip" as a real type
+                        # below (type in ["fasta", "phylip"]), unlike
+                        # the other two submission paths.
                         tmp_file.seek(0)
-                        sanitized = biofile.sanitize_fasta_content(tmp_file.read())
+                        sanitized = biofile.sanitize_sequence_content(tmp_file.read())
                         tmp_file.seek(0)
                         tmp_file.truncate()
                         tmp_file.write(sanitized)
@@ -173,10 +178,10 @@ def tool_exec_view(request, pk, store_output=None):
                             tmp_file.flush()
                             # Same sanitization as the uploaded_file
                             # branch above - see
-                            # biofile.sanitize_fasta_content's own
+                            # biofile.sanitize_sequence_content's own
                             # docstring.
                             tmp_file.seek(0)
-                            sanitized = biofile.sanitize_fasta_content(tmp_file.read())
+                            sanitized = biofile.sanitize_sequence_content(tmp_file.read())
                             tmp_file.seek(0)
                             tmp_file.truncate()
                             tmp_file.write(sanitized)

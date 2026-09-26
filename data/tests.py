@@ -102,6 +102,44 @@ class SanitizeFastaContentTest(TestCase):
         self.assertEqual(nseq_before, nseq_after)
         self.assertEqual(length_before, length_after)
 
+    def test_replaces_question_marks_with_n_for_nucleotide_content(self):
+        content = '>seq1\nACGT??ACGT\n>seq2\nAC??GTAC\n'
+        self.assertEqual(
+            biofile.sanitize_fasta_content(content),
+            '>seq1\nACGTNNACGT\n>seq2\nACNNGTAC\n')
+
+    def test_replaces_question_marks_with_x_for_protein_content(self):
+        # E/F/I/L/P/Q aren't valid nucleotide-ambiguity letters, so this
+        # can only be protein - see _guess_is_protein()'s own docstring
+        # for why nucleotide is checked first in the ambiguous cases.
+        content = '>seq1\nMEFPIL??QW\n'
+        self.assertEqual(
+            biofile.sanitize_fasta_content(content),
+            '>seq1\nMEFPILXXQW\n')
+
+    def test_leaves_question_marks_when_composition_is_ambiguous(self):
+        # Nothing but "?" itself in the sequence - nothing left to
+        # guess a composition from, so left untouched rather than
+        # guessing wrong.
+        content = '>seq1\n??????\n'
+        self.assertEqual(biofile.sanitize_fasta_content(content), content)
+
+    def test_does_not_replace_question_marks_inside_a_header(self):
+        content = '>seq1?weird header\nACGT?\n'
+        result = biofile.sanitize_fasta_content(content)
+        self.assertIn('?', result.split('\n')[0])
+        self.assertNotIn('?', result.split('\n')[1])
+
+    def test_question_mark_replacement_is_guessed_once_for_the_whole_file(self):
+        # Not per-sequence: a lone "?" in one otherwise-too-short-to-
+        # classify sequence still gets replaced correctly using the
+        # composition guessed from the *other* sequences in the same
+        # file - a single phylogenetics input is never a real mix of
+        # nucleotide and protein records.
+        content = '>seq1\nACGTACGTACGT\n>seq2\n?\n'
+        result = biofile.sanitize_fasta_content(content)
+        self.assertIn('>seq2\nN\n', result)
+
 
 class UploadMixinSanitizesFastaTest(TestCase):
     """
@@ -145,6 +183,164 @@ class UploadMixinSanitizesFastaTest(TestCase):
         mixin.upload_file(fasta, history_id='hist1')
         self.assertIn('>A0A1Q2MHV5_1_364\n', captured['content'])
         self.assertNotIn('\xa0', captured['content'])
+
+
+class SanitizePhylipContentTest(TestCase):
+    """
+    Loose/relaxed PHYLIP counterpart to SanitizeFastaContentTest above -
+    same real bug class (a non-breaking space embedded in a sequence
+    name surviving into a Newick tree, where it's treated as a token
+    delimiter unlike everywhere else in the pipeline), but for PHYLIP
+    input, which sanitize_fasta_content() itself is a no-op on (none of
+    its lines start with ">").
+    """
+
+    def test_sanitizes_the_real_reported_bug_case(self):
+        # Same id/NBSP shape as SanitizeFastaContentTest's own
+        # regression case, just in PHYLIP's "name<whitespace>sequence"
+        # shape instead of FASTA's ">id description".
+        content = " 1 4\nA0A1Q2MHV5\xa0_1_364 ACGT\n"
+        self.assertEqual(
+            biofile.sanitize_phylip_content(content),
+            " 1 4\nA0A1Q2MHV5_1_364 ACGT\n")
+
+    def test_sanitizes_only_the_declared_number_of_name_lines(self):
+        content = (
+            " 3 4\n"
+            "seq1\xa0a ACGT\n"
+            "seq2b    ACGT\n"
+            "seq3     ACGT\n"
+        )
+        self.assertEqual(
+            biofile.sanitize_phylip_content(content),
+            " 3 4\n"
+            "seq1_a ACGT\n"
+            "seq2b    ACGT\n"
+            "seq3     ACGT\n")
+
+    def test_leaves_interleaved_continuation_lines_untouched(self):
+        # N=2 in the header - a third line with no name field at all
+        # (an interleaved block's own continuation, pure sequence data)
+        # must never be mistaken for a third name line and run through
+        # sanitize_fasta_id()'s own character replacements.
+        content = (
+            " 2 8\n"
+            "s1\xa0x ACGT\n"
+            "s2      ACGT\n"
+            "AC,GT\n"
+        )
+        result = biofile.sanitize_phylip_content(content)
+        self.assertEqual(result, (
+            " 2 8\n"
+            "s1_x ACGT\n"
+            "s2      ACGT\n"
+            "AC,GT\n"
+        ))
+
+    def test_blank_separator_lines_are_not_counted_or_touched(self):
+        content = (
+            " 2 4\n"
+            "\n"
+            "s1\xa0x ACGT\n"
+            "s2   ACGT\n"
+        )
+        result = biofile.sanitize_phylip_content(content)
+        self.assertIn("s1_x ACGT", result)
+        self.assertIn("s2   ACGT", result)
+
+    def test_malformed_header_leaves_content_untouched(self):
+        content = "not a real header\nsome data\n"
+        self.assertEqual(biofile.sanitize_phylip_content(content), content)
+
+    def test_accepts_and_returns_bytes(self):
+        content = " 1 4\nseq\xa01 ACGT\n".encode('utf-8')
+        result = biofile.sanitize_phylip_content(content)
+        self.assertIsInstance(result, bytes)
+        self.assertEqual(result, b" 1 4\nseq_1 ACGT\n")
+
+    def test_does_not_touch_sequence_data_lines(self):
+        # The actual regression to guard against: only name lines
+        # change, never the sequence data itself (no dropped/added
+        # characters that would shift alignment length or content).
+        content = " 2 4\ns1\xa0a ACGT\ns2   TGCA\n"
+        result = biofile.sanitize_phylip_content(content)
+        self.assertIn("ACGT", result)
+        self.assertIn("TGCA", result)
+
+    def test_replaces_question_marks_in_a_name_lines_own_data(self):
+        content = " 2 6\ns1 ACGT??\ns2 AC??GT\n"
+        self.assertEqual(
+            biofile.sanitize_phylip_content(content),
+            " 2 6\ns1 ACGTNN\ns2 ACNNGT\n")
+
+    def test_replaces_question_marks_in_interleaved_continuation_lines(self):
+        # N=2 - "s1"/"s2" are name lines, the two lines after them are
+        # pure sequence-data continuation (no name field at all, per
+        # the class docstring above) and must still get the same "?"
+        # replacement, just without ever touching a name.
+        content = (
+            " 2 8\n"
+            "s1 ACGT\n"
+            "s2 ACGT\n"
+            "AC??\n"
+            "??GT\n"
+        )
+        self.assertEqual(
+            biofile.sanitize_phylip_content(content),
+            " 2 8\n"
+            "s1 ACGT\n"
+            "s2 ACGT\n"
+            "ACNN\n"
+            "NNGT\n")
+
+    def test_question_mark_replacement_uses_protein_when_applicable(self):
+        content = " 1 8\ns1 MEFPIL??\n"
+        self.assertEqual(
+            biofile.sanitize_phylip_content(content),
+            " 1 8\ns1 MEFPILXX\n")
+
+    def test_question_mark_replacement_is_guessed_once_across_all_lines(self):
+        # Same "one guess for the whole file, not per-line" reasoning
+        # as sanitize_fasta_content's own equivalent test - a name
+        # line's own data can be too short/ambiguous ("?" alone) to
+        # classify by itself, but still gets the right replacement from
+        # the file's overall composition.
+        content = " 2 4\ns1 ACGT\ns2 ?\n"
+        result = biofile.sanitize_phylip_content(content)
+        self.assertIn("s2 N\n", result)
+
+
+class SanitizeSequenceContentDispatchTest(TestCase):
+    """
+    utils.biofile.sanitize_sequence_content() - the entry point every
+    upload/paste call site now uses instead of calling
+    sanitize_fasta_content() directly, so a PHYLIP submission (a real,
+    accepted format on at least the A La Carte/single-tool path - see
+    tools/views.py's own "type in ['fasta', 'phylip']" check) actually
+    gets sanitized instead of silently passing through untouched.
+    """
+
+    def test_dispatches_fasta_content_to_the_fasta_sanitizer(self):
+        content = '>a\xa0b\nACGT\n'
+        self.assertEqual(
+            biofile.sanitize_sequence_content(content),
+            biofile.sanitize_fasta_content(content))
+
+    def test_dispatches_phylip_content_to_the_phylip_sanitizer(self):
+        content = " 1 4\nseq\xa01 ACGT\n"
+        self.assertEqual(
+            biofile.sanitize_sequence_content(content),
+            biofile.sanitize_phylip_content(content))
+
+    def test_leaves_unrecognized_content_untouched(self):
+        content = "just some\xa0random text\n"
+        self.assertEqual(biofile.sanitize_sequence_content(content), content)
+
+    def test_works_on_bytes_input_too(self):
+        content = b" 1 4\nseq\xc2\xa01 ACGT\n"
+        result = biofile.sanitize_sequence_content(content)
+        self.assertIsInstance(result, bytes)
+        self.assertEqual(result, b" 1 4\nseq_1 ACGT\n")
 
 
 class StaticPagesSmokeTest(TestCase):

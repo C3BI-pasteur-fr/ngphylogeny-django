@@ -124,6 +124,56 @@ def check_nt(sequence):
             return True
     return False
 
+
+def _guess_is_protein(seq_chars):
+    """
+    Best-effort nucleotide-vs-protein guess for sanitize_fasta_content()/
+    sanitize_phylip_content()'s own "?" -> N/X replacement below.
+    check_nt() first, not check_aa() alone or first - verified directly
+    (not assumed): every letter in each nucleotide alphabet
+    (unambiguous_dna.letters == "GATC", etc.) is *also* individually a
+    valid amino-acid letter, since extended_protein.letters includes
+    plain A/C/G/T/U among its own ambiguity codes - a pure-ACGT
+    nucleotide sequence would otherwise incorrectly satisfy check_aa()
+    too (protein's alphabet is by far the more permissive/inclusive of
+    the two), and this function would guess "protein" for genuinely
+    nucleotide input.
+
+    "?", common alignment-gap characters, and whitespace are all
+    stripped before checking (upper-cased first, same as check_aa()/
+    check_nt() themselves) - both functions compare the sequence's
+    *entire* character set against an alphabet's own letters, and none
+    of "?"/a gap/a space is ever a member of any of them, so leaving
+    them in would make every sequence that contains one fail both
+    checks regardless of its real composition. Whitespace matters here
+    specifically because callers pass in a PHYLIP line's own captured
+    "rest" group (name/data boundary included) or several such lines
+    joined together - both routinely still carry the separating
+    whitespace itself, and some real PHYLIP files additionally space
+    sequence data into blocks (e.g. "ACGT ACGT ACGT").
+
+    Returns True (protein), False (nucleotide), or None if nothing's
+    left to check or the remaining letters don't cleanly match either
+    alphabet - callers leave "?" untouched in that case rather than
+    guessing wrong.
+    """
+    stripped = re.sub(r"[?\-.\s]", "", seq_chars.upper())
+    if not stripped:
+        return None
+    if check_nt(stripped):
+        return False
+    if check_aa(stripped):
+        return True
+    return None
+
+
+def _unknown_base_char(is_protein):
+    """None (composition couldn't be determined) -> don't replace at all."""
+    if is_protein is None:
+        return None
+    return "X" if is_protein else "N"
+
+
 def valid_fasta(fasta_file):
     # Check uploaded file or pasted content
     # Read the whole thing upfront and normalize to text: uploaded file
@@ -273,6 +323,11 @@ def sanitize_fasta_id(seq_id):
     ASCII space), but keeping the whole id (cleanseqname() is only ever
     used to derive a short *display* name, and deliberately truncates
     at the first whitespace instead).
+
+    Also reused verbatim by sanitize_phylip_content() below - a
+    sequence name's own character-cleanup rules don't actually depend
+    on which format it came from, only how that format delimits the
+    name from what follows it.
     """
     out = re.sub(r"\s+", "_", seq_id)
     for ch in "()[]{}:;,":
@@ -286,14 +341,27 @@ def sanitize_fasta_content(content):
     """
     Rewrites every '>' header line's sequence id (the token up to the
     first whitespace) via sanitize_fasta_id() - leaving the rest of
-    each header (the description) and every non-header line untouched.
-    See that function's own docstring for the real bug this prevents.
+    each header (the description) untouched. See that function's own
+    docstring for the real bug this prevents.
 
-    FASTA only, not PHYLIP - the far more common upload path (OneClick
-    itself is documented as taking "Fasta format" - see
-    templates/workflows/workflows_form.html), and the one the real
-    incident behind this function was actually in; phylip's own
-    differently-shaped sequence-name field was out of scope here.
+    Also replaces any "?" character found in the actual sequence data
+    (never inside a header line) with "N" or "X" - whichever this
+    file's own composition calls for, guessed once via
+    _guess_is_protein() from every non-header character in the whole
+    file (not per-sequence - a single phylogenetics input is
+    overwhelmingly one homogeneous marker/alignment, never a mix of
+    nucleotide and protein sequences, so one guess for the whole file
+    is both simpler and no less accurate than a per-sequence one).
+    "?" is a common "unknown base" placeholder in some source tools/
+    formats, but isn't itself a valid symbol in any nucleotide/protein
+    alphabet the tools downstream of this expect - left as "?"
+    (never replaced) when the file's composition can't be confidently
+    determined, rather than guessing wrong and introducing a character
+    that's just as invalid as "?" was.
+
+    FASTA only, not PHYLIP - see sanitize_phylip_content() below for
+    that, and sanitize_sequence_content() for the dispatcher every real
+    call site actually uses.
 
     Accepts/returns either bytes or str, matching whichever the caller
     already has (an uploaded file's own chunks are bytes; pasted text
@@ -302,6 +370,10 @@ def sanitize_fasta_content(content):
     """
     is_bytes = isinstance(content, bytes)
     text = content.decode("utf-8", errors="replace") if is_bytes else content
+
+    is_protein = _guess_is_protein("".join(
+        line for line in text.splitlines() if not line.startswith(">")))
+    replacement_char = _unknown_base_char(is_protein)
 
     out_lines = []
     for line in text.splitlines(keepends=True):
@@ -328,10 +400,171 @@ def sanitize_fasta_content(content):
             if seq_id_raw:
                 line = ">" + sanitize_fasta_id(seq_id_raw) + rest
             line += ending
+        elif replacement_char:
+            line = line.replace("?", replacement_char)
         out_lines.append(line)
 
     result = "".join(out_lines)
     return result.encode("utf-8") if is_bytes else result
+
+
+def sanitize_phylip_content(content):
+    """
+    Loose/relaxed PHYLIP counterpart to sanitize_fasta_content() above -
+    same real bug class (a Unicode-whitespace character, e.g. a non-
+    breaking space, embedded inside a sequence name silently surviving
+    into a Newick tree where it's the one tool in the pipeline that
+    treats it as a token delimiter), just for PHYLIP-formatted input,
+    which was never covered at all before this (every upload/paste call
+    site sanitizes unconditionally regardless of detected format -
+    sanitize_fasta_content() itself is a no-op on PHYLIP content, since
+    none of its lines start with ">").
+
+    Deliberately "loose": treats a sequence name as an arbitrary-length
+    token up to the first run of whitespace (the same boundary rule as
+    a FASTA id, and how sanitize_fasta_id() below is reused verbatim),
+    not strict PHYLIP's fixed 10-character name width - real uploaded
+    files vary too much in practice for that width to be worth
+    enforcing here, and getting it wrong would risk corrupting sequence
+    data rather than just a name.
+
+    Only the first N lines *after* the header count as name lines - N
+    (the sequence count) is the first whitespace-separated token on the
+    header line (PHYLIP's own "N M" - sequence count/alignment length -
+    first line, every variant's own convention, an optional trailing
+    "I"/"S" interleaved/sequential flag ignored here). This is what
+    correctly handles interleaved PHYLIP too, not just sequential: an
+    interleaved file's later blocks are pure sequence-data continuation
+    lines with *no* name field at all, and must be left completely
+    untouched by sanitize_fasta_id()'s own character replacements -
+    those only ever apply to the name portion of the first N lines. A
+    header that can't be parsed (no leading integer) leaves the content
+    untouched entirely, same as sanitize_sequence_content()'s own
+    fallback below - this function only ever runs on content already
+    sniffed as PHYLIP-shaped.
+
+    Also replaces any "?" character found in the sequence-data portion
+    of *every* data line (both the first N name lines' own trailing
+    data, and any later interleaved continuation lines) with "N" or
+    "X" - same composition guess (once for the whole file, "?"/gaps
+    excluded from the check) as sanitize_fasta_content()'s own
+    identical feature; see that function's own docstring for the full
+    reasoning.
+
+    Same bytes-or-str tolerance as sanitize_fasta_content().
+    """
+    is_bytes = isinstance(content, bytes)
+    text = content.decode("utf-8", errors="replace") if is_bytes else content
+
+    def split_ending(line):
+        for newline in ("\r\n", "\n", "\r"):
+            if line.endswith(newline):
+                return line[:-len(newline)], newline
+        return line, ""
+
+    # Literal ASCII space/tab only for the name/sequence-data boundary,
+    # not a Unicode-whitespace-aware \S/\s split - same reasoning as
+    # sanitize_fasta_content()'s own id/description split: a name
+    # containing an embedded NBSP (the exact case this whole function
+    # exists for) would otherwise have the NBSP itself mistaken for the
+    # boundary, splitting the name short *before* the character that
+    # actually needs sanitizing and leaving it untouched in what this
+    # treats as "rest".
+    name_data_re = re.compile(r"([^ \t]*)([ \t].*)?$", re.DOTALL)
+
+    lines = text.splitlines(keepends=True)
+
+    header_index = None
+    nseq = 0
+    for i, line in enumerate(lines):
+        body, _ = split_ending(line)
+        if body.strip():
+            header_index = i
+            parts = body.split()
+            try:
+                nseq = int(parts[0])
+            except (IndexError, ValueError):
+                nseq = 0
+            break
+
+    if header_index is None or nseq <= 0:
+        return content
+
+    # First pass: gather every data line's own sequence-data portion
+    # (the name-stripped "rest" for one of the first N lines, the whole
+    # line for a later continuation one) to guess the file's overall
+    # nucleotide/protein composition once - the same guess is then
+    # applied consistently to every line in the second pass below,
+    # rather than each line (mis)guessing on its own, much shorter,
+    # slice of the data.
+    data_chars = []
+    named_lines_seen = 0
+    for i in range(header_index + 1, len(lines)):
+        body, _ = split_ending(lines[i])
+        if not body.strip():
+            continue
+        if named_lines_seen < nseq:
+            data_chars.append(name_data_re.match(body).group(2) or "")
+            named_lines_seen += 1
+        else:
+            data_chars.append(body)
+    replacement_char = _unknown_base_char(_guess_is_protein("".join(data_chars)))
+
+    out_lines = list(lines)
+    named_lines_seen = 0
+    for i in range(header_index + 1, len(lines)):
+        body, ending = split_ending(lines[i])
+        if not body.strip():
+            # A blank separator line (common between interleaved
+            # blocks) - doesn't carry a name or data, isn't counted,
+            # isn't touched.
+            continue
+        if named_lines_seen < nseq:
+            match = name_data_re.match(body)
+            name_raw, rest = match.group(1), match.group(2) or ""
+            if replacement_char:
+                rest = rest.replace("?", replacement_char)
+            if name_raw:
+                out_lines[i] = sanitize_fasta_id(name_raw) + rest + ending
+            named_lines_seen += 1
+        elif replacement_char:
+            out_lines[i] = body.replace("?", replacement_char) + ending
+
+    result = "".join(out_lines)
+    return result.encode("utf-8") if is_bytes else result
+
+
+def sanitize_sequence_content(content):
+    """
+    Dispatches raw uploaded/pasted content to sanitize_fasta_content()
+    or sanitize_phylip_content() based on a quick peek at its own first
+    non-blank line - every call site only ever has raw content in hand
+    at this point, not a file on disk to run detect_type() against
+    (that function needs a real path for magic/SeqIO.parse). ">" starts
+    a FASTA header; two leading whitespace-separated integers starts a
+    PHYLIP header (its own "N M" line). Anything else (already-invalid
+    input, or a format neither sanitizer applies to) is returned
+    untouched - the actual format/content validation that matters
+    happens downstream (biofile.valid_fasta()/nb_sequences()), not
+    here; this is purely a best-effort cleanup before that.
+    """
+    is_bytes = isinstance(content, bytes)
+    text = content.decode("utf-8", errors="replace") if is_bytes else content
+
+    first_line = ""
+    for line in text.splitlines():
+        if line.strip():
+            first_line = line.strip()
+            break
+
+    if first_line.startswith(">"):
+        return sanitize_fasta_content(content)
+
+    parts = first_line.split()
+    if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
+        return sanitize_phylip_content(content)
+
+    return content
 
 
 def translate(sequence, frame):

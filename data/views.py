@@ -61,8 +61,11 @@ class UploadMixin(object):
         # tool in the pipeline (MAFFT, PhyML/PhyML-SMS, newick_utilities'
         # nw_display, ...) will tokenize identically - see
         # biofile.sanitize_fasta_content's own docstring for the real
-        # production bug this prevents from recurring.
-        content = biofile.sanitize_fasta_content(content)
+        # production bug this prevents from recurring, and
+        # sanitize_sequence_content's for why this dispatches on
+        # detected format rather than calling sanitize_fasta_content
+        # directly (PHYLIP input is a real, supported path here too).
+        content = biofile.sanitize_sequence_content(content)
 
         return self.request.galaxy.tools.paste_content(content=content, file_name=name,
                                                        history_id=self.history_id)
@@ -78,9 +81,9 @@ class UploadMixin(object):
         tmpfile.flush()
 
         # Same sanitization as upload_content() above - see
-        # biofile.sanitize_fasta_content's own docstring.
+        # biofile.sanitize_sequence_content's own docstring.
         tmpfile.seek(0)
-        sanitized = biofile.sanitize_fasta_content(tmpfile.read())
+        sanitized = biofile.sanitize_sequence_content(tmpfile.read())
         tmpfile.seek(0)
         tmpfile.truncate()
         tmpfile.write(sanitized)
