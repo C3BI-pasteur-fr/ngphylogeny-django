@@ -1,13 +1,46 @@
-Django==1.11.22
-django-formtools==2.0
-django-crispy-forms==1.6
-bioblend==0.10
-django-markdown-deux==1.0.5
+Django==4.2.15
+django-formtools==2.6.1
+django-crispy-forms==1.9.2
+# Bumped from 0.10 (2017); bioblend's Client classes dropped the
+# per-client .url attribute and GalaxyClient.default_params along the
+# way (auth moved from ?key= query params to an x-api-key header) -
+# both fixed up in galaxy/galaxylib.py and workflows/models.py.
+# Import-level/unit-level verified only; NOT yet exercised against a
+# real Galaxy server - that's the next step.
+bioblend==1.4.0
+# django-markdown-deux is unmaintained (last release ~2013) and crashes
+# on import under Django 4.0+ (force_text/force_unicode removed). Its
+# one template usage (templates/documentation.html) was replaced with
+# a small local template tag (data/templatetags/markdown_extras.py)
+# built directly on markdown2, which markdown_deux itself just wrapped.
+markdown2==2.5.1
+# Build-time dependency of biopython==1.70 (not declared by biopython itself)
+numpy==1.24.4
 biopython==1.70
-python-slugify
-bibtexparser
-celery[redis]
-uwsgi
-django-simple-captcha
+python-slugify==8.0.4
+bibtexparser==1.4.4
+celery[redis]==5.4.0
+uwsgi==2.0.31
+django-simple-captcha==0.7.0
 python_magic==0.4.15
-psycopg2
+# Used directly by galaxy/galaxylib.py (multipart uploads); previously
+# only ever installed transitively via bioblend.
+requests-toolbelt==1.0.0
+# Not verified locally (needs libpq, which this dev machine lacks) -
+# the Dockerfile installs libpq-dev/postgresql-client before this.
+psycopg2==2.9.9
+# Needed by Django's loaddata for tools/fixtures/tool_flags.yaml - never
+# declared even though it's required; only ever worked before if something
+# else pulled it in transitively.
+PyYAML==6.0.1
+# Static file serving under DEBUG=False - see MIDDLEWARE in settings/base.py.
+whitenoise==6.7.0
+# Chart rendering for the daily workflow report (workspace/reports.py) -
+# 3.7.x is the last line supporting Python 3.8, matching numpy==1.24.4
+# above. Always used with the non-interactive 'Agg' backend (no display in
+# a Celery worker container).
+matplotlib==3.7.5
+# Used by the Dockerfile to replace the frozen/stale Debian Buster
+# ca-certificates bundle with an actively-maintained one - see the comment
+# there. Not imported directly by any app code.
+certifi==2024.8.30

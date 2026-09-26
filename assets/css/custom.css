@@ -14,6 +14,44 @@ html {
     float:right;
 }
 
+/* Replaces the old GitHub-hosted "Fork me on GitHub" ribbon image
+   (https://s3.amazonaws.com/github/ribbons/...), which GitHub
+   decommissioned years ago (403) - a plain CSS ribbon has no external
+   asset to go missing. */
+.github-fork-ribbon {
+    position: fixed;
+    top: 0;
+    right: 0;
+    z-index: 1000;
+    overflow: hidden;
+    width: 150px;
+    height: 150px;
+    pointer-events: none;
+}
+
+.github-fork-ribbon a {
+    position: absolute;
+    top: 42px;
+    right: -38px;
+    width: 170px;
+    padding: 5px 0;
+    transform: rotate(45deg);
+    background-color: #2c3e50;
+    color: #fff;
+    text-align: center;
+    text-decoration: none;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 13px;
+    font-weight: bold;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    pointer-events: auto;
+}
+
+.github-fork-ribbon a:hover {
+    background-color: #1a252f;
+    color: #fff;
+}
+
 div#page-wrapper {
     max-width: 1000px;
     margin-left:auto;
@@ -108,6 +146,7 @@ header.pagehead {
     width: 100%;
     height:80px;
     text-align: center;
+    position: relative;
 }
 
 header.pagehead h1 {
@@ -115,6 +154,26 @@ header.pagehead h1 {
     line-height:80px;
     margin:0px;
     padding:0px;
+}
+
+/* Absolutely positioned (not part of the centered-title flow) so it
+   sits at the left edge of the bar regardless of how wide the centered
+   h1 ends up - white logo, matches the dark header background (the
+   footer's own Institut Pasteur logo, logo_institut_pasteur.png, is the
+   full-color version, meant for a light background). */
+.pagehead-logo-link {
+    position: absolute;
+    left: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.pagehead-logo {
+    height: 44px;
+    width: auto;
+    max-width: 160px;
+    max-height: 44px;
+    display: block;
 }
 
 .row-eq-height {
@@ -357,4 +416,135 @@ textarea.fastaseq{
     height: 80px;
     width:100%;
     /*overflow-y: scroll;*/
+}
+
+/* Shared dataset/job table look - card container, color-coded status
+   pills, line-art SVG icon buttons with a fixed set of action slots so
+   the same action always lines up in the same column across rows.
+   Originally built for the history detail page's dataset table
+   (workspace/include/history_contents_refreshable.html, #myTable) and
+   moved here, global, once workspace/running_jobs.html needed the exact
+   same look for a second, unrelated table rather than duplicating it. */
+@keyframes workflow-step-pulse {
+    50% { opacity: 0.55; }
+}
+.history-table-card {
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .06), 0 1px 12px rgba(0, 0, 0, .04);
+    overflow: hidden;
+    margin-bottom: 22px;
+}
+table.history-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 13.5px;
+    margin-bottom: 0;
+}
+.history-table thead th {
+    text-align: left;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #8a94a6;
+    background: #fafbfc;
+    padding: 12px 16px;
+    border-bottom: 1px solid #e9ecf1;
+    border-top: none;
+}
+.history-table tbody tr {
+    border-bottom: 1px solid #e9ecf1;
+}
+.history-table tbody tr:last-child { border-bottom: none; }
+.history-table tbody tr:hover td { background: #f8fafc; }
+.history-table td {
+    padding: 11px 16px;
+    vertical-align: middle;
+    border-top: none;
+}
+.col-tool {
+    font-weight: 600;
+    color: #2c3e50;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.col-step {
+    color: #8a94a6;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.col-filename {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12.5px;
+    color: #2c3e50;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px 3px 8px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.status-pill .dot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
+.status-pill-ok { background: rgba(33, 189, 141, .12); color: #148a63; }
+.status-pill-ok .dot { background: #21bd8d; }
+.status-pill-running { background: rgba(68, 108, 179, .12); color: #33548c; }
+.status-pill-running .dot { background: #446cb3; animation: workflow-step-pulse 1.4s infinite; }
+.status-pill-pending { background: rgba(176, 182, 189, .18); color: #6b7280; }
+.status-pill-pending .dot { background: #b0b6bd; }
+.status-pill-error { background: rgba(217, 83, 79, .12); color: #b03530; }
+.status-pill-error .dot { background: #d9534f; }
+
+.history-table .actions { white-space: nowrap; text-align: right; }
+.history-table .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 7px;
+    background: #f1f3f6;
+    color: #4b5563;
+    text-decoration: none;
+    transition: background-color .1s ease, color .1s ease;
+}
+.history-table .icon-btn:hover { background: #e4e9f0; color: #2c3e50; }
+.history-table .icon-btn svg { display: block; }
+.history-table .icon-btn.primary { color: #446cb3; background: rgba(68, 108, 179, .12); }
+.history-table .icon-btn.primary:hover { background: rgba(68, 108, 179, .2); }
+.history-table .icon-btn.viewer { color: #148a63; background: rgba(33, 189, 141, .12); }
+.history-table .icon-btn.viewer:hover { background: rgba(33, 189, 141, .2); }
+.history-table .icon-btn.warn { color: #a9660a; background: rgba(184, 134, 11, .14); }
+.history-table .icon-btn.warn:hover { background: rgba(184, 134, 11, .22); }
+.history-table .icon-btn.danger { color: #b03530; background: rgba(217, 83, 79, .12); }
+.history-table .icon-btn.danger:hover { background: rgba(217, 83, 79, .2); }
+.history-table .itol-badge { width: 36px; height: 36px; border-radius: 50%; }
+/* Same-width empty spacer per slot, so a button that only applies to
+   some rows (tree viewer/iTOL/MSAViewer) still lines up in the exact
+   same column on every row. */
+.history-table .action-slot { display: inline-block; width: 30px; }
+.history-table .action-slot.wide { width: 36px; }
+
+/* Moved here from home.css (global, loaded on every page via base.html)
+   once a second page (documentation.html's Browser Extension section)
+   needed the same "New" pill, rather than duplicating it or pulling in
+   home.css's whole page-specific stylesheet just for this one class. */
+.badge-new {
+    background: #e8871e;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 9px;
 }

@@ -3,6 +3,12 @@
 {% load static %}
 {% block stylesheet %}
     <script>
+        function deselect_tool(radio) {
+            $(radio).prop('checked', false);
+            $(radio).parent().removeClass('active btn-info');
+            $('#' + $(radio).attr('data-target')).hide().empty();
+        }
+
         $(function () {
             $('input:radio:checked').each(function () {
                 $('#' + $(this).attr('data-target')).show().empty().append($('#' + $(this).attr('data-panel')).clone().show());
@@ -15,6 +21,20 @@
                     $('#' + $(this).attr('data-target')).show().empty().append($('#' + $(this).attr('data-panel')).clone().show());
                 }
             });
+            // Radio buttons can't be unchecked by clicking them again
+            // natively - track whether a tool was already selected
+            // right before the click, and if so, deselect it instead
+            // (removing it from the workflow skeleton below) rather
+            // than leaving it checked.
+            $('.workflow-tool').on('mousedown', function () {
+                $(this).data('was-checked', $(this).find('input:radio').is(':checked'));
+            });
+            $('.workflow-tool').on('click', function (e) {
+                if ($(this).data('was-checked')) {
+                    e.preventDefault();
+                    deselect_tool($(this).find('input:radio'));
+                }
+            });
             $('#wkname').change(function () {
                 $("input[name='wkname']").val($('#wkname').val());
             });
@@ -25,9 +45,8 @@
     </script>
     <script>
         function remove_panel(obj) {
-            $(obj).parent().parent().hide();
-            $('[data-panel="' + $(obj).parent().attr('id') + '"]').prop('checked', false).parent().removeClass('active btn-info');
-            $(obj).parent().remove();
+            var panel_id = $(obj).parent().attr('id');
+            deselect_tool($('[data-panel="' + panel_id + '"]'));
         }
     </script>
 
@@ -38,19 +57,6 @@
 {% endblock %}
 {% block xl-content %}
 <br>
-{% if messages %}
-<ul class="messages">
-    {% for message in messages %}
-    {% if "error" in message.tags %}
-    <div class="alert alert-danger alert-dismissable">
-        <a href="#" class="close" data-dismiss="alert"
-           aria-label="close">&times;</a><strong>Warning!</strong>
-        {{ message }}
-    </div>
-    {% endif %}
-    {% endfor %}
-</ul>
-{% endif %}
 <div class="row">
     <div class="col-md-11 col-md-offset-1">
         <h3 class="text-justify"><span class="glyphicon glyphicon-chevron-right small"></span> Name</h3>

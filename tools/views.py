@@ -4,8 +4,9 @@ import ast
 import json
 import tempfile
 
+import requests
 from bioblend.galaxy.tools.inputs import inputs
-from django.core.urlresolvers import reverse_lazy
+from django.urls import reverse_lazy
 from django.forms import ValidationError
 from django.http import HttpResponse
 from django.shortcuts import render, get_object_or_404, redirect
@@ -37,6 +38,15 @@ class ToolListView(ListView):
         tool_list = Tool.objects.filter(galaxy_server__current=True,
                                         visible=True,
                                         toolflag__name__in=CATEGORY).prefetch_related('toolflag_set')
+        # Precompute a plain attribute here rather than having the
+        # template call toolflag_set.first() via {% regroup %}/dictsort:
+        # dictsort's variable resolver stopped auto-calling methods
+        # starting Django 3.1 (a security hardening against triggering
+        # side-effecting methods via sort keys), so
+        # dictsort:"toolflag_set.first.verbose_name" silently resolved
+        # to "" and the whole list appeared empty.
+        for tool in tool_list:
+            tool.first_flag = tool.toolflag_set.first()
         return tool_list
 
 
@@ -105,6 +115,35 @@ def tool_exec_view(request, pk, store_output=None):
                         for chunk in uploaded_file.chunks():
                             tmp_file.write(chunk)
                         tmp_file.flush()
+                        # Rewrite sequence ids to something every
+                        # downstream Galaxy tool will tokenize
+                        # identically - see
+                        # biofile.sanitize_fasta_content's own
+                        # docstring for the real production bug this
+                        # prevents from recurring. Same code as
+                        # data.views.UploadMixin.upload_file() and
+                        # workflows.views.wkadvanced.
+                        # process_file_to_upload() - not covered by its
+                        # own dedicated view-level test here (this
+                        # view's own setup - ToolForm/
+                        # ToolFieldWhiteList/gi.tools.show_tool - is
+                        # substantial and unrelated to what's being
+                        # verified), see data.tests.
+                        # UploadMixinSanitizesFastaTest and workflows.
+                        # tests.ProcessFileToUploadTest for the same
+                        # sanitize_fasta_content() call proven correct
+                        # against the other two submission paths.
+                        # sanitize_sequence_content, not
+                        # sanitize_fasta_content directly - this view
+                        # explicitly accepts "phylip" as a real type
+                        # below (type in ["fasta", "phylip"]), unlike
+                        # the other two submission paths.
+                        tmp_file.seek(0)
+                        sanitized = biofile.sanitize_sequence_content(tmp_file.read())
+                        tmp_file.seek(0)
+                        tmp_file.truncate()
+                        tmp_file.write(sanitized)
+                        tmp_file.flush()
                         # send file to galaxy after verifying the
                         # allowed extensions
                         type = biofile.detect_type(tmp_file.name)
@@ -136,6 +175,16 @@ def tool_exec_view(request, pk, store_output=None):
                         if content:
                             tmp_file = tempfile.NamedTemporaryFile()
                             tmp_file.write(content)
+                            tmp_file.flush()
+                            # Same sanitization as the uploaded_file
+                            # branch above - see
+                            # biofile.sanitize_sequence_content's own
+                            # docstring.
+                            tmp_file.seek(0)
+                            sanitized = biofile.sanitize_sequence_content(tmp_file.read())
+                            tmp_file.seek(0)
+                            tmp_file.truncate()
+                            tmp_file.write(sanitized)
                             tmp_file.flush()
                             # send file to galaxy after verifying the
                             # allowed extensions
@@ -238,12 +287,46 @@ def get_tool_name(request):
     context = dict()
 
     if request.POST:
-        gi = request.galaxy
         toolid = request.POST.get('tool_id')
 
         if toolid:
-            tool = gi.tools.get_tools(tool_id=toolid)[0]
-            context.update({'tool_id': toolid, 'name': tool.get('name')})
+            # This app already mirrors every tool it actually runs
+            # locally (Tool, keyed by galaxy_server+id_galaxy - see
+            # CLAUDE.md's "App responsibilities") - a local lookup avoids
+            # a Galaxy API round trip (and a dependency on Galaxy being
+            # reachable at all) for a tool that's almost always already
+            # known here, since NGPhylogeny only ever submits its own
+            # preconfigured/imported workflows. Falls back to Galaxy only
+            # for a tool this app doesn't know about yet.
+            local_tool = Tool.objects.filter(
+                galaxy_server=request.galaxy_server, id_galaxy=toolid).first()
+            if local_tool:
+                context.update({'tool_id': toolid, 'name': local_tool.name})
+                return HttpResponse(json.dumps(context), content_type='application/json')
+
+            gi = request.galaxy
+            try:
+                # get_tools(tool_id=...) was removed from bioblend (its
+                # signature still accepts the kwarg, but the
+                # implementation now just raises ValueError telling you
+                # to use this instead) - show_tool() is the direct
+                # replacement and returns a single dict, not a list.
+                tool = gi.tools.show_tool(tool_id=toolid)
+                context.update({'tool_id': toolid, 'name': tool.get('name')})
+            except (ConnectionError, requests.exceptions.RequestException):
+                # Same transient-Galaxy-failure reasoning as
+                # workspace.views.get_dataset_toolprovenance (including
+                # why both exception types are caught, not just
+                # bioblend's own ConnectionError) - this endpoint is now
+                # polled frequently too (once per tool group, every 10s -
+                # see the history detail page's step chain/table), so a
+                # single hiccup shouldn't turn into an unhandled Django
+                # 500 on every failed poll. The caller
+                # already keeps its placeholder text if no 'name' comes
+                # back (see history_contents_refreshable.html).
+                return HttpResponse(
+                    json.dumps({'tool_id': toolid}),
+                    content_type='application/json', status=502)
 
     return HttpResponse(json.dumps(context), content_type='application/json')
 

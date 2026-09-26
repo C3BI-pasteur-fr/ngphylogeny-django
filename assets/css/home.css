@@ -52,3 +52,50 @@
 .phylo-analysis a:hover {
     text-decoration: none;
 }
+
+.extension-banner {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-top: 20px;
+    background: linear-gradient(to right, #eaf2f8, #f7fbfe);
+    border: 1px solid #cfe3f0;
+    border-left: 4px solid #1f77b4;
+    border-radius: 4px;
+    padding: 18px 24px;
+}
+
+.extension-banner-icon {
+    flex-shrink: 0;
+}
+
+.extension-banner-text {
+    flex-grow: 1;
+}
+
+.extension-banner-text h3 {
+    margin: 0;
+    font-size: 17px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.extension-banner-text p {
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: #555;
+}
+
+.extension-banner-btn {
+    flex-shrink: 0;
+    background: #1f77b4;
+    color: #fff;
+    font-weight: 600;
+}
+
+.extension-banner-btn:hover,
+.extension-banner-btn:focus {
+    background: #185d8e;
+    color: #fff;
+}

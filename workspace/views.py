@@ -1,24 +1,153 @@
 from __future__ import unicode_literals
+import io
 import json
+import zipfile
 
+import requests
+from django.contrib import messages
+from django.contrib.admin.views.decorators import staff_member_required
+from django.core import signing
+from django.db.models import Q
 from django.http import HttpResponse
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
+from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.generic import TemplateView, ListView, DeleteView, UpdateView, DetailView, View
 from django.views.generic.edit import SingleObjectMixin
 from bioblend.galaxy.client import ConnectionError
-from django.shortcuts import render, redirect
+from django.shortcuts import get_object_or_404, render, redirect
 from django.http import HttpResponseRedirect
-from tasks import deletegalaxyhistory
+from blast.models import BlastRun
+from .tasks import deletegalaxyhistory
 from workflows.tasks import deletegalaxyworkflow
 
 from galaxy.decorator import connection_galaxy
 from .models import WorkspaceHistory
+from .reports import CATEGORY_LABELS, build_report_web_context
+from .rocrate import build_rocrate_metadata
 from tools.models import Tool
 from .tasks import updateworkspacestatus
 
+# Salt for the workspace/histories permalink (PreviousHistoryListView/
+# WorkspacePermalinkView below) - just namespaces the signed token so it
+# can't be reinterpreted by some unrelated future use of
+# django.core.signing in this app; doesn't add real secrecy on its own
+# (nothing here does - see WorkspacePermalinkView's own docstring for
+# why that's fine).
+PERMALINK_SALT = 'workspace.permalink'
+
 from utils import ip
+
+
+def _parse_history_json(raw, default):
+    """
+    workspace.tasks.deleteoldgalaxyhistory() clears a cleaned-up
+    WorkspaceHistory's history_content_json/history_info_json to "" once
+    its Galaxy data is purged (see CLAUDE.md's "Workflow duplicates and
+    the Celery cleanup jobs") - and history_detail/the citation AJAX
+    views have no ownership check, so an old, already-deleted history's
+    id is still directly reachable. json.loads("") raises a
+    JSONDecodeError ("Expecting value: line 1 column 1 (char 0)")
+    instead of degrading gracefully - a real production 500. Same
+    tolerant-parsing convention already used by running_jobs_view.
+    """
+    try:
+        return json.loads(raw)
+    except (ValueError, TypeError):
+        return default
+
+
+@staff_member_required
+def daily_report_view(request):
+    """
+    Web view of the same daily workflow-usage report emailed by
+    workspace.tasks.send_daily_report (see workspace/reports.py) - admin/
+    staff only (@staff_member_required redirects to the admin login page,
+    same as the Django admin itself, for anyone not logged in as staff).
+
+    Cached (see build_report_web_context()) - ?refresh=1 bypasses that
+    for anyone who wants to force an immediate up-to-date render.
+    """
+    force_refresh = request.GET.get('refresh') == '1'
+    return render(request, 'workspace/report_page.html',
+                  build_report_web_context(force_refresh=force_refresh))
+
+
+@staff_member_required
+def running_jobs_view(request):
+    """
+    Live admin/staff-only view of everything currently running - both
+    regular workflow/tool runs (WorkspaceHistory: monitored, not yet
+    finished/deleted) and BLAST runs (BlastRun: still PENDING/RUNNING,
+    not deleted) - oldest first, so a run approaching or past one of the
+    two staleness cutoffs (workspace.tasks.WORKFLOW_RUN_STALE_AFTER,
+    blast.tasks.PASTEUR_RUN_STALE_AFTER - both cancel/error a run out
+    once it's been going too long, see CLAUDE.md) surfaces at the top
+    instead of being buried under newer ones. Not cached, unlike
+    daily_report_view - the whole point here is a live, up-to-the-moment
+    picture, not a 15-minute-old snapshot.
+    """
+    now = timezone.now()
+    rows = []
+
+    for w in (WorkspaceHistory.objects
+              .filter(monitored=True, finished=False, deleted=False)
+              .values('history', 'name', 'created_date', 'email',
+                      'workflow_category', 'workflow_steps', 'workflow__name',
+                      'history_content_json')):
+        # history_content_json is only ever dict-shaped in the normal
+        # case - a genuinely malformed one shouldn't crash this page,
+        # just show as 0 datasets (see WorkspaceHistoryObjectMixin.
+        # get_context_data's own note on this - hit live once already).
+        try:
+            content = json.loads(w['history_content_json'] or '[]')
+        except ValueError:
+            content = []
+        steps = [f for f in content if isinstance(f, dict)]
+        done = sum(1 for f in steps if 'ok' in f.get('state', ''))
+        running = sum(
+            1 for f in steps
+            if any(s in f.get('state', '') for s in ('new', 'queued', 'running')))
+        rows.append({
+            'kind': 'Workflow',
+            'name': w['name'],
+            'type': CATEGORY_LABELS.get(
+                w['workflow_category'], w['workflow_category'] or 'Unknown'),
+            'email': w['email'],
+            'created_date': w['created_date'],
+            'runtime': now - w['created_date'],
+            'steps_total': len(steps),
+            'steps_done': done,
+            'steps_running': running,
+            'url': reverse('history_detail', kwargs={'history_id': w['history']}),
+        })
+
+    server_labels = dict(BlastRun.BLASTSERVERS)
+    status_labels = dict(BlastRun.RUNSTATUS)
+    for b in (BlastRun.objects
+              .filter(status__in=[BlastRun.PENDING, BlastRun.RUNNING], deleted=False)
+              .values('id', 'query_id', 'date', 'email', 'server', 'blastprog', 'status')):
+        is_running = b['status'] == BlastRun.RUNNING
+        rows.append({
+            'kind': 'BLAST',
+            'name': b['query_id'] or 'BLAST run',
+            'type': '%s BLAST (%s, %s)' % (
+                server_labels.get(b['server'], b['server']), b['blastprog'],
+                status_labels.get(b['status'], b['status'])),
+            'email': b['email'],
+            'created_date': b['date'],
+            'runtime': now - b['date'],
+            'steps_total': 1,
+            'steps_done': 0,
+            'steps_running': 1 if is_running else 0,
+            'url': reverse('blast_view', kwargs={'pk': b['id']}),
+        })
+
+    rows.sort(key=lambda r: r['created_date'])
+
+    return render(request, 'workspace/running_jobs.html', {'rows': rows, 'now': now})
+
 
 @connection_galaxy
 def create_history(request, name='', wf_category='', wf_steps=''):
@@ -35,7 +164,7 @@ def create_history(request, name='', wf_category='', wf_steps=''):
         name = 'NGPhylogeny analyse'
     history = gi.histories.create_history(name=name)
 
-    if request.user.is_authenticated():
+    if request.user.is_authenticated:
         current_user = request.user
     else:
         current_user = server.galaxyuser_set.get(anonymous=True).user
@@ -73,8 +202,12 @@ def get_or_create_history(request, name=''):
     """
     history_id = get_history(request)
     if not history_id:
-        # Create a new galaxy history
-        history_id = create_history(request, name)
+        # Create a new galaxy history - create_history() returns the
+        # WorkspaceHistory model instance (other callers, e.g.
+        # tools/views.py, need it for its FKs/wf_category/wf_steps), not
+        # a plain id - unwrap .history here to actually satisfy this
+        # function's own "return: history_id" contract.
+        history_id = create_history(request, name).history
 
     return history_id
 
@@ -99,6 +232,128 @@ def delete_history(request, history_id=None):
 
     WorkspaceHistory.objects.get(history=history_id).delete()
 
+def resolve_dataset_tools(gi, galaxy_server, history_id, dataset_ids):
+    """
+    Resolve {dataset_id: tool_id} for every dataset in dataset_ids (via
+    Galaxy's provenance API - there's no bulk equivalent bioblend
+    exposes) and {tool_id: name} for every tool_id resolved that way.
+
+    Tool names are looked up in this app's own Tool model (mirrors every
+    tool NGPhylogeny actually runs - see CLAUDE.md's "App
+    responsibilities") before ever falling back to a Galaxy API call:
+    NGPhylogeny only ever submits its own preconfigured/imported
+    workflows, so the tool that produced any given dataset is almost
+    always already known locally, and a DB lookup is both cheaper and
+    doesn't depend on Galaxy being reachable at all.
+
+    Used to be done independently, every 10s poll, by three separate
+    call sites (the step chain, the table, and the citations list - each
+    re-deriving the exact same dataset->tool_id/tool_id->name mappings
+    on their own) - see CLAUDE.md's step-chain section for the real
+    production incident (pod restarts) this contributed to. Computed
+    once per poll instead, in HistoryContentRefreshView.get_context_data,
+    and shared across all three.
+
+    A dataset/tool that can't be resolved (a transient Galaxy failure -
+    see get_dataset_toolprovenance's own docstring for why that's common
+    enough to matter here) is simply left out of the returned dicts
+    rather than raising - callers already treat "not resolved yet" as a
+    normal state (a step chain box/table row just keeps its fallback
+    label).
+    """
+    dataset_tool_ids = {}
+    for dataset_id in dataset_ids:
+        try:
+            provenance = gi.histories.show_dataset_provenance(
+                history_id, dataset_id, follow=False)
+        except (ConnectionError, requests.exceptions.RequestException):
+            continue
+        tool_id = provenance.get('tool_id')
+        if tool_id:
+            dataset_tool_ids[dataset_id] = tool_id
+
+    tool_names = {}
+    for tool_id in set(dataset_tool_ids.values()):
+        local_tool = Tool.objects.filter(
+            galaxy_server=galaxy_server, id_galaxy=tool_id).first()
+        if local_tool:
+            tool_names[tool_id] = local_tool.name
+            continue
+        try:
+            tool = gi.tools.show_tool(tool_id=tool_id)
+            tool_names[tool_id] = tool.get('name')
+        except (ConnectionError, requests.exceptions.RequestException):
+            pass
+
+    return dataset_tool_ids, tool_names
+
+
+def build_citations(dataset_tool_ids):
+    """
+    Citation list for every distinct tool in dataset_tool_ids.values() -
+    shared logic between get_dataset_citations (the standalone AJAX
+    endpoint, kept for any other caller) and HistoryContentRefreshView,
+    which now computes this itself alongside the step chain/table so the
+    history detail page's 10s poll doesn't also re-derive it separately
+    via its own extra Galaxy calls (see resolve_dataset_tools above).
+    """
+    refs = [ngphylo_citation()]
+    for tool_id in set(dataset_tool_ids.values()):
+        try:
+            t = Tool.objects.get(id_galaxy=tool_id)
+            refs.extend(t.citations)
+        except Tool.DoesNotExist:
+            pass
+    return refs
+
+
+@connection_galaxy
+def export_rocrate(request, history_id):
+    """
+    Download an RO-Crate (https://www.researchobject.org/ro-crate/)
+    packaging this history's workflow/tool provenance as a citable,
+    machine-readable record - see workspace/rocrate.py's own docstring
+    for exactly what it contains and why dataset files are referenced by
+    URL rather than bundled into the crate.
+
+    No ownership/finished check, same as history_detail and every other
+    per-history view in this file (see CLAUDE.md's permalink section for
+    why: a history's id is already not secret, reachable the exact same
+    way elsewhere) - the "export" button itself only appears once
+    object.finished is true, but a crate built mid-run just describes
+    whatever's there yet rather than being blocked outright.
+    """
+    gi = request.galaxy
+    galaxy_server = request.galaxy_server
+    w = get_object_or_404(
+        WorkspaceHistory, history=history_id, galaxy_server=galaxy_server)
+    w.history_content = _parse_history_json(w.history_content_json, [])
+    w.history_info = _parse_history_json(
+        w.history_info_json, {'id': history_id})
+
+    dataset_ids = [f.get('id') for f in w.history_content
+                   if isinstance(f, dict) and f.get('id')]
+    dataset_tool_ids, tool_names = resolve_dataset_tools(
+        gi, galaxy_server, w.history, dataset_ids)
+
+    metadata = build_rocrate_metadata(w, dataset_tool_ids, tool_names)
+
+    # A zip containing just ro-crate-metadata.json, not a bare JSON
+    # download - the conventional .crate.zip shape RO-Crate tooling
+    # (ro-crate-py, Describo, ...) expects to unzip and find that file
+    # in, even though there's nothing else local to bundle alongside it
+    # here (see workspace/rocrate.py's docstring on remote-only files).
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr('ro-crate-metadata.json', json.dumps(metadata, indent=2))
+    buf.seek(0)
+
+    response = HttpResponse(buf.read(), content_type='application/zip')
+    response['Content-Disposition'] = (
+        'attachment; filename="ngphylogeny-%s-rocrate.zip"' % w.history)
+    return response
+
+
 class WorkspaceHistoryObjectMixin(SingleObjectMixin):
     model = WorkspaceHistory
     pk_url_kwarg = 'history_id'
@@ -114,9 +369,85 @@ class WorkspaceHistoryObjectMixin(SingleObjectMixin):
         w = queryset.get(history=hist_id,
                          galaxy_server=server)
 
-        w.history_content = json.loads(w.history_content_json)
-        w.history_info = json.loads(w.history_info_json)
+        w.history_content = _parse_history_json(w.history_content_json, [])
+        # Falls back to just the real history id (not {}) so the
+        # template's {% url ... object.history_info.id %} calls (session
+        # toggle, rename, refresh timer, citation links) still reverse
+        # correctly for a cleaned-up history instead of raising
+        # NoReverseMatch on a missing id.
+        w.history_info = _parse_history_json(
+            w.history_info_json, {'id': hist_id})
         return w
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        # Shared by every view built on this mixin - both HistoryDetailView
+        # (the very first render) and HistoryContentRefreshView (every
+        # later poll) include workspace/include/history_contents_
+        # refreshable.html, which needs this same data either way. This
+        # used to live only on HistoryContentRefreshView's own
+        # get_context_data() - meaning an already-finished history (whose
+        # client-side polling timer gets cleared before ever firing once
+        # - see that template's own {% if object.finished %} handling)
+        # loaded straight through HistoryDetailView and got a step chain/
+        # table/citations list that stayed permanently unresolved, since
+        # /refresh was never going to be called to backfill it. Real
+        # production bug, not just a theoretical gap - a completed run's
+        # tool column and citations list stayed blank forever.
+        #
+        # Matches the template's own "is there a real step chain/table
+        # yet" condition (that same file's top-level {% if %}) - nothing
+        # to resolve in the "please wait" state, so skip the Galaxy calls
+        # entirely rather than doing pointless work before a run has even
+        # really started.
+        history_content = self.object.history_content or []
+        if len(history_content) > 1:
+            # Real production crash: history_content is only ever
+            # dict-shaped in the *normal* case - a genuinely malformed/
+            # unexpected history_content_json (seen live: a plain list
+            # of strings) crashed this with AttributeError: 'str' object
+            # has no attribute 'get', 500ing the whole page. Hit right on
+            # a new workflow submission - Galaxy is at its busiest
+            # scheduling many jobs at once right then, a plausible moment
+            # for show_history(contents=True) to transiently return
+            # something other than its usual dataset list (workspace.
+            # tasks.initializeworkspacejob/updateworkspacestatus store
+            # whatever it returns verbatim, with no validation). The
+            # template rendering this exact same data
+            # (dictsortreversed:"hid" etc.) never crashed on it, since
+            # Django's template engine fails a bad attribute lookup
+            # silently rather than raising - this filters out anything
+            # that isn't actually dict-shaped (or has no 'id') to match
+            # that same tolerance, rather than assuming the shape.
+            dataset_ids = [f.get('id') for f in history_content
+                           if isinstance(f, dict) and f.get('id')]
+            dataset_tool_ids, tool_names = resolve_dataset_tools(
+                self.request.galaxy, self.request.galaxy_server,
+                self.object.history_info['id'], dataset_ids)
+            context['dataset_tool_ids'] = dataset_tool_ids
+            context['tool_names'] = tool_names
+            context['citations'] = build_citations(dataset_tool_ids)
+
+        # First finished newick/nhx dataset in the history, if any - the
+        # same file the table's own {% if file.extension in "nhx,nwk" %}
+        # branch shows the "Interactive Tree visualisation"/iTOL buttons
+        # for (see history_contents_refreshable.html). Read straight off
+        # history_content, already fetched above with no extra Galaxy
+        # call - this is what history_contents_refreshable.html's inline
+        # phylotree.js preview fetches (via display_raw) and renders,
+        # once, the first time it appears.
+        tree_dataset = next(
+            (f for f in history_content
+             if isinstance(f, dict) and f.get('extension') in ('nhx', 'nwk')
+             and 'ok' in (f.get('state') or '')),
+            None)
+        if tree_dataset and tree_dataset.get('id'):
+            context['tree_preview_dataset_id'] = tree_dataset['id']
+            context['tree_preview_url'] = reverse(
+                'display_raw', kwargs={'file_id': tree_dataset['id']})
+        return context
+
 
 @method_decorator(ensure_csrf_cookie, name="dispatch")
 @method_decorator(connection_galaxy, name="dispatch")
@@ -126,7 +457,46 @@ class HistoryDetailView(WorkspaceHistoryObjectMixin, DetailView):
     """
     template_name = 'workspace/history.html'
 
-    
+
+@method_decorator(connection_galaxy, name="dispatch")
+class HistoryContentRefreshView(WorkspaceHistoryObjectMixin, DetailView):
+    """
+    Renders just the part of the history detail page that actually
+    changes as a run progresses (workspace/include/
+    history_contents_refreshable.html) - either the step-chain + dataset
+    table once there are 2+ datasets, or a "please wait" message before
+    that (that template's own top comment has the detail; this used to
+    be a second, entirely separate template/timer - history_wait.html,
+    now deleted - unified into this same one so both states share the
+    exact same shell/polling). Polled client-side (jQuery's .load(),
+    which - unlike a plain AJAX GET swapped in via .html() - executes
+    the <script> tags in the response, so this reuses the exact same
+    in-template JS the initial page load already runs, no separate
+    client-side re-init logic needed) instead of the full page reload
+    templates/workspace/history.html used to do every 10s.
+    No @ensure_csrf_cookie here (unlike HistoryDetailView) - the initial
+    full page load already guarantees the cookie exists by the time this
+    is ever called from that page's own JS.
+
+    ?staging=1 tells the template it's being loaded into the hidden
+    #history-refreshable-staging container rather than rendered directly
+    into the live #history-refreshable-region - see the template's own
+    comments for why (builds the step chain/table out of sight, then
+    swaps the finished result in, instead of visibly blanking and
+    rebuilding the live page on every poll).
+    """
+    template_name = 'workspace/include/history_contents_refreshable.html'
+
+    def get_context_data(self, **kwargs):
+        # dataset_tool_ids/tool_names/citations are resolved by the
+        # shared WorkspaceHistoryObjectMixin.get_context_data() above -
+        # this just adds the one thing specific to being polled rather
+        # than directly included on first load.
+        context = super().get_context_data(**kwargs)
+        context['staging'] = self.request.GET.get('staging') == '1'
+        return context
+
+
 @connection_galaxy
 def get_dataset_toolprovenance(request, history_id, ):
     """
@@ -138,12 +508,38 @@ def get_dataset_toolprovenance(request, history_id, ):
 
         data_id = request.POST.get('dataset_id')
         if data_id:
-            dataset_provenance = gi.histories.show_dataset_provenance(
-                history_id,
-                data_id,
-                follow=False)
-            context.update({'tool_id': dataset_provenance.get("tool_id"),
-                            'dataset_id': data_id})
+            try:
+                dataset_provenance = gi.histories.show_dataset_provenance(
+                    history_id,
+                    data_id,
+                    follow=False)
+                context.update({'tool_id': dataset_provenance.get("tool_id"),
+                                'dataset_id': data_id})
+            except (ConnectionError, requests.exceptions.RequestException):
+                # Galaxy (or a proxy in front of it) can be transiently
+                # unreachable/return a 502 - this endpoint is now polled
+                # frequently (once per dataset, every 10s - see the
+                # history detail page's step chain/table), so a single
+                # hiccup shouldn't turn into an unhandled Django 500 (and
+                # an admin error email under DEBUG=False) on every failed
+                # poll. Both exception types matter here, not just
+                # bioblend's own ConnectionError: bioblend's own retry
+                # logic (bioblend.galaxy.client.Client._get) only catches
+                # requests.exceptions.ConnectionError itself (converting
+                # it to this one) - a plain read timeout
+                # (requests.exceptions.ReadTimeout, the likely shape of a
+                # slow/overloaded rather than fully unreachable Galaxy,
+                # and specifically what GalaxyUser.get_galaxy_instance's
+                # new timeout=30 is meant to turn a stuck request into)
+                # isn't a ConnectionError subclass and would otherwise
+                # propagate straight through uncaught. The client already
+                # treats a failed request the same as any other rejected
+                # promise - see history_contents_refreshable.html's own
+                # .then(success, fail) handling - a non-2xx status is
+                # enough for that.
+                return HttpResponse(
+                    json.dumps({'dataset_id': data_id}),
+                    content_type='application/json', status=502)
     return HttpResponse(json.dumps(context), content_type='application/json')
 
 
@@ -153,17 +549,30 @@ def get_dataset_citations(request, history_id):
     Ajax: return citations of all tools used in the dataset
     """
     context = dict()
-    refs = []
+    refs = [ngphylo_citation()]
     tools = []
     gi = request.galaxy
     try:
         w = WorkspaceHistory.objects.get(history=history_id)
-        w.history_content = json.loads(w.history_content_json)
+        w.history_content = _parse_history_json(w.history_content_json, [])
         for file in w.history_content:
-            dataset_provenance = gi.histories.show_dataset_provenance(
-                history_id,
-                file.get('id'),
-                follow=False)
+            try:
+                dataset_provenance = gi.histories.show_dataset_provenance(
+                    history_id,
+                    file.get('id'),
+                    follow=False)
+            except (ConnectionError, requests.exceptions.RequestException):
+                # Same transient-Galaxy-failure reasoning as
+                # get_dataset_toolprovenance above (including why both
+                # exception types are caught, not just bioblend's own
+                # ConnectionError) - this makes one bioblend call per
+                # dataset in the history, so it's even more likely than
+                # that one to hit a flaky/overloaded Galaxy on a big
+                # history. Skip just this dataset's provenance rather
+                # than failing the whole citations fetch (and crashing
+                # this now-every-10s-polled endpoint) over one bad
+                # dataset.
+                continue
             tools.append(dataset_provenance.get('tool_id'))
         tools = list(set(tools))
         for tid in tools:
@@ -177,6 +586,21 @@ def get_dataset_citations(request, history_id):
     context.update({'citations': refs})
     return HttpResponse(json.dumps(context), content_type='application/json')
 
+
+def ngphylo_citation():
+    ref = """
+    <a target="_blank" href="https://doi.org/10.1093/nar/gkz303">
+    <div class="pub-date">2019</div>
+    <div class="pub-content clear">
+    <span class="pub-author-list">Lemoine, F. and Correia, D. and Lefort, V. and Doppelt-Azeroual, O. and Mareuil, F. and Cohen-Boulakia, S. and Gascuel, O.</span>
+    <span class="pub-title">NGPhylogeny.fr: new generation phylogenetic services for non-specialists.</span>
+    <span class="pub-journal-name">Nucleic acids research, 47:W260-W265</span>
+    </div>
+    </a>
+    """
+    return ref
+
+
 @connection_galaxy
 def get_dataset_citations_bibtex(request, history_id):
     """
@@ -187,7 +611,7 @@ def get_dataset_citations_bibtex(request, history_id):
     gi = request.galaxy
     try:
         w = WorkspaceHistory.objects.get(history=history_id)
-        w.history_content = json.loads(w.history_content_json)
+        w.history_content = _parse_history_json(w.history_content_json, [])
         for file in w.history_content:
             dataset_provenance = gi.histories.show_dataset_provenance(
                 history_id,
@@ -199,7 +623,7 @@ def get_dataset_citations_bibtex(request, history_id):
             try:
                 t = Tool.objects.get(id_galaxy=tid)
                 for b in t.citation_set.all():
-                    refs=refs+unicode(b.reference)+unicode("\n")
+                    refs=refs+b.reference+"\n"
             except Tool.DoesNotExist:
                 pass
     except WorkspaceHistory.DoesNotExist:
@@ -216,7 +640,7 @@ def get_dataset_citations_txt(request, history_id):
     gi = request.galaxy
     try:
         w = WorkspaceHistory.objects.get(history=history_id)
-        w.history_content = json.loads(w.history_content_json)
+        w.history_content = _parse_history_json(w.history_content_json, [])
         for file in w.history_content:
             dataset_provenance = gi.histories.show_dataset_provenance(
                 history_id,
@@ -228,7 +652,7 @@ def get_dataset_citations_txt(request, history_id):
             try:
                 t = Tool.objects.get(id_galaxy=tid)
                 for b in t.citation_set.all():
-                    refs=refs+unicode(b.txt())+unicode("\n")
+                    refs=refs+b.txt()+"\n"
             except Tool.DoesNotExist:
                 pass
     except WorkspaceHistory.DoesNotExist:
@@ -244,7 +668,7 @@ class GalaxyErrorView(TemplateView):
     template_name='display_galaxyerror.html'
     def get_context_data(self, *args, **kwargs):
         gi = self.request.galaxy
-	context = super(GalaxyErrorView, self).get_context_data(*args, **kwargs)
+        context = super(GalaxyErrorView, self).get_context_data(*args, **kwargs)
         dsid = kwargs.get('id')
         ds = gi.datasets.show_dataset(dsid)
         state = ''
@@ -259,28 +683,137 @@ class GalaxyErrorView(TemplateView):
             errormessage = jinfo.get('stderr')+jinfo.get('stdout')
             hid = ds.get('history_id')
             name = ds.get('name')
-	context['state'] = state
+        context['state'] = state
         context['error'] = errormessage
         context['history_id'] = hid
         context['jobname'] = name
-	return context
+        return context
 
 @method_decorator(connection_galaxy, name="dispatch")
 class PreviousHistoryListView(ListView):
     """
-    Display list of Previous analyses stored in the sessions cookies
+    Display list of Previous analyses - the session-based list (the
+    classic behavior: whatever Galaxy history ids this browser session
+    has run, tracked in request.session['histories']) merged with this
+    account's own histories (WorkspaceHistory.user), when logged in.
+    Session-only analyses (anonymous, or run in a different browser/
+    session than the one currently logged in) still show up here too -
+    the two sources are additive, not a replacement of one by the
+    other.
     """
     queryset = WorkspaceHistory.objects.none()
     template_name = 'workspace/previous_analyses.html'
     context_object_name = 'histories'
 
     def get_queryset(self):
-        self.queryset = WorkspaceHistory.objects.filter(history__in=self.request.session.get('histories', [])).filter(deleted=False).order_by("-created_date")
+        session_ids = self.request.session.get('histories', [])
+        history_filter = Q(history__in=session_ids)
+        if self.request.user.is_authenticated:
+            history_filter |= Q(user=self.request.user)
+        self.queryset = WorkspaceHistory.objects.filter(
+            history_filter, deleted=False).order_by("-created_date")
 
-        # update session history
-        self.request.session['histories'] = list(self.queryset.values_list('history', flat=True))
+        # update session history - only reconciles the session's own
+        # list (dropping any id that's since been deleted), same as
+        # before this method also started merging in account-owned
+        # rows. Account rows deliberately aren't added into the session
+        # list itself: they're already reachable independently of the
+        # session (via login), so stuffing them in here would just make
+        # the session cookie grow unboundedly for an active account and
+        # make them show up on the permalink (PreviousHistoryListView.
+        # get_context_data() below) for no real benefit.
+        self.request.session['histories'] = list(
+            self.queryset.filter(history__in=session_ids)
+            .values_list('history', flat=True))
 
         return self.queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Permalink to *this* list - see WorkspacePermalinkView below.
+        # Built from self.queryset (get_queryset() above - already
+        # deleted=False-filtered and, for a logged-in account, merged
+        # with that account's own WorkspaceHistory.user rows on top of
+        # the session ones), not just the session list on its own - a
+        # permalink shared/reopened elsewhere should restore the exact
+        # same combined view this page is showing right now, not just
+        # its session-based half. Deliberately not restricted to
+        # session_ids the way the session-list-reconciliation step in
+        # get_queryset() is - that step exists to prune stale session
+        # ids, a different concern from what this token should carry.
+        history_ids = list(
+            self.queryset.values_list('history', flat=True))
+        # request.build_absolute_uri(), not site_url() - site_url()
+        # exists for contexts with no request at all (a Celery task
+        # building an email/RO-Crate link - see workspace/emails.py's
+        # own docstring) and falls back to a hardcoded 'ngphylogeny.fr'
+        # host when NGPHYLO_HTTPS_HOST/NGPHYLO_HOST aren't set, which is
+        # wrong here: this is a real view with a real request, so the
+        # actual host (localhost:8000 in local dev, the real domain in
+        # prod) is already known correctly - no env var/fallback guess
+        # needed. Reported live: a local dev instance's permalink
+        # pointed at https://ngphylogeny.fr/workspace/permalink/... - a
+        # real production URL, not this local instance at all.
+        context['permalink_url'] = (
+            self.request.build_absolute_uri(
+                reverse('workspace_permalink', kwargs={
+                    'token': signing.dumps(history_ids, salt=PERMALINK_SALT),
+                }))
+            if history_ids else None)
+        return context
+
+
+class WorkspacePermalinkView(View):
+    """
+    GET /workspace/permalink/<token> - restores the exact list of
+    analyses a permalink (PreviousHistoryListView.get_context_data()
+    above) was generated for into *this* browser's session, then
+    redirects to the normal previous-analyses page. The whole point:
+    "Workspace" is otherwise only ever readable from the one browser
+    session that actually ran each analysis (see PreviousHistoryListView's
+    own docstring) - clearing cookies, switching devices, or just coming
+    back much later loses access to it entirely even though the
+    underlying data is still there. This link is how to get it back (or
+    hand the same list to a collaborator).
+
+    The token itself is just a signed (not encrypted) list of history
+    ids - django.core.signing guarantees it wasn't tampered with, not
+    that it's secret. That's consistent with how an individual history
+    is already reachable: WorkspaceHistoryObjectMixin.get_object()
+    (history_detail, /workspace/history/<id>) has no ownership/session
+    check at all - anyone who knows a 16-character Galaxy history id can
+    already open that history directly. A permalink bundling several of
+    those already-not-secret ids together doesn't introduce a new kind
+    of exposure, just a convenient way to share/restore the same list.
+
+    Since PreviousHistoryListView.get_context_data() now builds the
+    token from that page's own merged queryset (session ids union this
+    account's own WorkspaceHistory.user rows, when logged in - see that
+    view's docstring), a permalink generated while logged in carries
+    both halves - following it elsewhere restores the full combined
+    list, not just the session-only part, onto whatever session follows
+    it (regardless of whether *that* session is logged into the same
+    account or not - same not-secret-id reasoning as above, this
+    doesn't grant any access an already-shared history id didn't).
+
+    Merges with (rather than replacing) whatever's already in the
+    current session, so following a permalink in a browser that already
+    has its own, different set of analyses adds to that list instead of
+    losing it.
+    """
+
+    def get(self, request, token):
+        try:
+            history_ids = signing.loads(token, salt=PERMALINK_SALT)
+        except signing.BadSignature:
+            messages.add_message(
+                request, messages.ERROR,
+                "This permalink is invalid or has been corrupted.")
+            return redirect('previous_analyses')
+
+        existing = set(request.session.get('histories', []))
+        request.session['histories'] = list(existing.union(history_ids))
+        return redirect('previous_analyses')
 
 
 @method_decorator(connection_galaxy, name="dispatch")

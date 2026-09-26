@@ -3,34 +3,37 @@
 {% block title %}Previous analyses{% endblock %}
 {% block content %}
 <div class="col-md-offset-1">
-  <ul class="nav histories-nav nav-pills">
-    {% for history in histories %}
-      <li class="col-md-9" style="background-color:{% cycle '#f5f9fb' '#fcfcfc' %}">
-        <a href="{% url 'history_detail' history.history %}">
-          <div class="pull-left">
-            <span class="badge">{{ forloop.counter }}</span>
-          </div>
-          {{ history.name }}
-          <div class="pull-right">
-            <span class="label label-info">{{ history.history|truncatechars:12 }}</span>
-          </div>
-          <div class="pull-right">
-            <span class="text-muted">{{ history.created_date }}</span>
-          </div>
-        </a>
-      </li>
-      <li style="background-color:{% cycle '#f5f9fb' '#fcfcfc' %}">
-        <a href="{% url 'history_delete' history.history %}" class="text-center">
-          <span class='glyphicon glyphicon-trash text-default'></span>
-        </a>
-      </li>
-    {% empty %}
-      <div class="panel panel-info">
-        <div class="panel-heading">Analyses in Session</div>
-        <div class="panel-body">You have no analyses in the session</div>
+  {% if permalink_url %}
+  <div class="panel panel-info">
+    <div class="panel-heading">Permalink to this list</div>
+    <div class="panel-body">
+      <p class="text-muted">
+        Bookmark or share this link to get back to this exact list of
+        analyses later, even from a different browser or device.
+      </p>
+      <div class="input-group">
+        <input id="permalink-url" type="text" class="form-control"
+               value="{{ permalink_url }}" readonly
+               onclick="this.select();">
+        <span class="input-group-btn">
+          <button class="btn btn-default" type="button"
+                  onclick="copyPermalink()">
+            <span class="glyphicon glyphicon-copy"></span> Copy
+          </button>
+        </span>
       </div>
-    {% endfor %}
-  </ul>
+    </div>
+  </div>
+  <script>
+    function copyPermalink() {
+      var input = document.getElementById('permalink-url');
+      input.select();
+      input.setSelectionRange(0, input.value.length);
+      document.execCommand('copy');
+    }
+  </script>
+  {% endif %}
+  {% include "workspace/include/history_list_table.html" with empty_message="You have no analyses in the session or on your account." %}
   <a class="btn btn-danger" role="button" href="{% url 'history_delete_all' %}">Delete all histories</a>
 </div>
 {% endblock %}

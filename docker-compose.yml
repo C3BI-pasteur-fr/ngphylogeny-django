@@ -1,0 +1,156 @@
+x-django-env: &django-env
+  DJANGO_SETTINGS_MODULE: "${NGPHYLO_SETTINGS_MODULE:-NGPhylogeny_fr.settings.local}"
+  NGPHYLO_DATABASE_ENGINE: django.db.backends.postgresql
+  NGPHYLO_DATABASE_NAME: ngphylo
+  NGPHYLO_DATABASE_USER: ngphylo
+  NGPHYLO_DATABASE_PASSWORD: ngphylo_local_dev
+  NGPHYLO_DATABASE_HOST: db
+  NGPHYLO_DATABASE_PORT: "5432"
+  NGPHYLO_REDIS_URL: redis://redis:6379/0
+  # Point these at a running Galaxy server (e.g. the docker-compose in the
+  # sibling NGPhylogeny_fr_galaxytools repo) to link it up automatically -
+  # see README.md. Left unset, the app still starts, it just has no Galaxy
+  # server to submit workflows to yet.
+  NGPHYLO_GALAXY_URL: "${NGPHYLO_GALAXY_URL:-}"
+  NGPHYLO_GALAXY_KEY: "${NGPHYLO_GALAXY_KEY:-}"
+  # Precise/fast workflow-import path (docker/init.sh) - fetches these
+  # specific ids directly instead of listing/name-filtering the target
+  # Galaxy's whole /api/workflows/ collection. Only meaningful when that
+  # collection already has known, stable base-workflow ids (e.g.
+  # galaxy.pasteur.fr - see CLAUDE.md's "Kubernetes deployment" section);
+  # leave unset for a freshly-created Galaxy instance, which won't have
+  # them yet.
+  NGPHYLO_GALAXY_WORKFLOW_IDS: "${NGPHYLO_GALAXY_WORKFLOW_IDS:-}"
+  NGPHYLO_ADMIN_USER: "${NGPHYLO_ADMIN_USER:-admin}"
+  NGPHYLO_ADMIN_EMAIL: "${NGPHYLO_ADMIN_EMAIL:-admin@example.org}"
+  NGPHYLO_ADMIN_PASSWORD: "${NGPHYLO_ADMIN_PASSWORD:-password}"
+  # SMTP config for job-completion emails and the daily workflow report
+  # (workspace.tasks.send_daily_report, 8am UTC - see CLAUDE.md). Left
+  # unset, sending just fails/no-ops (send_daily_report specifically
+  # no-ops without NGPHYLO_REPORT_RECIPIENTS - it doesn't need working SMTP
+  # config to still be safe to leave enabled).
+  NGPHYLO_EMAIL_HOST: "${NGPHYLO_EMAIL_HOST:-}"
+  NGPHYLO_EMAIL_PORT: "${NGPHYLO_EMAIL_PORT:-}"
+  NGPHYLO_EMAIL_HOST_USER: "${NGPHYLO_EMAIL_HOST_USER:-}"
+  NGPHYLO_EMAIL_HOST_PASSWORD: "${NGPHYLO_EMAIL_HOST_PASSWORD:-}"
+  NGPHYLO_EMAIL_USE_TLS: "${NGPHYLO_EMAIL_USE_TLS:-False}"
+  # Comma-separated recipient list for the daily workflow report.
+  NGPHYLO_REPORT_RECIPIENTS: "${NGPHYLO_REPORT_RECIPIENTS:-}"
+  NGPHYLO_REPORT_FROM_EMAIL: "${NGPHYLO_REPORT_FROM_EMAIL:-ngphylogeny@pasteur.fr}"
+  # Comma-separated recipient list the contact form (surveys app) notifies
+  # in addition to saving the submitted Feedback row - same no-op-if-unset
+  # convention as NGPHYLO_REPORT_RECIPIENTS above.
+  NGPHYLO_CONTACT_FORM_RECIPIENTS: "${NGPHYLO_CONTACT_FORM_RECIPIENTS:-}"
+  # "True" serves templates/maintenance.html (503) for every request
+  # instead of routing normally - see NGPhylogeny_fr/middleware.py.
+  NGPHYLO_MAINTENANCE_MODE: "${NGPHYLO_MAINTENANCE_MODE:-False}"
+  # "True" activates the Pasteur Galaxy BLAST server option and
+  # deactivates NCBI's public one at the same time (mutually exclusive,
+  # not independently toggleable) - see settings/base.py's BLASTS dict.
+  # Note BLAST analysis is currently disabled regardless
+  # (blast/views.py's BlastView.dispatch()) - this alone won't bring it
+  # back.
+  NGPHYLO_PASTEUR_BLAST_ENABLED: "${NGPHYLO_PASTEUR_BLAST_ENABLED:-False}"
+  # "True" re-enables public account sign-up (account.views.
+  # AccountCreateView) - off by default for now, see that view's own
+  # docstring.
+  NGPHYLO_ACCOUNT_CREATION_ENABLED: "${NGPHYLO_ACCOUNT_CREATION_ENABLED:-False}"
+  # Days a finished workspace history is kept before
+  # workspace.tasks.deleteoldgalaxyhistory's daily cleanup removes it -
+  # see workspace/models.py's WorkspaceHistory.RETENTION_DAYS.
+  NGPHYLO_WORKSPACE_RETENTION_DAYS: "${NGPHYLO_WORKSPACE_RETENTION_DAYS:-14}"
+  # Days a BlastRun is kept before blast.tasks.deleteoldblastruns's
+  # daily cleanup removes it - see blast/models.py's
+  # BlastRun.RETENTION_DAYS. Independently configurable from
+  # NGPHYLO_WORKSPACE_RETENTION_DAYS above (a different table/task);
+  # defaults to a shorter 7 days.
+  NGPHYLO_BLAST_RETENTION_DAYS: "${NGPHYLO_BLAST_RETENTION_DAYS:-7}"
+  # Days a non-base (per-run duplicated) Galaxy workflow *definition* is
+  # kept before workflows.tasks.deleteoldgalaxyworkflows's daily cleanup
+  # removes it - see workflows/models.py's Workflow.RETENTION_DAYS.
+  # Independently configurable from NGPHYLO_WORKSPACE_RETENTION_DAYS
+  # above (deleting a workflow definition doesn't touch its history's
+  # actual data), defaulting to the same 14 days.
+  NGPHYLO_WORKFLOW_RETENTION_DAYS: "${NGPHYLO_WORKFLOW_RETENTION_DAYS:-14}"
+  # Hours a still-running/queued workspace history is left alone before
+  # workspace.tasks.updateworkspacestatus force-cancels its still-
+  # pending Galaxy jobs - see workspace/tasks.py's WORKFLOW_RUN_STALE_AFTER.
+  NGPHYLO_WORKFLOW_RUN_STALE_HOURS: "${NGPHYLO_WORKFLOW_RUN_STALE_HOURS:-24}"
+  # Hours a still-pending/running Pasteur BLAST run is polled before
+  # blast.tasks.checkblastruns gives up and marks it ERROR - see
+  # blast/tasks.py's PASTEUR_RUN_STALE_AFTER.
+  NGPHYLO_PASTEUR_BLAST_STALE_HOURS: "${NGPHYLO_PASTEUR_BLAST_STALE_HOURS:-3}"
+
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: ngphylo
+      POSTGRES_PASSWORD: ngphylo_local_dev
+      POSTGRES_DB: ngphylo
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ngphylo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - ngphylo-db:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+
+  # One-shot: migrations, admin user, and (if NGPHYLO_GALAXY_URL/KEY are set)
+  # Galaxy server linking + tool/workflow import. web/celery-* wait for this
+  # to finish before starting.
+  init:
+    build: .
+    command: ["docker/init.sh"]
+    environment: *django-env
+    # collectstatic (run by docker/init.sh) writes to STATIC_ROOT
+    # (/home/ngphylo/static) inside *this* container's own filesystem -
+    # without this shared volume, those files never reach web (a
+    # separate container from the same image, but its own independent
+    # filesystem), so under DEBUG=False (settings.prod - see
+    # settings/base.py's STATICFILES_STORAGE/whitenoise setup) every
+    # static asset 404s. Only bit under DEBUG=True (settings.local, the
+    # default here), where Django's dev server serves static files
+    # directly and never needs STATIC_ROOT populated at all - easy to
+    # not notice locally.
+    volumes:
+      - ngphylo-static:/home/ngphylo/static
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    environment: *django-env
+    volumes:
+      - ngphylo-static:/home/ngphylo/static
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
+  celery-worker:
+    build: .
+    command: ["celery", "-A", "NGPhylogeny_fr.celery:app", "worker", "-l", "INFO", "-Q", "default,monitor,ncbi_blast"]
+    environment: *django-env
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
+  celery-beat:
+    build: .
+    command: ["celery", "-A", "NGPhylogeny_fr.celery:app", "beat", "-l", "INFO"]
+    environment: *django-env
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
+volumes:
+  ngphylo-db:
+  ngphylo-static:

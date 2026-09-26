@@ -1,214 +1,641 @@
 {% extends "display.html" %}
 {% load static %}
 {% block stylesheet %}
-    <script src="{% static 'presto/d3.v3.min.js' %} "></script>
-    <script src="{% static 'presto/load_tree.js' %} "></script>
-    <script src="{% static 'presto/phylotree.js' %} "></script>
-    <link rel="stylesheet" type="text/css" href="{% static 'presto/css/font-awesome.css' %}"/>
-    <link rel="stylesheet" type="text/css" href="{% static 'presto/phylotree.css' %}"/>
+    <!-- Modern, actively-maintained phylotree.js (npm "phylotree" 2.6.0 -
+         the same "veg/phylotree.js" project the old presto/phylotree.js
+         bundle here used to be, just years newer: D3 v7 core, TypeScript,
+         real releases) instead of the old PRESTO toolbar built by hand
+         against that ancient version's API. The toolbar below is a fresh,
+         small one built directly against the new API's own real
+         accessors (radial()/alignTips()/internalNames(), all verified
+         directly against the vendored bundle, not guessed from docs) -
+         plus the library's own built-in interaction/context-menu system
+         (click a node) for everything not covered by an explicit
+         button. Needs underscore AND lodash loaded as separate globals
+         first - see underscore-lodash-shim.js for why both, in that
+         order, are required (a real bug in this package's own UMD
+         build, not a choice made here). -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.8.3/underscore-min.js"></script>
+    <script>window.__phylotreeUnderscore = window._;</script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js"></script>
+    <script src="{% static 'phylotree-2.6.0/underscore-lodash-shim.js' %}"></script>
+    <link rel="stylesheet" type="text/css" href="{% static 'phylotree-2.6.0/phylotree.css' %}"/>
+    <link rel="stylesheet" type="text/css" href="{% static 'phylotree-2.6.0/phylotree-menus.css' %}"/>
+    <script src="{% static 'phylotree-2.6.0/phylotree.js' %}"></script>
+    <style>
+      .tree-viewer-wrapper {
+        padding: 10px 0;
+      }
+      .tree-viewer-hint {
+        color: #666;
+        margin-bottom: 10px;
+      }
+      .tree-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 18px;
+        padding: 10px 14px;
+        margin-bottom: 12px;
+        background: #f7f7f9;
+        border: 1px solid #e3e3e3;
+        border-radius: 4px;
+      }
+      .tree-toolbar .toolbar-group {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .tree-toolbar label {
+        font-weight: normal;
+        margin: 0;
+        white-space: nowrap;
+      }
+      #tree_container {
+        width: 100%;
+        /* Fixed viewport: the Width/Height range controls scale the tree's
+           own rendered size (an svg attribute in this non-responsive mode -
+           see rebuildTree()), not this container - matching the default
+           height option (800) means the tree fits with no scrollbar at its
+           starting size, and only overflows/scrolls once a slider grows it
+           past that, by design (see CLAUDE.md's "tree panel stays fixed
+           size" note). */
+        height: 800px;
+        overflow: auto;
+      }
+      #tree_container svg {
+        max-width: none;
+      }
+      .branch-length-label {
+        font-size: 9px;
+        fill: #888;
+      }
+    </style>
 {% endblock %}
 {% block content %}
-    <!--
-    ###############################################################################################################################
-    -->
-    <div id="tree_wrapper" class="tree-wrapper">
-        <div id="top_bar" class="top_bar">
-            <a class="navbar-brand" href="#">PRESTO - Phylogenetic tReE viSualisaTiOn - </a>
-            <ul class="nav navbar-nav">
-
-                <!-- THIS CODE IS USED TO UPLOAD TREES. IT CAN BE IMPLEMENTED IF YOU DECIDE TO USE THE SOFTWARE IN A STANDALONE MODE
-
-
-              <li class="dropdown">
-                <a href="#" class="dropdown-toggle" data-toggle="dropdown">Upload your own tree <b class="caret"></b></a>
-                <ul class="dropdown-menu">
-                  <li><a href="#" data-toggle="modal" data-target="#newick_modal">Input Text</a></li>
-                  <li><a href="#"><input type="file" id="newick_file"/></a></li>
-                </ul>
-              </li>
-
-                  -->
-
-            </ul>
-
-            <div class="modal" id="newick_modal">
-                <div class="modal-dialog">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
-                            <h4 class="modal-title">Newick string to render</h4>
-                        </div>
-                        <div class="modal-body" id="newick_body">
-                            <textarea id="nwk_spec" autofocus="true" placeholder="" style="width: 100%; height: 100%"
-                                      rows="20" selectionstart="1" selectionend="1000">(a : 0.1, (b : 0.11, (c : 0.12, d : 0.13) : 0.14) : 0.15)</textarea>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-primary" id="validate_newick">Display this tree
-                            </button>
-                        </div>
-                    </div><!-- /.modal-content -->
-                </div><!-- /.modal-dialog -->
-            </div><!-- /.modal -->
-           <!--
-            <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-2">
-                <ul class="nav navbar-nav">
-                    <li class="dropdown">
-                        <a href="#" class="dropdown-toggle" data-toggle="dropdown"> Export the tree <b
-                                class="caret"></b></a>
-                        <ul class="dropdown-menu" id="Download">
-                            <li id="download-SVG"><a href="#">SVG</a></li>
-                            <li id="download-PDF"><a href="#">PDF</a></li>
-                            <li id="download-PNG"><a href="#">PNG</a></li>
-                            <li id="download-JPEG"><a href="#">JPEG</a></li>
-                            <li class="divider"></li>
-                            <li id="download-NWK"><a href="#">Newick</a></li>
-                        </ul>
-                    </li>
-                </ul>
-            </div>
-            -->
-        </div>
-        <div class="tree_options">
-            <p class="text_tree_options_title"> Tree Layout </p>
-            <div class="tree_disposition_wrapper">
-                <div class="tree_disposition_1">
-                    <div>
-                        <label>
-                            <input id="phylotree_branch_length_1" type="radio" name="options_bl"
-                                   class="phylotree_branch_length" data-mode="phylogram" autocomplete="off" checked=""
-                                   title="Layout with branch length">
-                            <span class="text_tree_options_content"> Phylogram </span>
-                        </label>
-                    </div>
-                    <div>
-                        <label>
-                            <input id="phylotree_branch_length_2" type="radio" name="options_bl"
-                                   class="phylotree_branch_length" data-mode="dendrogram" autocomplete="off"
-                                   title="Layout without branch length">
-                            <span class="text_tree_options_content"> Dendrogram </span>
-                        </label>
-                    </div>
-                </div>
-                <div class="tree_disposition_line"></div>
-                <div class="tree_disposition_2">
-                    <div>
-                        <label>
-                            <input id="phylotree_layout_mode_1" type="radio" name="options_lay"
-                                   class="phylotree-layout-mode" data-mode="step" autocomplete="off" checked=""
-                                   title="Layout left-to-right">
-                            <span class="text_tree_options_content"> Linear </span>
-                        </label>
-                    </div>
-                    <div>
-                        <label>
-                            <input id="phylotree_layout_mode_2" type="radio" name="options_lay"
-                                   class="phylotree-layout-mode" data-mode="radial" autocomplete="off"
-                                   title="Layout radially">
-                            <span class="text_tree_options_content"> Radial </span>
-                        </label>
-                    </div>
-                    <div>
-                        <label>
-                            <input id="phylotree_layout_mode_3" type="radio" name="options_lay"
-                                   class="phylotree-layout-mode" data-mode="straight" autocomplete="off"
-                                   title="Layout tree">
-                            <span class="text_tree_options_content"> Slanted </span>
-                        </label>
-                    </div>
+    <div class="tree-viewer-wrapper">
+        <h3>Phylogenetic tree viewer</h3>
+        <p class="tree-viewer-hint">
+            Click a node for more options (collapse/expand, hide, reroot
+            here). Scroll to zoom, drag to pan.
+        </p>
+        <div class="tree-toolbar">
+            <div class="toolbar-group">
+                <div class="btn-group" role="group">
+                    <button type="button" class="btn btn-default btn-sm active" id="layout_linear">Linear</button>
+                    <button type="button" class="btn btn-default btn-sm" id="layout_circular" title="Radial layout, rooted at the center">Circular</button>
+                    <button type="button" class="btn btn-default btn-sm" id="layout_unrooted" title="Equal-angle unrooted layout (sometimes itself also called &quot;radial&quot;)">Unrooted</button>
                 </div>
             </div>
-            <p class="text_tree_options_title"> Tree ordering </p>
-            <div class="tree_ordering">
-                <div>
-                    <button type="button" class="btn btn-default btn-sm" id="sort_ascending"
-                            title="Sort deepest clades to the bottom">
-                        <i class="fa  fa-sort-amount-asc" aria-hidden="true"></i>
+            <div class="toolbar-group">
+                <label><input type="checkbox" id="toggle_align_tips"> Align tips</label>
+            </div>
+            <div class="toolbar-group">
+                <label><input type="checkbox" id="toggle_support_values"> Show support values</label>
+            </div>
+            <div class="toolbar-group">
+                <label><input type="checkbox" id="toggle_branch_lengths"> Show branch lengths</label>
+            </div>
+            <div class="toolbar-group">
+                <div class="btn-group" role="group">
+                    <button type="button" class="btn btn-default btn-sm" id="zoom_out" title="Zoom out">
+                        <span class="glyphicon glyphicon-zoom-out"></span>
                     </button>
-                    <p class="text_tree_options_content"> Increasing ladderizing </p>
-                </div>
-                <div>
-                    <button type="button" class="btn btn-default btn-sm" id="sort_descending"
-                            title="Sort deepsest clades to the top">
-                        <i class="fa  fa-sort-amount-desc " aria-hidden="true"></i>
+                    <button type="button" class="btn btn-default btn-sm" id="zoom_in" title="Zoom in">
+                        <span class="glyphicon glyphicon-zoom-in"></span>
                     </button>
-                    <p class="text_tree_options_content"> decreasing ladderizing </p>
-                </div>
-                <div>
-                    <button type="button" class="btn btn-default btn-sm" id="sort_original"
-                            title="Restore original order">
-                        <i class="fa  fa-refresh" aria-hidden="true"></i>
+                    <button type="button" class="btn btn-default btn-sm" id="zoom_reset" title="Reset view">
+                        <span class="glyphicon glyphicon-refresh"></span>
                     </button>
-                    <p class="text_tree_options_content"> Retrieve original order </p>
                 </div>
             </div>
-            <p class="text_tree_options_title"> Tree settings </p>
-            <div class="tree_manipulation">
-                <div>
-                    <input type="checkbox" class="btn btn-default btn-sm" id="display_bootstrap"
-                           title="Display bootstrap (and other support values)">
-                    <p class="text_tree_options_content"> Display support values </p>
-                </div>
-                <div>
-                    <input type="checkbox" class="btn btn-default btn-sm" id="display_LB" title="Display Branch length">
-                    <p class="text_tree_options_content"> Display branch length </p>
-                </div>
-                <div>
-                    <input type="checkbox" class="btn btn-default btn-sm" id="align-toggler"
-                           title="Align tips labels to the edge of the plot">
-                    <p class="text_tree_options_content"> align text </p>
-                </div>
+            <div class="toolbar-group">
+                <label for="tree_font_size_range">Tip font size</label>
+                <input type="range" id="tree_font_size_range" min="6" max="40" step="1" value="14">
             </div>
-            <div class="branch_filter_wrapper" id="branch_filter_wrapper">
-                <p class="text_tree_options_search"> Highlight node </p>
-                <div>
-                    <input type="text" id="branch_filter" class="form-control" placeholder="Search...">
+            <div class="toolbar-group">
+                <label for="tree_width_range">Width</label>
+                <input type="range" id="tree_width_range" min="400" max="3000" step="50" value="1200">
+            </div>
+            <div class="toolbar-group">
+                <label for="tree_height_range">Height</label>
+                <input type="range" id="tree_height_range" min="300" max="3000" step="50" value="800">
+            </div>
+            <div class="toolbar-group">
+                <button type="button" class="btn btn-default btn-sm" id="copy_tip_names" title="Copy the selected clade's tip names to the clipboard">
+                    Copy selected tip names
+                </button>
+            </div>
+            <div class="toolbar-group">
+                <div class="btn-group" role="group">
+                    <button type="button" class="btn btn-default btn-sm" id="export_svg" title="Export the tree as an SVG image">Export SVG</button>
+                    <button type="button" class="btn btn-default btn-sm" id="export_png" title="Export the tree as a PNG image">Export PNG</button>
                 </div>
             </div>
         </div>
-        <div id="tree_visualisation" class="tree-vis">
-            <div id="tree_container" class="tree-widget">
-            </div>
-            <div id="tree_zoom" class="tree_zoom">
-                <div class="btn-group">
-                    <button type="button" class="btn btn-default btn-sm" id="expand_vert_space"
-                            data-direction="vertical" data-amount="1" title="Expand vertical spacing">
-                        <i class="fa fa-arrows-v" aria-hidden="true"></i>
-                    </button>
-                    <button type="button" class="btn btn-default btn-sm" id="expand_hori_space"
-                            data-direction="horizontal" data-amount="1" title="Expand horizonal spacing">
-                        <i class="fa fa-arrows-h" aria-hidden="true"></i>
-                    </button>
-
-                </div>
-                <div class="btn-group">
-                    <button type="button" class="btn btn-default btn-sm" id="compress_vert_space"
-                            data-direction="vertical" data-amount="-1" title="Compress vertical spacing">
-                        <i class="fa  fa-compress fa-rotate-135" aria-hidden="true"></i>
-                    </button>
-                    <button type="button" class="btn btn-default btn-sm" id="compress_hori_space"
-                            data-direction="horizontal" data-amount="-1" title="Compress horizonal spacing">
-                        <i class="fa  fa-compress fa-rotate-45" aria-hidden="true"></i>
-                    </button>
-                </div>
-                <div class="btn-group">
-                    <button type="button" class="btn btn-default btn-sm" id="enable_zoom" title="Display zoom function">
-                        <i class="fa fa-search" aria-hidden="true"></i>
-                    </button>
-                    <button type="button" class="btn btn-default btn-sm" id="zoom_minus" title="Zoom minus on the tree">
-                        <i class="fa fa-search-minus" aria-hidden="true"></i>
-                    </button>
-                    <button type="button" class="btn btn-default btn-sm" id="zoom_plus" title="Zoom plus on the tree">
-                        <i class="fa fa-search-plus" aria-hidden="true"></i>
-                    </button>
-
-                </div>
-            </div>
-        </div>
+        <div id="tree_container"></div>
     </div>
-    <!--
-    ###############################################################################################################################
-    -->
     <script>
-        load( "{{newick_tree|escapejs}}")
+        // A negative branch length (e.g. a small numerical-correction
+        // artifact some phylogenetic methods leave near true zero, like
+        // "Tant_cDNA:-0.00007") is not physically meaningful in any
+        // layout, but confirmed live to actively break the unrooted
+        // (equal-angle) layout specifically - a real reported bug, not a
+        // cosmetic one: that one branch rendered ~800 SVG units long
+        // (its sister taxon's equivalent, non-negative branch rendered
+        // at ~2 units) - reproduced directly against the real tree via
+        // this exact newick. Traced to phylotree.js's own
+        // branch_length_accessor clamping a negative length to exactly
+        // 0 - and it's the *zero*, not the negative sign itself, that
+        // breaks the equal-angle direction-vector math (degenerates to
+        // a zero-length vector, confirmed by testing a small *positive*
+        // epsilon in place of 0, which did not fix it, before landing on
+        // this). Simply stripping the minus sign (keeping the original
+        // magnitude, not clamping to 0 or forcing an arbitrary epsilon)
+        // is the fix verified to work - applied here rather than left
+        // for phylotree.js's own clamping, since that only kicks in
+        // after the layout math has already broken.
+        var newick = "{{ newick_tree|escapejs }}".replace(/:-(?=[\d.])/g, ':');
+
+        // Toolbar state - each control just flips one of these and calls
+        // rebuildTree()/applyBranchLengthLabels(), rather than trying to
+        // patch the existing render in place for every option; render()
+        // itself is cheap (this is a single tree, not a huge alignment),
+        // and re-rendering from scratch is the same pattern the library
+        // uses internally for its own reroot handling (verified directly
+        // in the vendored bundle, not assumed) - simpler and more
+        // reliable than tracking exactly which options can be changed
+        // live vs which need a fresh render.
+        var treeOptions = {
+            container: "#tree_container",
+            width: 1200,
+            height: 800,
+            "show-scale": true,
+            selectable: true,
+            collapsible: true,
+            reroot: true,
+            hide: true,
+            // Deliberately false, unlike the library's own default: brush
+            // (click-and-drag to rubber-band-select a region) and zoom
+            // (click-and-drag to pan) both bind to the same plain-drag
+            // gesture, and having both enabled at once is genuinely
+            // confusing in practice - a drag can't tell which one you
+            // meant, and once a brush selection starts it doesn't offer
+            // any obvious way to back out of it. With brush off, a drag
+            // is unambiguously "pan" and a plain click is unambiguously
+            // "select/open this node's menu".
+            brush: false,
+            zoom: true,
+            "align-tips": false,
+            // Three mutually-exclusive layouts: plain left-to-right
+            // ("linear", both false), a radial layout rooted at the
+            // center ("is-radial"), and a genuinely different equal-angle
+            // unrooted layout ("is-unrooted" - confirmed directly against
+            // the vendored bundle to produce real, distinct node
+            // positions from is-radial, not an alias for it - the two
+            // are easy to conflate since "unrooted" layouts are
+            // themselves sometimes informally called "radial" too).
+            // Never set both true at once - see setLayout() below.
+            "is-radial": false,
+            "is-unrooted": false,
+            "internal-names": false,
+            // Needed for the width/height sliders below to do anything
+            // at all - confirmed directly against the vendored bundle
+            // that under this library's own *default* spacing mode
+            // ("fixed-step"), the actual rendered extent
+            // (this.size[0]/this.size[1]) is computed purely from
+            // fixed_width (spacing_x()/spacing_y()) and the tree's own
+            // leaf count/depth, completely ignoring the "width"/"height"
+            // options passed to render() - only "fit-to-size" mode
+            // actually ties the rendered size to those options. Verified
+            // empirically too: doubling width/height under fixed-step
+            // left the tree's own drawn extent unchanged; under
+            // fit-to-size it scaled proportionally as expected. This
+            // also simplified the tip-font-size feature - see
+            // applyTipFontSize() below, which no longer needs the
+            // spacing_x() workaround this mode switch made unnecessary.
+            "left-right-spacing": "fit-to-size",
+            "top-bottom-spacing": "fit-to-size"
+        };
+        var showBranchLengths = false;
+        var display;
+
+        // Draws (or, when showBranchLengths is false, clears) a small text
+        // label with the branch length at each edge's midpoint. There's no
+        // built-in boolean for this in phylotree.js 2.x (verified directly
+        // against the vendored bundle - "bootstrap"/"internal-names" cover
+        // support values, nothing covers branch-length text; there IS a
+        // built-in hover tooltip showing "Length = ..." on every edge
+        // already, found while tracing this - this label is in addition to
+        // that, not a replacement), so this is a small custom style_edges
+        // callback instead - the one piece of this toolbar that isn't just
+        // flipping a documented option. `style_edges` binds `this` to the
+        // TreeRender instance for whatever callback it's given (verified
+        // directly in the vendored bundle), so `this.phylotree.
+        // branch_length_accessor(...)` - the library's own accessor,
+        // matching how it computes the hover tooltip's own value - is used
+        // here rather than reading the parsed newick's raw "attribute"
+        // field by hand. This toolbar's own branch-length toggle calls
+        // rebuildTree()'s display.layout() (see the toggle handler
+        // below), never display.refresh() - a real bug in this library
+        // version's refresh() (an arrow function loses `this` partway
+        // through its own edge-styling call, breaking element.selectAll()
+        // with "this.querySelectorAll is not a function") means refresh()
+        // can't be used to apply this without hitting that bug.
+        //
+        // But refresh() isn't only called from code this toolbar
+        // controls - modifySelection() (the library's own selection
+        // mechanism, used internally by the built-in node menu's "All
+        // terminal nodes"/"Incident branch"/"Path to root"/etc. actions)
+        // calls refresh() itself too, found live: selecting a clade via
+        // the menu threw this exact exception, breaking selection
+        // entirely, regardless of whether the branch-length toggle was
+        // ever touched - since style_edges' callback runs on every edge
+        // unconditionally, this toggle's mere presence was enough to
+        // break the unrelated built-in selection feature. Guarded
+        // defensively instead of trying to avoid every internal
+        // refresh() call site (there's no guarantee this is the only
+        // one, or that a future phylotree.js version doesn't add more):
+        // if `element` isn't wrapping a real DOM node (i.e. this is that
+        // broken refresh() code path calling in with the TreeRender
+        // instance itself instead), just no-op rather than throw.
+        // element.selectAll() alone can't tell the two apart - select()
+        // always returns a full Selection object with every method
+        // present regardless of what it's wrapping, and only throws
+        // *inside* selectAll() once it tries to actually use the
+        // wrapped non-DOM object - confirmed live, a first attempt at
+        // this guard checked `typeof element.selectAll` and still threw.
+        function branchLengthStyler(element, edgeDatum) {
+            var node = element && element.node && element.node();
+            if (!node || typeof node.querySelectorAll !== 'function') {
+                return;
+            }
+            // `element` here is the edge's own <path class="branch"> (the
+            // "container" drawEdge() passes to the edge_styler, confirmed
+            // directly in the vendored bundle) - appending a <text> as its
+            // *child* (the original approach) is invalid SVG: a <path>'s
+            // content model doesn't support child elements at all, so the
+            // label silently never painted, even though it was really
+            // sitting in the DOM (getBoundingClientRect() on it measured
+            // all zeros - confirmed directly, not assumed - which is
+            // exactly why every earlier verification of this toggle,
+            // counting DOM nodes rather than checking actual rendering,
+            // never caught it). Fixed by appending to the branch's own
+            // *parent* <g> (a valid sibling of the path, which does
+            // support text children) instead - reached via `this.svg.
+            // select("." + this.css_classes["tree-container"])` (the
+            // single wrapping <g class="phylotree-container"> the
+            // library always draws every edge/node into, confirmed
+            // directly - the same class its own internal transform/
+            // reroot code targets), NOT via `element.node().parentNode`.
+            // A first attempt used the latter and worked for the
+            // branch-length *toggle* (a `.layout()` call on an
+            // already-fully-built tree, where the path's parentNode is
+            // reliably attached by the time edge_styler runs) but broke
+            // - wrong position, then zero labels entirely - on any full
+            // rebuild (the width/height sliders, or switching layout):
+            // during a fresh render(), drawEdge()'s own newly-created
+            // <path> isn't guaranteed to already be attached under its
+            // final parent at the exact moment edge_styler runs,
+            // confirmed directly (reproduced: toggling on via .layout()
+            // gave 41 correctly-positioned, visible labels; immediately
+            // rebuilding via a slider change with the toggle still on
+            // gave zero). Going through `this.svg` instead sidesteps
+            // that timing entirely - it's stable and already fully
+            // attached (it's the render's own root) regardless of where
+            // in the edge-drawing loop this call happens to land. Each
+            // edge's own label is tracked via a bound `.datum(edgeDatum)`
+            // and matched back with a strict-equality filter, since the
+            // parent <g> holds every edge's label as a sibling, not just
+            // this one's - the edge/node objects themselves are stable
+            // for the lifetime of one `tree`/`display` instance (every
+            // mutation here is either a `.layout()` on the existing
+            // instance or a full `new phylotree(...)` + fresh render,
+            // never an in-place edge-object swap), so identity
+            // comparison is safe.
+            var parent = this.svg.select("." + this.css_classes["tree-container"]);
+            parent.selectAll(".branch-length-label")
+                .filter(function (d) { return d === edgeDatum; })
+                .remove();
+            var length = this.phylotree.branch_length_accessor(edgeDatum.target);
+            if (showBranchLengths && length !== undefined) {
+                // The rectangular/"linear" layout draws each branch as an
+                // elbow (d3's own stepBefore curve, confirmed directly in
+                // the vendored bundle's `draw_line`) - a vertical drop
+                // from the source's row to the target's row, then a
+                // horizontal run from the source's depth to the target's
+                // depth - not a straight diagonal line from source to
+                // target. A plain (source+target)/2 midpoint on the *row*
+                // axis lands halfway up the vertical segment, nowhere
+                // near the actual horizontal run the label is meant to
+                // annotate - confirmed live (reported: right x, wrong y).
+                // The library's own `lineSegmentPlacer` (used elsewhere
+                // in this bundle for placing things along an edge) uses
+                // exactly this instead: the horizontal run sits at a
+                // *constant* row equal to the target's own
+                // (`yCoord(edge.target)`, i.e. `edgeDatum.target.x` in
+                // this tree's coordinate convention, confirmed directly:
+                // `xCoord(d) => d.y` depth, `yCoord(d) => d.x` row) - so
+                // the correct y for a point *on* that segment is
+                // `edgeDatum.target.x`, not a source/target average.
+                // Radial and unrooted layouts draw a genuinely straight
+                // line (or arc) between the two node positions instead
+                // (`drawUnrootedEdge`/`drawArc`, confirmed directly), so
+                // the plain midpoint *is* geometrically correct there and
+                // is left unchanged - only reported broken on linear.
+                var isRectangular = !this.radial() && !this.unrooted();
+                var labelY = isRectangular
+                    ? edgeDatum.target.x - 3
+                    : (edgeDatum.source.x + edgeDatum.target.x) / 2 - 3;
+                parent.append("text")
+                    .datum(edgeDatum)
+                    .attr("class", "branch-length-label")
+                    .attr("x", (edgeDatum.source.y + edgeDatum.target.y) / 2)
+                    .attr("y", labelY)
+                    .text(parseFloat(length).toFixed(3));
+            }
+        }
+        // Registered as the render-time "edge-styler" option (below,
+        // once treeOptions exists) rather than via the separate
+        // `display.style_edges(...)` this file used to call right after
+        // `tree.render(...)` in rebuildTree() - a real, second bug found
+        // alongside the positioning one above: TreeRender's own
+        // constructor reads `this.edge_styler` straight from
+        // `this.options['edge-styler']` and runs its *entire* first
+        // edge-drawing pass during that same render() call, before
+        // rebuildTree() ever got a chance to call style_edges()
+        // afterward - so on every full rebuild (this is exactly what a
+        // width/height slider change or a layout switch is), the very
+        // first layout pass always ran with no styler registered yet,
+        // and nothing ever re-ran it later. This is *why* the toggle
+        // itself (a `.layout()` call on an already-built display, styler
+        // already registered from its own earlier rebuild) looked like
+        // it worked in isolation, while any rebuild while already toggled
+        // on lost the labels outright - confirmed directly (reproduced:
+        // the toggle's own `.layout()` call always redrew labels
+        // correctly; immediately triggering a rebuild via any slider or
+        // layout button, with the toggle still on, gave zero every time,
+        // regardless of the this.svg-based positioning fix above).
+        // `style_edges()`'s own `.bind(this)` isn't needed for this -
+        // `this.edge_styler(container, edge, transition)` (drawEdge's
+        // own call site) already binds `this` to the TreeRender instance
+        // as an ordinary method call, identically either way.
+
+        // Tip label font size, in px, via the render() "font-size"
+        // option. Under this library's default spacing mode
+        // ("fixed-step"), that option alone wasn't enough to make an
+        // *increase* visible - the actually-rendered size was capped by
+        // this.scales[0], which under fixed-step is just
+        // this.fixed_width[0] (hardcoded to 14), independent of
+        // "font-size" - needing a workaround via the live spacing_x()
+        // accessor. Switching to "left-right-spacing"/"top-bottom-
+        // spacing": "fit-to-size" above (needed anyway for the width/
+        // height sliders below to do anything) also ties this.scales[0]
+        // directly to the actual width/height option instead, which for
+        // any reasonably-sized canvas is comfortably larger than a
+        // normal tip font size - confirmed empirically that "font-size"
+        // alone now takes effect with no extra workaround needed. (The
+        // library's *own* font_size() accessor method is still
+        // unreachable regardless - `this.font_size` is a plain instance
+        // property that shadows the same-named prototype method, so
+        // `display.font_size(20)` throws "not a function" - this is why
+        // "font-size" is still only ever set via the render() options
+        // object, never that accessor.)
+        var tipFontSize = 14;
+
+        function applyTipFontSize() {
+            treeOptions["font-size"] = tipFontSize;
+            rebuildTree();
+        }
+
+        treeOptions["edge-styler"] = branchLengthStyler;
+
+        function rebuildTree() {
+            var tree = new window.phylotree.phylotree(newick);
+            display = tree.render(treeOptions);
+            var container = document.getElementById("tree_container");
+            container.innerHTML = "";
+            container.appendChild(display.show());
+        }
+
+        rebuildTree();
+
+        $("#tree_font_size_range").on("input", function () {
+            tipFontSize = parseInt(this.value, 10);
+            applyTipFontSize();
+        });
+
+        // "input" (not "change") fires continuously while dragging, for
+        // immediate feedback - a full rebuild is cheap enough for a
+        // single tree that this doesn't need debouncing.
+        $("#tree_width_range").on("input", function () {
+            treeOptions.width = parseInt(this.value, 10);
+            rebuildTree();
+        });
+        $("#tree_height_range").on("input", function () {
+            treeOptions.height = parseInt(this.value, 10);
+            rebuildTree();
+        });
+
+        function setLayout($button, isRadial, isUnrooted) {
+            treeOptions["is-radial"] = isRadial;
+            treeOptions["is-unrooted"] = isUnrooted;
+            $("#layout_linear, #layout_circular, #layout_unrooted").removeClass("active");
+            $button.addClass("active");
+            rebuildTree();
+        }
+        $("#layout_linear").on("click", function () {
+            setLayout($(this), false, false);
+        });
+        $("#layout_circular").on("click", function () {
+            setLayout($(this), true, false);
+        });
+        $("#layout_unrooted").on("click", function () {
+            setLayout($(this), false, true);
+        });
+        $("#toggle_align_tips").on("change", function () {
+            treeOptions["align-tips"] = this.checked;
+            rebuildTree();
+        });
+        $("#toggle_support_values").on("change", function () {
+            treeOptions["internal-names"] = this.checked;
+            rebuildTree();
+        });
+        $("#toggle_branch_lengths").on("change", function () {
+            showBranchLengths = this.checked;
+            // Not display.refresh() - see branchLengthStyler's own
+            // comment for the real bug in this library version that
+            // rules it out here.
+            display.layout();
+        });
+        $("#zoom_in").on("click", function () {
+            display.zoomBehavior.scaleBy(display.svg, 1.3);
+        });
+        $("#zoom_out").on("click", function () {
+            display.zoomBehavior.scaleBy(display.svg, 1 / 1.3);
+        });
+        $("#zoom_reset").on("click", function () {
+            rebuildTree();
+        });
+
+        // Selection is the library's own built-in mechanism (a click on
+        // a node opens its menu - "All terminal nodes", "Incident
+        // branch", "Path to root", etc. under "Toggle Selection" all
+        // call display.modifySelection(...) internally, verified
+        // directly in the vendored bundle) - this just reads back
+        // whatever's currently selected via display.getSelection() and
+        // expands any selected *internal* node to its own leaf
+        // descendants, so "select a clade, then copy its tip names"
+        // works the same whether the user selected the clade's root or
+        // its individual tips one by one.
+        function getSelectedTipNames() {
+            var selected = display.getSelection();
+            var names = [];
+            selected.forEach(function (node) {
+                if (display.phylotree.isLeafNode(node)) {
+                    names.push(node.data.name);
+                } else {
+                    display.phylotree.selectAllDescendants(node, true, false)
+                        .forEach(function (leaf) { names.push(leaf.data.name); });
+                }
+            });
+            return names.filter(function (name, i) { return names.indexOf(name) === i; });
+        }
+
+        function copyViaExecCommand(text) {
+            // Fallback for browsers without the Clipboard API, or where
+            // it exists but rejects (e.g. no document focus/user-gesture
+            // credit at the moment of the call) - a temporary off-screen
+            // textarea + the old execCommand, same approach
+            // workspace/histories' own permalink copy button already
+            // uses in this codebase.
+            var $textarea = $('<textarea readonly></textarea>')
+                .css({position: 'fixed', top: '-1000px', left: '-1000px'})
+                .val(text);
+            $('body').append($textarea);
+            $textarea[0].select();
+            document.execCommand('copy');
+            $textarea.remove();
+        }
+
+        function copyTextToClipboard(text) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                return navigator.clipboard.writeText(text).catch(function () {
+                    copyViaExecCommand(text);
+                });
+            }
+            copyViaExecCommand(text);
+            return $.Deferred().resolve().promise();
+        }
+
+        function flashButtonText($button, text) {
+            var original = $button.data('original-text');
+            if (original === undefined) {
+                original = $button.text();
+                $button.data('original-text', original);
+            }
+            $button.text(text);
+            clearTimeout($button.data('flash-timer'));
+            $button.data('flash-timer', setTimeout(function () {
+                $button.text($button.data('original-text'));
+            }, 1500));
+        }
+
+        $("#copy_tip_names").on("click", function () {
+            var $button = $(this);
+            var names = getSelectedTipNames();
+            if (names.length === 0) {
+                flashButtonText($button, 'Nothing selected');
+                return;
+            }
+            copyTextToClipboard(names.join('\n')).then(function () {
+                flashButtonText($button, 'Copied ' + names.length + ' name' + (names.length === 1 ? '' : 's') + '!');
+            });
+        });
+
+        // SVG/PNG export. The exported file needs the tree's own CSS
+        // embedded directly in it (phylotree.css's rules, e.g. node
+        // circle colors, only apply here via this page's <link> tag -
+        // a serialized SVG fragment doesn't carry an external
+        // stylesheet with it, so without this every export would come
+        // out as unstyled black-on-white shapes) - fetched once and
+        // cached rather than hand-copied into this file, so it can
+        // never drift out of sync with the real, currently-vendored
+        // phylotree.css.
+        var exportCssCache = null;
+        function getExportCss(callback) {
+            if (exportCssCache !== null) {
+                callback(exportCssCache);
+                return;
+            }
+            $.get("{% static 'phylotree-2.6.0/phylotree.css' %}", function (css) {
+                exportCssCache = css;
+                callback(css);
+            }).fail(function () {
+                exportCssCache = '';
+                callback('');
+            });
+        }
+
+        function buildExportableSvg(css) {
+            var clone = display.svg.node().cloneNode(true);
+            clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+            clone.setAttribute('width', treeOptions.width);
+            clone.setAttribute('height', treeOptions.height);
+            if (!clone.getAttribute('viewBox')) {
+                clone.setAttribute('viewBox', '0 0 ' + treeOptions.width + ' ' + treeOptions.height);
+            }
+            var styleEl = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+            styleEl.textContent = css;
+            clone.insertBefore(styleEl, clone.firstChild);
+            return clone;
+        }
+
+        function downloadBlob(blob, filename) {
+            var url = URL.createObjectURL(blob);
+            var $link = $('<a></a>').attr({href: url, download: filename}).appendTo('body');
+            $link[0].click();
+            $link.remove();
+            setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+        }
+
+        $("#export_svg").on("click", function () {
+            getExportCss(function (css) {
+                var svgString = new XMLSerializer().serializeToString(buildExportableSvg(css));
+                downloadBlob(new Blob([svgString], {type: 'image/svg+xml'}), 'tree.svg');
+            });
+        });
+
+        $("#export_png").on("click", function () {
+            getExportCss(function (css) {
+                var svgString = new XMLSerializer().serializeToString(buildExportableSvg(css));
+                // A base64 data: URI, not a blob: URL, for the <img> source
+                // that gets drawn onto the canvas below - a blob: URL is
+                // known to leave the canvas "tainted" (blocking
+                // canvas.toBlob) in some browsers even for same-document,
+                // same-origin SVG content; a data: URI doesn't have that
+                // problem. unescape(encodeURIComponent(...)) is the
+                // standard way to base64-encode a real UTF-8 string
+                // (btoa alone only handles Latin1).
+                var dataUrl = 'data:image/svg+xml;base64,' +
+                    btoa(unescape(encodeURIComponent(svgString)));
+                var img = new Image();
+                img.onload = function () {
+                    var scale = 2; // a plain 1:1 raster looks noticeably soft
+                    var canvas = document.createElement('canvas');
+                    canvas.width = treeOptions.width * scale;
+                    canvas.height = treeOptions.height * scale;
+                    var ctx = canvas.getContext('2d');
+                    ctx.fillStyle = '#fff'; // the SVG itself has no background
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.scale(scale, scale);
+                    ctx.drawImage(img, 0, 0, treeOptions.width, treeOptions.height);
+                    canvas.toBlob(function (blob) {
+                        downloadBlob(blob, 'tree.png');
+                    }, 'image/png');
+                };
+                img.src = dataUrl;
+            });
+        });
     </script>
 {% endblock %}

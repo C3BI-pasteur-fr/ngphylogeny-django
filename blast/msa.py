@@ -58,9 +58,9 @@ class PseudoMSA:
             if self.blast_prog=='blastx' or self.blast_prog=='tblastx':
                 # Computing start on the translated query sequence
                 if self.frame > 0:
-                    start = (hsp.query_start - self.frame) / 3 + 1
+                    start = (hsp.query_start - self.frame) // 3 + 1
                 else:
-                    start = (len(self.query_seq_bk) - hsp.query_end + 1 + self.frame) / 3 + 1
+                    start = (len(self.query_seq_bk) - hsp.query_end + 1 + self.frame) // 3 + 1
 
             position = start-1
             self.starts[str(sbjct_name)]=position
@@ -90,7 +90,7 @@ class PseudoMSA:
         minstart=-1
         maxend=0
         nseqs=0
-        for key, value in sorted(self.scores.iteritems(), reverse=True, key=lambda (k,v): (v,k)):
+        for key, value in sorted(self.scores.items(), reverse=True, key=lambda kv: (kv[1], kv[0])):
             if nseqs >= maxseqs :
                 break
             s=self.starts[str(key)]
@@ -98,8 +98,8 @@ class PseudoMSA:
             minstart = s if minstart==-1 or s<minstart else minstart
             maxend = e if e>maxend else maxend
             nseqs+=1
-            
-        ids = self.sequences.keys()
+
+        ids = list(self.sequences.keys())
         for id in ids:
             seq = self.sequences[id]
             self.sequences[id] = seq[minstart:maxend+1]
@@ -108,12 +108,12 @@ class PseudoMSA:
         self.query_seq = self.query_seq[minstart:maxend+1]
 
     def all_sequences(self):
-        for id, seq in self.sequences.iteritems():
+        for id, seq in self.sequences.items():
             yield (str(id), "".join(seq))
 
     def first_n_max_score_sequences(self, maxseqs):
         nseqs = 0
-        for key, value in sorted(self.scores.iteritems(), reverse=True, key=lambda (k,v): (v,k)):
+        for key, value in sorted(self.scores.items(), reverse=True, key=lambda kv: (kv[1], kv[0])):
             if nseqs >= maxseqs :
                 break
             else:
@@ -128,6 +128,6 @@ class PseudoMSA:
 
     def to_string(self):
         msa = ">%s\n%s\n" % (self.query_id, "".join(self.query_seq))
-        for id, seq in self.sequences.iteritems():
+        for id, seq in self.sequences.items():
             msa += ">%s\n%s\n" % (id, "".join(seq))
         return msa

@@ -2,3 +2,9 @@
 */migrations/0*.py
 db.sqlite3
 *~
+# collectstatic output (STATIC_ROOT) - generated, not source
+/static/
+# docker compose auto-loads this for ${VAR} substitution in
+# docker-compose*.yml - holds real secrets (a Galaxy API key) for local
+# dev, never commit it. See .env.example.
+/.env

@@ -10,7 +10,7 @@ from tools.models import ToolInputData
 
 class Command(BaseCommand):
     help = 'Import Galaxy tools to NGPhylogeny'
-    requires_system_checks = True
+    requires_system_checks = '__all__'
     input_fields = []
     flags = []
 
@@ -97,7 +97,7 @@ class Command(BaseCommand):
                 raise CommandError('Cannot connect to Galaxy server {}'.format(galaxy_server.url))
         if tools_found:
             self.stdout.write("%s" % ('\n'.join(tools_found)))
-            response = 'y' if force else raw_input(
+            response = 'y' if force else input(
                 'Do you want (re)import this tool(s)? [y/N] from {}:'.format(galaxy_server))
             if response.lower() == 'y':
                 import_tools_report = Tool.import_tools(

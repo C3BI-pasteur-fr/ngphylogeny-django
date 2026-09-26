@@ -1,9 +1,9 @@
 from __future__ import absolute_import
 
+from django.conf import settings
 from django.db.models import Q
-from django.core.mail import send_mail
-from django.core.urlresolvers import reverse
 from django.core.cache import cache
+from django.utils import timezone
 
 from smtplib import SMTPException
 
@@ -19,15 +19,15 @@ import time
 import tempfile
 
 from celery import shared_task
-from celery.decorators import periodic_task
+from celery.exceptions import SoftTimeLimitExceeded
 from celery.utils.log import get_task_logger
-from celery.schedules import crontab
 
-from datetime import timedelta, datetime
+from datetime import timedelta
 
 from galaxy.decorator import galaxy_connection
 from bioblend.galaxy.tools.inputs import inputs
 
+from .emails import send_blast_completion_email
 from .models import BlastRun, BlastSubject
 from .msa import PseudoMSA
 
@@ -37,10 +37,49 @@ logger = get_task_logger(__name__)
 
 LOCK_EXPIRE = 60 * 5 # Lock expires in 5 minutes
 
+# checkblastruns() gives up on a Pasteur run still pending/running past
+# this age. There's no timeout at all on the actual Galaxy-side blast
+# computation otherwise (unlike launch_ncbi_blast/launch_pasteur_blast's
+# own soft_time_limit/time_limit, which only cover *submitting* the
+# job) - a real search against a big database (e.g. blastn vs nt) can
+# legitimately take a while, but a run that's still "running" after
+# this long is more likely stuck on Galaxy's/the cluster's side than
+# genuinely still computing. 3 hours is a guess at "generous enough for
+# a real, slow-but-legitimate search, bounded enough to actually
+# recover" - adjust based on real observed run times if this turns out
+# to be too tight or too loose. Reads settings.
+# NGPHYLO_PASTEUR_BLAST_STALE_HOURS (settings/base.py) - configurable
+# via the PASTEUR_BLAST_STALE_HOURS GitLab CI/CD variable, 3 if unset
+# (this task's original hardcoded value).
+PASTEUR_RUN_STALE_AFTER = timedelta(
+    hours=settings.NGPHYLO_PASTEUR_BLAST_STALE_HOURS)
+
 
 ## It should be alone on a celery queue with only 1 cpu
 ## Otherwise, may run too many jobs on ncbi server
-@shared_task
+#
+# time_limit/soft_time_limit: NCBIWWW.qblast() below polls NCBI in a bare
+# `while True:` loop with no timeout or retry cap of its own (checked
+# directly against biopython 1.70's actual source, this project's pinned
+# version - see CLAUDE.md's "Known dependency ceilings") - it relies
+# entirely on NCBI eventually sending a recognizable "READY" (or
+# no-Status) response. If NCBI is slow, the query gets stuck server-side,
+# or a response comes back in a shape this old biopython version doesn't
+# recognize as done, this call - and therefore this task - hangs
+# indefinitely, with nothing in this codebase to ever notice or recover.
+# Since this queue is deliberately meant to run one task at a time (see
+# above), one stuck run blocks every subsequent NCBI BLAST submission
+# behind it too, forever, until someone manually restarts the
+# celery-worker process. soft_time_limit raises SoftTimeLimitExceeded
+# inside the task (caught below, so the run gets marked ERROR with a
+# clear message and the worker moves on to the next queued task);
+# time_limit is Celery's own hard SIGKILL backstop shortly after, in case
+# the soft one doesn't get a chance to run (e.g. blocked in a C
+# extension). 10 minutes is a guess at "generous enough for a real,
+# slow-but-legitimate NCBI search, bounded enough to actually recover" -
+# adjust based on real observed run times if this turns out to be too
+# tight or too loose.
+@shared_task(soft_time_limit=600, time_limit=660)
 def launch_ncbi_blast(blastrunid, sequence, prog, db, evalue, coverage, maxseqs):
     """
     Celery task that will launch a blast on the public blast server
@@ -53,6 +92,7 @@ def launch_ncbi_blast(blastrunid, sequence, prog, db, evalue, coverage, maxseqs)
         if len(records) == 1:
             b.query_id = biofile.cleanseqname(records[0].id)
             b.query_seq = records[0].seq
+            b.query_length = len(records[0].seq)
             b.evalue = evalue
             b.coverage = coverage
             b.database = db
@@ -125,33 +165,28 @@ def launch_ncbi_blast(blastrunid, sequence, prog, db, evalue, coverage, maxseqs)
 
         if b.email is not None and re.match(r"[^@]+@[^@]+\.[^@]+", b.email):
             try:
-                citation = "Lemoine F, Correia D, Lefort V, Doppelt-Azeroual O, Mareuil F, Cohen-Boulakia S, Gascuel O\n" \
-                           "NGPhylogeny.fr: new generation phylogenetic services for non-specialists.\n" \
-                           "Nucleic Acids Research 2019 (https://doi.org/10.1093/nar/gkz303).\n"
-                message = "Dear NGPhylogeny user, \n\n"
-                if b.status != b.FINISHED:
-                    message = message + "Your NGPhylogeny BLAST job finished with errors.\n\n"
-                else:
-                    message = message + "Your NGPhylogeny BLAST job finished successfuly.\n"
-                please = 'Please visit http://%s%s to check results\n\n' % (
-                    "ngphylogeny.fr", reverse('blast_view', kwargs={'pk': b.id}))
-                message = message + please
-                message = message + "Thank you for using ngphylogeny.fr\n\n"
-                message = message + "NGPhylogeny.fr development team.\n\n"
-                message = message + citation
-                
-                send_mail(
-                    'NGPhylogeny.fr BLAST results',
-                    message,
-                    'ngphylogeny@pasteur.fr',
-                    [b.email],
-                    fail_silently=False,
-                )
+                # Same branded HTML template as the workflow job-completion
+                # email (workspace.emails), not a hand-built plain-text
+                # message - see CLAUDE.md's "BLAST completion email" note.
+                send_blast_completion_email(b, b.email)
             except SMTPException as e:
                 logging.warning("Problem with smtp server : %s" % (e))
             except Exception as e:
                 logging.warning(
                     "Unknown Problem while sending e-mail: %s" % (e))
+    except SoftTimeLimitExceeded:
+        # See this task's own soft_time_limit comment above - a clear,
+        # specific message here beats the generic except below's bare
+        # str(e) (which for this exception is just an empty
+        # "SoftTimeLimitExceeded()").
+        logging.warning(
+            "NCBI BLAST run %s exceeded the time limit and was aborted" %
+            (blastrunid))
+        b.status = BlastRun.ERROR
+        b.message = ("NCBI took too long to respond and this search was "
+                      "aborted. NCBI's public server can be slow or "
+                      "congested - please try again, or try a smaller/"
+                      "more specific query.")
     except Exception as e:
         logging.exception(str(e))
         b.status = BlastRun.ERROR
@@ -159,7 +194,14 @@ def launch_ncbi_blast(blastrunid, sequence, prog, db, evalue, coverage, maxseqs)
     b.save()
     time.sleep(30)
 
-@shared_task
+# soft_time_limit/time_limit: same reasoning as launch_ncbi_blast's own
+# comment above, but the likely hang location differs - the blast
+# computation itself runs asynchronously on Galaxy once submitted, and
+# is separately monitored (with no timeout of its own - see CLAUDE.md's
+# BLAST notes) by checkblastruns(). A hang here is most likely in the
+# (network-bound) create_history/upload_file/run_tool calls that submit
+# the job in the first place. 10 minutes, matching launch_ncbi_blast.
+@shared_task(soft_time_limit=600, time_limit=660)
 def launch_pasteur_blast(blastrunid, sequence, prog, db, evalue, coverage, maxseqs):
     """
     Celery task that will launch a blast on the pasteur Galaxy Server
@@ -177,6 +219,7 @@ def launch_pasteur_blast(blastrunid, sequence, prog, db, evalue, coverage, maxse
             b.history = history.get("id")
             b.query_id = biofile.cleanseqname(records[0].id)
             b.query_seq = records[0].seq
+            b.query_length = len(records[0].seq)
             b.evalue = evalue
             b.coverage = coverage
             b.database = db
@@ -195,22 +238,27 @@ def launch_pasteur_blast(blastrunid, sequence, prog, db, evalue, coverage, maxse
                 b.message = "The given sequence has the wrong alphabet. Program %s expects %s sequence" % (
                     blast_type, blast_inputtype)
             elif blast_type is not None:
-                tmp_file = tempfile.NamedTemporaryFile()
+                # mode='w': sequence is a plain str (the pasted/uploaded
+                # FASTA text) - NamedTemporaryFile() defaults to binary
+                # mode, which raises "a bytes-like object is required, not
+                # 'str'" here. Same Python 2->3 bug class as CLAUDE.md's
+                # "Code paths only a real Galaxy run exercises" section.
+                tmp_file = tempfile.NamedTemporaryFile(mode='w')
                 tmp_file.write(sequence)
                 tmp_file.flush()
                 if biofile.is_fasta_one_seq(tmp_file.name):
                     ## Upload input query file to galaxy
-	            outputs = galaxycon.tools.upload_file(path=tmp_file.name,file_name="blastinput.fasta",history_id=history.get("id"),file_type="fasta")
-	            file_id = outputs.get('outputs')[0].get('id')
+                    outputs = galaxycon.tools.upload_file(path=tmp_file.name,file_name="blastinput.fasta",history_id=history.get("id"),file_type="fasta")
+                    file_id = outputs.get('outputs')[0].get('id')
                     ## Configuring job
-	            tool_inputs=inputs()
-	            tool_inputs.set_dataset_param("query",file_id)
-	            tool_inputs.set_param("db_opts|database", db)
-	            tool_inputs.set_param("blast_type", blast_type)
-	            tool_inputs.set_param("evalue_cutoff", evalue)
-	            tool_inputs.set_param("output|out_format", "5")
+                    tool_inputs=inputs()
+                    tool_inputs.set_dataset_param("query",file_id)
+                    tool_inputs.set_param("db_opts|database", db)
+                    tool_inputs.set_param("blast_type", blast_type)
+                    tool_inputs.set_param("evalue_cutoff", evalue)
+                    tool_inputs.set_param("output|out_format", "5")
                     ## Running blast job
-	            outputs=galaxycon.tools.run_tool(history_id=history.get("id"),tool_id=prog,tool_inputs=tool_inputs)
+                    outputs=galaxycon.tools.run_tool(history_id=history.get("id"),tool_id=prog,tool_inputs=tool_inputs)
                     b.history_fileid = outputs.get("outputs")[0].get("id")
                 else:
                     b.status=BlastRun.ERROR
@@ -223,13 +271,30 @@ def launch_pasteur_blast(blastrunid, sequence, prog, db, evalue, coverage, maxse
             b.status = BlastRun.ERROR
             b.message = "More than one record in the fasta file! %d" % (
                 len(list(records)))
+    except SoftTimeLimitExceeded:
+        logging.warning(
+            "Pasteur BLAST run %s exceeded the time limit and was "
+            "aborted" % (blastrunid))
+        # b.history (an in-memory attribute set right after
+        # create_history() returns, whether or not it's been saved yet -
+        # see above) tells us whether a Galaxy history actually got
+        # created before the timeout fired. Clean it up rather than
+        # leaving an orphaned history nothing will ever reference again
+        # - queued separately (not called directly) so this already
+        # timed-out task doesn't also block on deleting it.
+        if b.history:
+            deletegalaxyhistory.delay(b.history)
+        b.status = BlastRun.ERROR
+        b.message = ("Submitting this search to the Pasteur Galaxy "
+                      "server took too long and it was aborted. Please "
+                      "try again.")
     except Exception as e:
         logging.exception(str(e))
         b.status = BlastRun.ERROR
         b.message = str(e)
     b.save()
     time.sleep(30)
-    
+
 
 @shared_task
 def build_tree(blastrunid):
@@ -247,22 +312,39 @@ def build_tree(blastrunid):
         b.message = str(e)
         b.save()
 
-@periodic_task(run_every=(crontab(hour="02", minute="00", day_of_week="*")))
+@shared_task
 def deleteoldblastruns():
     """
-    Every day at 2am, clears analyses older than 14 days
+    Every day at 2am, clears analyses older than BlastRun.RETENTION_DAYS
     """
     logger.info("Start old blast deletion task")
-    datecutoff = datetime.now() - timedelta(days=14)
+    # timezone.now, not datetime.now: USE_TZ=True is on - see BlastRun.date's
+    # own comment in blast/models.py for the same fix/reasoning.
+    datecutoff = timezone.now() - timedelta(days=BlastRun.RETENTION_DAYS)
     for e in BlastRun.objects.filter(deleted=False).filter(date__lte=datecutoff):
         if e.history != "":
-            deletegalaxyhistory(e.history)
+            # Queued, not called directly - same reasoning as the
+            # submission/staleness timeouts' own cleanup: don't let one
+            # slow/unresponsive Galaxy history-delete hold up the rest of
+            # this batch.
+            deletegalaxyhistory.delay(e.history)
         e.soft_delete()
+        # Re-derived here (not just trusted from submission time) so
+        # rows predating BlastRun.query_length, or from a launch path
+        # that somehow never set it, still keep this before it's lost
+        # for good.
+        if e.query_length is None:
+            e.query_length = len(e.query_seq or "")
+        # Frees space on rows old enough to be cleaned up anyway - safe
+        # for the daily report (workspace/reports.py), which only ever
+        # reads BlastRun's date/deleted/id, never query_seq/tree.
+        e.query_seq = ""
+        e.tree = ""
         e.save()
     logger.info("Old blast deletion task finished")
 
 
-@periodic_task(run_every=(crontab(hour="*", minute="*", day_of_week="*")))
+@shared_task
 def checkblastruns():
     """
     Every minutes, check running pasteur blast runs
@@ -283,14 +365,57 @@ def checkblastruns():
     try:
         galaxycon = galaxy_connection()
         galaxycon.nocache = True
-        
-        for b in BlastRun.objects.filter(deleted=False, server=BlastRun.PASTEUR).filter(Q(status=BlastRun.PENDING) | Q(status=BlastRun.RUNNING)):
+    except Exception as e:
+        logger.info("Error while connecting to galaxy: %s" % (e))
+        logging.exception("message")
+        release_lock()
+        return
+
+    # Excludes history_fileid='': launch_pasteur_blast() saves the run as
+    # PENDING right after creating its Galaxy history, but only sets
+    # history_fileid afterwards, once the (network-bound) file upload +
+    # tool run calls complete - a real race with this task's own 1-minute
+    # schedule. Without this exclude, show_dataset(b.history, '') turns
+    # into a GET on Galaxy's history *contents list* endpoint (trailing
+    # empty dataset id) instead of a single dataset, which returns a
+    # list, not a dict - crashing with "'list' object has no attribute
+    # 'get'". That row is picked up again on the next pass once
+    # history_fileid is set.
+    #
+    # Each run is also processed in its own try/except: previously the
+    # entire loop shared one try/except, so a single run's failure (this
+    # race included) silently aborted checking of every other
+    # pending/running run in the same pass too.
+    for b in BlastRun.objects.filter(
+            deleted=False, server=BlastRun.PASTEUR
+        ).exclude(history_fileid='').filter(
+            Q(status=BlastRun.PENDING) | Q(status=BlastRun.RUNNING)):
+        try:
+            if timezone.now() - b.date > PASTEUR_RUN_STALE_AFTER:
+                logging.warning(
+                    "Pasteur BLAST run %s has been pending/running for "
+                    "over %s - giving up on it" % (b.id, PASTEUR_RUN_STALE_AFTER))
+                # Queued separately (not called directly), same reasoning
+                # as launch_pasteur_blast's own SoftTimeLimitExceeded
+                # cleanup: don't add another blocking Galaxy call to a
+                # run we've already decided to abandon.
+                if b.history:
+                    deletegalaxyhistory.delay(b.history)
+                b.status = BlastRun.ERROR
+                b.message = (
+                    "This search has been running on the Pasteur Galaxy "
+                    "server for longer than expected and was aborted. "
+                    "Please try again, possibly with a smaller/more "
+                    "specific query.")
+                b.save()
+                continue
+
             # State of the output file we want (blast XML)
             dataset=galaxycon.histories.show_dataset(b.history,b.history_fileid)
             state=dataset.get('state')
             infos=dataset.get('misc_info')
             b.message=infos
-    
+
             if state == 'ok':
                 b.status=BlastRun.FINISHED
                 blast_type = BlastRun.blast_type(BlastRun.PASTEUR, b.blastprog)
@@ -303,7 +428,7 @@ def checkblastruns():
                     frame=majorityQueryFrame(tmp_file.name)
                     b.query_seq = biofile.translate(str(b.query_seq), frame)
                     b.save()
-                
+
                 result_handle = open(tmp_file.name, "r")
                 blast_records = NCBIXML.parse(result_handle)
                 ms = PseudoMSA(b.query_id, b.query_seq, query_seq_bk, frame, blast_type)
@@ -344,37 +469,25 @@ def checkblastruns():
             else:
                 b.status=BlastRun.ERROR
             b.save()
-    
+
             if b.email is not None and re.match(r"[^@]+@[^@]+\.[^@]+", b.email) and (b.status == BlastRun.ERROR or b.status == BlastRun.FINISHED):
                 try:
-                    message = "Dear NGPhylogeny user, \n\n"
-                    if b.status != b.FINISHED:
-                        message = message + "Your NGPhylogeny BLAST job finished with errors.\n\n"
-                    else:
-                        message = message + "Your NGPhylogeny BLAST job finished successfuly.\n"
-                    please = 'Please visit http://%s%s to check results\n\n' % (
-                        "ngphylogeny.fr", reverse('blast_view', kwargs={'pk': b.id}))
-                    message = message + please
-                    message = message + "Thank you for using ngphylogeny.fr\n\n"
-                    message = message + "NGPhylogeny.fr development team.\n"
-                    send_mail(
-                        'NGPhylogeny.fr BLAST results',
-                        message,
-                        'ngphylogeny@pasteur.fr',
-                        [b.email],
-                        fail_silently=False,
-                    )
+                    # Same branded HTML template as the workflow
+                    # job-completion email (workspace.emails) - see
+                    # CLAUDE.md's "BLAST completion email" note.
+                    send_blast_completion_email(b, b.email)
                 except SMTPException as e:
                     logging.warning("Problem with smtp server : %s" % (e))
                 except Exception as e:
                     logging.warning(
                         "Unknown Problem while sending e-mail: %s" % (e))
-    except Exception as e:
-        b.status=BlastRun.ERROR
-        b.message=str(e)
-        b.save()
-        logger.info("Error while checking blast run: %s" % (e))
-        logging.exception("message")
+        except Exception as e:
+            logging.warning(
+                "Problem while checking blast run %s: %s" % (b.id, e))
+            logging.exception("message")
+            b.status=BlastRun.ERROR
+            b.message=str(e)
+            b.save()
 
     release_lock()
     logger.info("Pasteur blast runs checked")

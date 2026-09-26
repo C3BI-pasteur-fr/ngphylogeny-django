@@ -16,13 +16,25 @@ import os
 BASE_DIR = os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__))))
 
-LOGIN_URL = '/galaxy/login'
+# Real production bug, found while adding login_required-protected
+# account-page tests (galaxy.tests.AccountPageOwnHistoriesTest): this
+# used to be '/galaxy/login' - galaxy/urls.py has always been an empty
+# urlpatterns = [] (mounted at /galaxy/), so every @login_required view
+# in the app (including /account itself) redirected an anonymous
+# visitor to a dead 404 instead of the real login form. The actual
+# login page has always lived at /account/login (account/urls.py's own
+# name='login').
+LOGIN_URL = '/account/login'
 LOGIN_REDIRECT_URL = '/'
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/1.11/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = '_m(y$t1ukdw&!z-e_)ig5h!=*#y*3db3vh81il_i=n*y24ih9k'
+# The fallback is only for local dev/CI - it's public (this file is on
+# GitHub), so any real deployment must set NGPHYLO_SECRET_KEY instead.
+SECRET_KEY = os.environ.get(
+    'NGPHYLO_SECRET_KEY',
+    '_m(y$t1ukdw&!z-e_)ig5h!=*#y*3db3vh81il_i=n*y24ih9k')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
@@ -30,8 +42,17 @@ DEBUG = False
 ALLOWED_HOSTS = ["*", ]
 INTERNAL_IPS = ["127.0.0.1", ]
 
+# Trust a reverse proxy's X-Forwarded-Proto header to know a request was
+# actually HTTPS (Django can't tell otherwise - it only sees the plain HTTP
+# connection from the proxy). Inert unless that header is actually present,
+# so this is safe to leave on for deployments with no proxy in front too.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 CRISPY_TEMPLATE_PACK = "bootstrap3"
 TESTDATA_DIR = os.path.join(BASE_DIR, 'testdata')
+# Preserves pre-3.2 behavior (AutoField) instead of opting into the new
+# Django 3.2 default (BigAutoField), which would alter existing PK columns.
+DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
 # Application definition
 
 INSTALLED_APPS = [
@@ -52,17 +73,23 @@ INSTALLED_APPS = [
     'surveys.apps.SurveysConfig',
     'workflows',
     # 'workspace.apps.WorkspaceConfig',
-    'markdown_deux',
     'blast.apps.BlastConfig',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # Serves STATIC_ROOT directly from the app process - needed because
+    # runserver only auto-serves static files when DEBUG=True, and this
+    # deployment has no separate nginx/CDN in front of it under prod
+    # settings (DEBUG=False).
+    'whitenoise.middleware.WhiteNoiseMiddleware',
+    # Must stay right after WhiteNoiseMiddleware - see
+    # NGPhylogeny_fr/middleware.py's own docstring for why.
+    'NGPhylogeny_fr.middleware.MaintenanceModeMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.auth.middleware.SessionAuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -128,6 +155,13 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/1.11/howto/static-files/
 STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 STATIC_URL = '/static/'
+# Not CompressedManifestStaticFilesStorage: collectstatic fails hard on it
+# because css/bootstrap.css references fonts/glyphicons-halflings-regular.eot,
+# which was never actually included in this repo's assets - a pre-existing
+# gap, not something introduced here. CompressedStaticFilesStorage still
+# gzips and whitenoise-serves everything, it just doesn't hash-bust or
+# validate CSS asset references.
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 STATICFILES_DIRS = (
     # Put strings here, like "/home/html/static" or "C:/www/django/static".
     # Always use forward slashes, even on Windows.
@@ -158,7 +192,30 @@ CACHES = {
     }
 }
 
-MARKDOWN_DEUX_STYLES = {'default': {
+# Shared by local.py and prod.py so both actually get a working
+# DATABASES setting - it used to live only in local.py, which meant
+# prod.py (missing `from .base import *` entirely, fixed alongside
+# this) had none at all.
+if os.environ.get('NGPHYLO_DATABASE_HOST') is not None:
+    DATABASES = {
+        'default': {
+            'ENGINE': os.environ.get('NGPHYLO_DATABASE_ENGINE'),
+            'NAME': os.environ.get('NGPHYLO_DATABASE_NAME'),
+            'USER': os.environ.get('NGPHYLO_DATABASE_USER'),
+            'PASSWORD': os.environ.get('NGPHYLO_DATABASE_PASSWORD'),
+            'HOST': os.environ.get('NGPHYLO_DATABASE_HOST'),
+            'PORT': os.environ.get('NGPHYLO_DATABASE_PORT'),
+        }
+    }
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+        }
+    }
+
+MARKDOWN_STYLES = {'default': {
     "extras": {
         "code-friendly": None,
         "tables": None,
@@ -171,12 +228,130 @@ EMAIL_PORT = os.environ.get('NGPHYLO_EMAIL_PORT')
 EMAIL_HOST_USER = os.environ.get('NGPHYLO_EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.environ.get('NGPHYLO_EMAIL_HOST_PASSWORD')
 EMAIL_USE_TLS = (os.environ.get('NGPHYLO_EMAIL_USE_TLS')== 'True')
+# Django's own default ('webmaster@localhost') leaks straight into
+# anything sent without an explicit from_email - notably
+# django.contrib.auth's PasswordResetForm.save() (account/views.py's
+# password-reset flow), which has no other hook for this. Reuses
+# NGPHYLO_REPORT_FROM_EMAIL's own default address/env-var-optional
+# convention rather than introducing a third from-address setting.
+DEFAULT_FROM_EMAIL = os.environ.get(
+    'NGPHYLO_DEFAULT_FROM_EMAIL', 'ngphylogeny@pasteur.fr')
 
-if EMAIL_PORT is not None:
+# See NGPhylogeny_fr/middleware.py. Case-insensitive (unlike
+# EMAIL_USE_TLS's exact-'True' check above) since a maintenance toggle
+# being silently wrong because someone typed "true" instead of "True" in
+# a GitLab CI/CD variable has real consequences either way (site stuck up
+# during an actual outage, or stuck down after maintenance ends).
+NGPHYLO_MAINTENANCE_MODE = (
+    os.environ.get('NGPHYLO_MAINTENANCE_MODE', '').lower() == 'true')
+
+# "true" (case-insensitive, same reasoning as NGPHYLO_MAINTENANCE_MODE
+# above) re-enables public account sign-up (account.views.
+# AccountCreateView) - off by default for now. See
+# AccountCreateView.dispatch(), which reads this directly.
+NGPHYLO_ACCOUNT_CREATION_ENABLED = (
+    os.environ.get('NGPHYLO_ACCOUNT_CREATION_ENABLED', '').lower() == 'true')
+
+if EMAIL_PORT:
+    # Truthy check, not "is not None": docker-compose.yml/
+    # docker-compose.standalone.yml pass this through as "${NGPHYLO_EMAIL_PORT:-}",
+    # which sets an empty string (not an absent var) when unconfigured -
+    # int('') raises ValueError, unlike int() on a value that was never
+    # set in the environment at all.
     EMAIL_PORT = int(EMAIL_PORT)
+else:
+    EMAIL_PORT = None
+
+# Daily workflow-usage report (workspace.tasks.send_daily_report, scheduled
+# via CELERY_BEAT_SCHEDULE below) - comma-separated recipient list. Left
+# unset, the task just logs and does nothing: no report is sent, and
+# nothing else is affected.
+NGPHYLO_REPORT_RECIPIENTS = [
+    r.strip() for r in
+    os.environ.get('NGPHYLO_REPORT_RECIPIENTS', '').split(',')
+    if r.strip()
+]
+NGPHYLO_REPORT_FROM_EMAIL = os.environ.get(
+    'NGPHYLO_REPORT_FROM_EMAIL', 'ngphylogeny@pasteur.fr')
+
+# Contact form (surveys.views.FeedbackCreateView) - comma-separated
+# recipient list, same shape/empty-means-no-op convention as
+# NGPHYLO_REPORT_RECIPIENTS above. Left unset, a submitted Feedback row
+# is still saved to the DB as usual; no email is sent, nothing else is
+# affected.
+NGPHYLO_CONTACT_FORM_RECIPIENTS = [
+    r.strip() for r in
+    os.environ.get('NGPHYLO_CONTACT_FORM_RECIPIENTS', '').split(',')
+    if r.strip()
+]
+
+# Days a finished WorkspaceHistory is kept before workspace.tasks.
+# deleteoldgalaxyhistory's daily cleanup removes it - see workspace/
+# models.py's WorkspaceHistory.RETENTION_DAYS, which reads this (also
+# what the Workspace/account pages' "days left" estimate is computed
+# from). `or '14'`, not just a plain default= on .get(): docker-compose.
+# yml/docker-compose.standalone.yml pass a real "14" through their own
+# "${NGPHYLO_WORKSPACE_RETENTION_DAYS:-14}" shell default, but
+# manifest.yaml's "${WORKSPACE_RETENTION_DAYS}" is substituted by
+# envsubst (no bash-style ":-" default support) - an unset GitLab CI/CD
+# variable there becomes a genuinely empty string, and int('') raises
+# ValueError.
+NGPHYLO_WORKSPACE_RETENTION_DAYS = int(
+    os.environ.get('NGPHYLO_WORKSPACE_RETENTION_DAYS') or '14')
+
+# Days a BlastRun is kept before blast.tasks.deleteoldblastruns's daily
+# cleanup removes it - see blast/models.py's BlastRun.RETENTION_DAYS,
+# which reads this. Independently configurable from
+# NGPHYLO_WORKSPACE_RETENTION_DAYS above (a different table, a
+# different cleanup task) - defaults to 7, not 14, per this project's
+# own choice of a shorter default retention for BLAST runs specifically.
+# Same empty-string-safety reasoning as NGPHYLO_WORKSPACE_RETENTION_DAYS
+# above.
+NGPHYLO_BLAST_RETENTION_DAYS = int(
+    os.environ.get('NGPHYLO_BLAST_RETENTION_DAYS') or '7')
+
+# Days a non-base (per-run duplicated) Galaxy workflow *definition* is
+# kept before workflows.tasks.deleteoldgalaxyworkflows's daily cleanup
+# removes it - see workflows/models.py's Workflow.RETENTION_DAYS, which
+# reads this. Independently configurable from
+# NGPHYLO_WORKSPACE_RETENTION_DAYS above (deleting a workflow definition
+# doesn't touch its associated history's actual data - see that task's
+# own docstring) - defaults to 14, matching
+# NGPHYLO_WORKSPACE_RETENTION_DAYS's own default, though the two aren't
+# tied together beyond that shared default value. Same empty-string-
+# safety reasoning as NGPHYLO_WORKSPACE_RETENTION_DAYS above.
+NGPHYLO_WORKFLOW_RETENTION_DAYS = int(
+    os.environ.get('NGPHYLO_WORKFLOW_RETENTION_DAYS') or '14')
+
+# Hours a still-running/queued WorkspaceHistory is left alone before
+# workspace.tasks.updateworkspacestatus's own cancel_stale_jobs() gives
+# up and force-cancels its still-pending Galaxy jobs - see workspace/
+# tasks.py's WORKFLOW_RUN_STALE_AFTER, which reads this. Defaults to 24,
+# this task's original hardcoded value. Same empty-string-safety
+# reasoning as NGPHYLO_WORKSPACE_RETENTION_DAYS above.
+NGPHYLO_WORKFLOW_RUN_STALE_HOURS = int(
+    os.environ.get('NGPHYLO_WORKFLOW_RUN_STALE_HOURS') or '24')
+
+# Hours a still-pending/running Pasteur BLAST run is polled before
+# blast.tasks.checkblastruns gives up and marks it ERROR - see
+# blast/tasks.py's PASTEUR_RUN_STALE_AFTER, which reads this. Defaults
+# to 3, this task's original hardcoded value. Same empty-string-safety
+# reasoning as NGPHYLO_WORKSPACE_RETENTION_DAYS above.
+NGPHYLO_PASTEUR_BLAST_STALE_HOURS = int(
+    os.environ.get('NGPHYLO_PASTEUR_BLAST_STALE_HOURS') or '3')
 
 # CELERY SETTINGS
-BROKER_URL = 'redis://localhost:6379/0'
+#
+# Celery >=4.0 also accepts the unprefixed names below (BROKER_URL,
+# CELERY_DEFAULT_QUEUE, CELERY_ROUTES) via a deprecated compat shim,
+# but that shim - along with celery.decorators.periodic_task, used to
+# be used here - was removed in Celery 5. These are the current
+# CELERY_-prefixed names, read via
+# app.config_from_object('django.conf:settings', namespace='CELERY')
+# in NGPhylogeny_fr/celery.py.
+from celery.schedules import crontab
+
+CELERY_BROKER_URL = os.environ.get('NGPHYLO_REDIS_URL', 'redis://localhost:6379/0')
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
@@ -185,8 +360,8 @@ CELERY_TIMEZONE = 'Europe/Madrid'
 CELERY_ENABLE_UTC = True
 
 # celery queues setup
-CELERY_DEFAULT_QUEUE = 'default'
-CELERY_ROUTES = {
+CELERY_TASK_DEFAULT_QUEUE = 'default'
+CELERY_TASK_ROUTES = {
     'blast.tasks.launch_ncbi_blast': {'queue': 'ncbi_blast'},
     'blast.tasks.launch_pasteur_blast': {'queue': 'default'},
     'blast.tasks.build_tree': {'queue': 'default'},
@@ -202,12 +377,64 @@ CELERY_ROUTES = {
     'workflows.tasks.deletegalaxyworkflow': {'queue': 'default'},
 }
 
+# celery beat schedule: replaces the celery.decorators.periodic_task
+# decorator (removed in Celery 5) previously used directly on these
+# task functions in blast/tasks.py, workflows/tasks.py and
+# workspace/tasks.py. Schedules are unchanged from before.
+CELERY_BEAT_SCHEDULE = {
+    'blast-delete-old-runs': {
+        'task': 'blast.tasks.deleteoldblastruns',
+        'schedule': crontab(hour=2, minute=0),
+    },
+    'blast-check-runs': {
+        'task': 'blast.tasks.checkblastruns',
+        'schedule': crontab(),
+    },
+    'workflows-delete-old-galaxy-workflows': {
+        'task': 'workflows.tasks.deleteoldgalaxyworkflows',
+        'schedule': crontab(hour=2, minute=0),
+    },
+    'workspace-launch-monitor-workspaces': {
+        'task': 'workspace.tasks.launchmonitorworkspaces',
+        'schedule': crontab(),
+    },
+    'workspace-delete-old-galaxy-history': {
+        'task': 'workspace.tasks.deleteoldgalaxyhistory',
+        'schedule': crontab(hour=2, minute=0),
+    },
+    'workspace-send-daily-report': {
+        'task': 'workspace.tasks.send_daily_report',
+        'schedule': crontab(hour=8, minute=0),
+    },
+}
+
+# Mutually exclusive by design, not just independently toggleable: once
+# Pasteur's own Galaxy BLAST server is activated, prefer it exclusively
+# rather than also still offering NCBI's public server (the slower, less
+# controlled option - shared, rate-limited infrastructure outside this
+# app's control, only bounded to a hard 10-minute timeout this session,
+# see blast/tasks.py's launch_ncbi_blast). Computed once into a plain
+# variable, not cross-referenced between the two dict entries below -
+# Python dict literals can't self-reference like that.
+_PASTEUR_BLAST_ENABLED = os.environ.get(
+    'NGPHYLO_PASTEUR_BLAST_ENABLED', '').lower() == 'true'
+
 BLASTS = {
     'pasteur' : {
-        'activated' : False,
+        # Env-var driven (NGPHYLO_PASTEUR_BLAST_ENABLED, "true" to
+        # activate - anything else/unset leaves it off, matching this
+        # setting's long-standing hardcoded default), not a hardcoded
+        # literal - lets this be turned on per-deployment without a code
+        # change/redeploy of the setting itself, same pattern as
+        # NGPHYLO_MAINTENANCE_MODE. Case-insensitive for the same reason
+        # as that setting: a silently-wrong toggle here just means
+        # showing/hiding a server option, not a security issue either
+        # way, so being lenient about "true"/"True"/"TRUE" is worth more
+        # than being strict.
+        'activated' : _PASTEUR_BLAST_ENABLED,
         'name' : 'Institut Pasteur Galaxy Server',
         'progs': {
-            'toolshed.pasteur.fr/repos/fmareuil/ncbi_blast_plus/ncbi_blastn_wrapper/2.6.0' : {
+            'toolshed.g2.bx.psu.edu/repos/devteam/ncbi_blast_plus/ncbi_blastn_wrapper/2.14.1+galaxy2' : {
                 'name': 'blastn (nt query vs. nt db)',
                 'test_data' : 'DNA_Human.fa',
                 'dbs': {
@@ -222,7 +449,7 @@ BLASTS = {
                 'type' : 'blastn',
                 'input': 'nt',
             },
-            'toolshed.pasteur.fr/repos/fmareuil/ncbi_blast_plus/ncbi_blastp_wrapper/2.6.0' : {
+            'toolshed.g2.bx.psu.edu/repos/devteam/ncbi_blast_plus/ncbi_blastp_wrapper/2.14.1+galaxy2' : {
                 'name': 'blastp (aa query vs. aa db)',
                 'test_data' : 'AA_Human.fa',
                 'dbs': {
@@ -233,7 +460,7 @@ BLASTS = {
                 'type' : 'blastp',
                 'input': 'aa',
             },
-            'toolshed.pasteur.fr/repos/fmareuil/ncbi_blast_plus/ncbi_tblastn_wrapper/2.6.0' : {
+            'toolshed.g2.bx.psu.edu/repos/devteam/ncbi_blast_plus/ncbi_tblastn_wrapper/2.14.1+galaxy2' : {
                 'name': 'tblastn (aa query vs. nt db)',
                 'test_data' : 'AA_Human.fa',
                 'dbs' : {
@@ -248,7 +475,7 @@ BLASTS = {
                 'type' : 'tblastn',
                 'input': 'aa',
             },
-            'toolshed.pasteur.fr/repos/fmareuil/ncbi_blast_plus/ncbi_blastx_wrapper/2.6.0' : {
+            'toolshed.g2.bx.psu.edu/repos/devteam/ncbi_blast_plus/ncbi_blastx_wrapper/2.14.1+galaxy2' : {
                 'name': 'blastx (nt query vs. aa db)',
                 'test_data' : 'DNA_Human.fa',
                 'dbs' : {
@@ -277,7 +504,9 @@ BLASTS = {
         },
     },
     'ncbi' : {
-        'activated' : True,
+        # See _PASTEUR_BLAST_ENABLED above - mutually exclusive with
+        # 'pasteur', not independently toggleable.
+        'activated' : not _PASTEUR_BLAST_ENABLED,
         'name' : 'Public NCBI Blast Server',
         'progs' : {
             'blastn' : {

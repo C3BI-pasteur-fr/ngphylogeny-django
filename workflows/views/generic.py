@@ -1,5 +1,10 @@
-from django.core.urlresolvers import reverse_lazy
+import logging
+
+import requests
+from bioblend.galaxy.client import ConnectionError
+from django.urls import reverse_lazy
 from django.http import HttpResponseRedirect
+from django.shortcuts import render
 from django.utils.decorators import method_decorator
 from django.utils.functional import cached_property
 from django.views.generic import ListView, DetailView
@@ -16,9 +21,39 @@ from blast.models import BlastRun
 from workspace.tasks import initializeworkspacejob
 
 import tempfile
-import StringIO
+from io import StringIO
 
 from utils import biofile
+
+logger = logging.getLogger(__name__)
+
+# Raised by bioblend itself (ConnectionError, once its own retries are
+# exhausted) or by the underlying requests call (e.g. a ReadTimeout -
+# see GalaxyUser.GALAXY_REQUEST_TIMEOUT in galaxy/models.py) whenever
+# the configured Galaxy server can't actually be reached (e.g. Galaxy's
+# own maintenance mode, a 503) - same broadened pair used throughout
+# workspace/views.py for the same reason, see CLAUDE.md's "pod restart"
+# section for why ConnectionError alone isn't enough.
+GALAXY_UNREACHABLE_EXCEPTIONS = (
+    ConnectionError, requests.exceptions.RequestException)
+
+
+def galaxy_unavailable_response(request):
+    """
+    A plain, friendly 503 page instead of a 500 - see the workflow list/
+    form views below, which call this whenever a page load's own direct
+    Galaxy call(s) fail with GALAXY_UNREACHABLE_EXCEPTIONS. NGPhylogeny.fr
+    does no computation of its own (see CLAUDE.md's "What this is") - a
+    Galaxy outage genuinely means these pages can't be shown at all, so
+    this isn't a bug to recover from, just a clearer response than the
+    generic templates/500.html for a case that's expected to happen and
+    resolve on its own.
+    """
+    logger.warning(
+        "Galaxy server unreachable while serving %s", request.path)
+    return render(
+        request, 'workflows/galaxy_unavailable.html', status=503)
+
 
 @method_decorator(connection_galaxy, name="dispatch")
 class WorkflowListView(ListView):
@@ -40,7 +75,13 @@ class WorkflowListView(ListView):
         return workflow_queryset
 
     def get_queryset(self):
-        return self.workflow_list    
+        return self.workflow_list
+
+    def get(self, request, *args, **kwargs):
+        try:
+            return super().get(request, *args, **kwargs)
+        except GALAXY_UNREACHABLE_EXCEPTIONS:
+            return galaxy_unavailable_response(request)
 
 @method_decorator(connection_galaxy, name="dispatch")
 class WorkflowFormView(UploadView, DetailView):
@@ -51,7 +92,12 @@ class WorkflowFormView(UploadView, DetailView):
     template_name = 'workflows/workflows_form.html'
     restricted_toolset = None
 
-  
+    def get(self, request, *args, **kwargs):
+        try:
+            return super().get(request, *args, **kwargs)
+        except GALAXY_UNREACHABLE_EXCEPTIONS:
+            return galaxy_unavailable_response(request)
+
     def get_context_data(self, **kwargs):
         gi = self.request.galaxy
         context = super(WorkflowFormView, self).get_context_data(**kwargs)
@@ -62,7 +108,7 @@ class WorkflowFormView(UploadView, DetailView):
             context['form'] = UploadView.form()
         if hasattr(wk, 'json'):
             # parse galaxy workflow json information
-            context["inputs"] = wk.json['inputs'].keys()
+            context["inputs"] = list(wk.json['inputs'].keys())
             # add workfow galaxy information
             context["steps"] = WorkflowStepInformation(
                 wk.json, tools=self.restricted_toolset,
@@ -105,10 +151,10 @@ class WorkflowFormView(UploadView, DetailView):
             nseq, length, seqaa = biofile.valid_fasta(submitted_file)
             submitted_file.seek(0)
         elif pasted_text:
-            nseq, length, seqaa = biofile.valid_fasta(StringIO.StringIO(str(pasted_text)))
+            nseq, length, seqaa = biofile.valid_fasta(StringIO(str(pasted_text)))
         elif blast_run != '--':
             b = BlastRun.objects.get(pk=blast_run)
-            nseq, length, seqaa = biofile.valid_fasta(StringIO.StringIO(str(b.to_fasta())))
+            nseq, length, seqaa = biofile.valid_fasta(StringIO(str(b.to_fasta())))
         elif galaxy_file != "--":
             file_id = galaxy_file
         else:
@@ -155,17 +201,23 @@ class WorkflowFormView(UploadView, DetailView):
             file_id = u_file.get('outputs')[0].get('id')
         # else if galaxy: : file_id is already set
         
-        i_input = workflow.json['inputs'].keys()[0]
+        i_input = list(workflow.json['inputs'].keys())[0]
         
         # input file
         dataset_map = dict()
         dataset_map[i_input] = {'id': file_id, 'src': 'hda'}
         try:
             # run workflow
-            self.outputs = gi.workflows.run_workflow(
+            # run_workflow() (dataset_map=...) was removed from
+            # bioblend; invoke_workflow() (inputs=...) is the direct
+            # replacement - same role, new name - matching the
+            # invoke_workflow() call already used for the advanced/a
+            # la carte flow in workflows/views/wkadvanced.py.
+            self.outputs = gi.workflows.invoke_workflow(
                 workflow_id=workflow.id_galaxy,
                 history_id=wksph.history,
-                dataset_map=dataset_map,
+                inputs=dataset_map,
+                allow_tool_state_corrections=True,
             )
         except Exception as galaxy_exception:
             workflow.delete_from_galaxy(gi)

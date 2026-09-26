@@ -1,10 +1,23 @@
 db.sqlite3
-*/migrations
-*~
+# Real production/legacy DB dumps used for the one-off historical-data
+# restore work (see CLAUDE.md's "Restoring historical..." sections) sit
+# untracked at the repo root, several GB each - Docker sends the whole
+# build context to the daemon before applying this file's exclusions, so
+# leaving these in blew that up to ~25GB and made every `docker build`
+# glacial. None of them are needed to build the image.
+*.sql
+# Keep migrations/__init__.py (needed for Django to recognize these as
+# migrations-tracked apps) - only the generated 0*.py files are excluded,
+# matching .gitignore. makemigrations creates them fresh on every build.
+*/migrations/0*.py
+# Unlike .gitignore, a bare pattern here only matches at the build context
+# root - it needs the **/ prefix to actually match at any depth.
+**/*~
 .git
 Dockerfile
-*.pyc
-*.pyo
-*.pyd
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/__pycache__
 .Python
 env

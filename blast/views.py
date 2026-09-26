@@ -9,7 +9,7 @@ from django.conf import settings
 from django.http import HttpResponse
 
 from .forms import BlastForm
-from tasks import launch_ncbi_blast, launch_pasteur_blast, build_tree
+from .tasks import launch_ncbi_blast, launch_pasteur_blast, build_tree
 from .models import BlastRun, BlastSubject
 
 import json
@@ -147,21 +147,34 @@ class DeleteBlastSequences(View):
         return HttpResponseRedirect(reverse_lazy('blast_view', kwargs=kwargs))
     
 class DeleteBlastRunView(DeleteView):
+    """
+    No confirmation template - both GET and POST soft-delete straight
+    away. Django 4.x's BaseDeleteView.post() was rewritten to go through
+    FormMixin (get_form()/form_valid()/form_invalid()) and no longer
+    calls self.delete() at all - a get() that forwards to self.post()
+    (the old way to skip DeleteView's confirmation page) now builds an
+    unbound form (get_form_kwargs() only binds request.POST/FILES when
+    self.request.method is actually 'POST', which it isn't for a GET
+    request even though we're calling post() by hand), so
+    form.is_valid() is always False and it falls through to
+    form_invalid()'s default: render the (nonexistent, we never wanted
+    one) blastrun_confirm_delete.html - "TemplateDoesNotExist" instead
+    of a redirect. Overriding delete() no longer has any effect either
+    (see the DeleteViewCustomDeleteWarning this used to trigger) since
+    post() never calls it any more. Fixed by handling GET/POST directly,
+    bypassing FormMixin's form machinery entirely - this view never had
+    an actual form/confirmation page to validate against.
+    """
     model = BlastRun
     success_url = reverse_lazy('blast_form')
 
     def get(self, request, *args, **kwargs):
-        """ No confirmation template """
-        return self.post(request, *args, **kwargs)
+        return self._soft_delete_and_redirect()
 
-    # Overrides the default delete method to prevent actual
-    # deletion, but instead mark it as deleted and delete the
-    # subject sequence results
-    def delete(self, request, *args, **kwargs):
-        """
-        Calls the delete() method on the fetched object and then
-        redirects to the success URL.
-        """
+    def post(self, request, *args, **kwargs):
+        return self._soft_delete_and_redirect()
+
+    def _soft_delete_and_redirect(self):
         self.get_object().soft_delete()
         return HttpResponseRedirect(self.success_url)
 

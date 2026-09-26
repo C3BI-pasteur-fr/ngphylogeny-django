@@ -1,0 +1,33 @@
+# Development override: bind-mounts this checkout into web/celery-worker/
+# celery-beat in place of relying on their baked-in `COPY . .` image layer,
+# so editing a file on the host takes effect immediately - no `--build`
+# needed to see the change. `init` is deliberately NOT included here - it
+# runs docker/init.sh, which the image's own build makes executable
+# (`RUN chmod +x docker/init.sh`); the host file itself isn't +x, and a
+# bind mount would replace the image's copy with that non-executable one.
+#
+# web's default command (`python manage.py runserver`, from the Dockerfile)
+# already auto-reloads on file changes via Django's own StatReloader.
+# celery-worker/celery-beat don't auto-reload - restart those two by hand
+# after changing code they actually run:
+#   docker compose <the same -f flags as below> restart celery-worker celery-beat
+#
+# Use alongside either compose file (both define web/celery-worker/
+# celery-beat with the same image/code layout):
+#   docker compose -f docker-compose.standalone.yml -f docker-compose.dev.yml up -d
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+#
+# Build once first so dependencies (requirement.txt) are actually
+# installed into the image - this override only replaces the application
+# code layer, not the Python environment. Re-`--build` only when
+# requirement.txt itself changes, not for ordinary code edits.
+services:
+  web:
+    volumes:
+      - .:/home/ngphylo
+  celery-worker:
+    volumes:
+      - .:/home/ngphylo
+  celery-beat:
+    volumes:
+      - .:/home/ngphylo

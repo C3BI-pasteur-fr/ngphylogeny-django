@@ -21,9 +21,14 @@
     {% block javascripts %} {% endblock %}
 </head>
 <body>
-  <a href="https://github.com/C3BI-pasteur-fr/NGPhylogeny_fr_django"><img style="position: absolute; top: 0; right: 0; border: 0;" src="https://s3.amazonaws.com/github/ribbons/forkme_right_darkblue_121621.png" alt="Fork me on GitHub"></a>
+  <div class="github-fork-ribbon">
+    <a href="https://github.com/C3BI-pasteur-fr/NGPhylogeny_fr_django">Fork me on GitHub</a>
+  </div>
 <div id="page-wrapper">
   <header class="pagehead">
+    <a href="https://www.pasteur.fr" class="pagehead-logo-link">
+      <img class="pagehead-logo" src="{% static 'images/logo_institut_pasteur_white.png' %}" alt="Institut Pasteur" width="119" height="44">
+    </a>
     <h1><span class="title-cap">NG</span>Phylogeny.fr</h1>
   </header>
 <nav class="navbar-default">
@@ -53,12 +58,7 @@
             {% endblock %}
             {% block nav-workspace %}
                 <li>
-                <a {% if request.session.histories|length >= 1 %}
-                    href="{% url 'previous_analyses' %}"
-                    {% else %}
-                    class="text-muted"
-                    {% endif %}
-                    >
+                <a href="{% url 'previous_analyses' %}">
                     <span class="glyphicon glyphicon-th-list"></span> Workspace
                     <span class="badge">{{ request.session.histories|length }}</span>
                 </a>
@@ -92,6 +92,18 @@
                 </a>
             </li>
             {% endif %}
+            {% if request.user.is_staff %}
+            <li class="user navbar-right">
+                <a href="{% url 'running_jobs' %}" title="Running jobs">
+                    <span class="glyphicon glyphicon-time"></span>
+                </a>
+            </li>
+            <li class="user navbar-right">
+                <a href="{% url 'daily_report' %}" title="Daily workflow report">
+                    <span class="glyphicon glyphicon-stats"></span>
+                </a>
+            </li>
+            {% endif %}
             <li class="user navbar-right">
                 <a href="{% url 'account' %}">
                     <span class="glyphicon glyphicon-user"></span> {{user}}
@@ -110,6 +122,40 @@
 {% block section-title %}
 {% endblock %}
 <div class="container">
+    {% comment %}
+    Shared across every page - used to be a handful of individual pages
+    each rendering their own ad-hoc messages block, some filtering to
+    error-tagged messages only. A message added on a page that never
+    rendered any such block at all (e.g. account.views.AccountDeleteView's
+    own confirmation, which redirects to the home page) used to sit
+    queued (django.contrib.messages defaults to cookie-based storage,
+    unaffected by login/logout/session changes) until it happened to
+    land on one of those few pages later, however much later that was -
+    reported live as a stale "Your account and its analyses have been
+    deleted" message showing up on the account page right after a
+    brand new, unrelated sign-up. Rendering (and thereby consuming)
+    every message on every page, right where it's actually added, is
+    what actually fixes that, not just this specific report of it.
+
+    Do not spell out real template tag syntax inside this comment block
+    (e.g. literal curly-brace-percent if/endif text) - Django's lexer
+    tokenizes the whole template before this comment is stripped, and a
+    multi-line {# #} comment specifically does not span newlines at all
+    (its regex has no DOTALL), so any such text would either get parsed
+    as a real tag or, as happened here once already, leak the entire
+    "commented-out" text as visible page content instead of being
+    hidden. Paraphrase instead, as done above.
+    {% endcomment %}
+    {% if messages %}
+    <div class="messages">
+        {% for message in messages %}
+        <div class="alert {% if message.tags == 'error' %}alert-danger{% elif message.tags %}alert-{{ message.tags }}{% else %}alert-info{% endif %} alert-dismissable" role="alert">
+            <a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
+            {{ message }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
     {% block jumbotron %}{% endblock %}
     {% block goback %} {% endblock %}
     {% block content %} {% endblock %}
@@ -119,9 +165,9 @@
 </div>
 <footer class="footer container-fluid">
         <div class="row">
-            <a href="https://c3bi.pasteur.fr">
-                <div><img class="center-block logo_contrib" alt="C3BI"
-                          src="{% static 'images/logo_ip_cnrs_c3bi.png' %}"></div>
+            <a href="https://www.pasteur.fr">
+                <div><img class="center-block logo_contrib" alt="Institut Pasteur"
+                          src="{% static 'images/logo_institut_pasteur.png' %}"></div>
             </a>
             <a href="http://www.lirmm.fr">
                 <div><img class="center-block logo_contrib" alt="Lirmm"
@@ -139,11 +185,6 @@
             <a href="https://www.france-bioinformatique.fr">
                 <div><img class="center-block logo_contrib" alt="IFB"
                           src="{% static 'images/logo_ifb.png' %}"></div>
-            </a>
-            <a href="https://www.igs.cnrs-mrs.fr">
-                <div>
-                    <img class="center-block logo_contrib" alt="IGS"
-                         src="{% static 'images/logo_igs.jpg' %}"></div>
             </a>
         </div>
 

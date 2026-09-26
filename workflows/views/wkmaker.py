@@ -2,7 +2,7 @@ import random
 import string
 
 from django.contrib import messages
-from django.shortcuts import render, redirect
+from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse
 from django.utils.decorators import method_decorator
 
@@ -124,7 +124,19 @@ class WorkflowMakerView(WorkflowAdvancedFormView):
         wkname = wk_json.get('name')
 
         # create workflow
-        wk_obj = Workflow.objects.filter(id_galaxy=self.kwargs['id']).exclude(category='base').first()
+        # Real production 500: a stale/bogus id (e.g. a base workflow's
+        # own id, always excluded here - a maker-built workflow is never
+        # category='base' - or a duplicated workflow already cleaned up
+        # by workflows.tasks.deleteoldgalaxyworkflows()'s 7-day cutoff,
+        # see CLAUDE.md) has no matching non-base row, and
+        # show_workflow() above can still succeed even then (Galaxy
+        # still knows the workflow) - .first() returning None then
+        # crashed the next line with AttributeError instead of a clean
+        # 404. get_object_or_404 matches the same pattern already used
+        # by RerunWorkflow (workflows/views/generic.py).
+        wk_obj = get_object_or_404(
+            Workflow.objects.exclude(category='base'),
+            id_galaxy=self.kwargs['id'])
         # add galaxy json information
         wk_obj.json = wk_json
         wk_obj.save()
