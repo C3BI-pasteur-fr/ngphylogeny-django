@@ -237,9 +237,10 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
                     tool_inputs.set_param(fields.get(key), value)
             if not boot:
                 nboot = 0
-            if not t.can_run_on_data(nseq, length, nboot, seqaa):
+            reason = t.rejection_reason(nseq, length, nboot, seqaa)
+            if reason:
                 raise WorkflowInputFileFormatError(
-                    "Input data is too large for the workflow"
+                    "Input data is too large for the workflow (%s): %s" % (t.name, reason)
                 )
             for inputfile in inputs_data:
                 uploaded_file = ""
@@ -387,6 +388,13 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
             context = self.get_context_data(object=self.object)
             context['fileerror'] = str(e)
             workflow.delete_from_galaxy(gi)
+            # Same cleanup as the sibling WorkflowInvalidFormError branch
+            # just above - wksph/its Galaxy history was already created
+            # before analyze_forms() ever ran (see create_history() call
+            # above), so a can_run_on_data() rejection here left it
+            # orphaned (never deleted, only picked up by the normal
+            # 14-day retention cleanup) until this fix.
+            delete_history(request, wksph.history)
             return render(request, self.template_name, context)
 
         # We run the galaxy workflow

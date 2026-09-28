@@ -79,22 +79,49 @@ class Tool(models.Model):
         else:
             self.import_tool(self.tool_json)
 
+    def rejection_reason(self, nseq, length, nboot, seqaa):
+        """
+        Returns None if the tool is authorized to run on data of this
+        size, otherwise a short, human-readable reason naming which
+        specific limit was exceeded and by how much - used to build a
+        more informative rejection message than a bare "too large" (see
+        CLAUDE.md's Tool input-size-limits section for the 3-field model
+        this checks against). can_run_on_data() is a thin boolean
+        wrapper around this - kept so every existing caller/test that
+        treats it as a plain bool keeps working unchanged.
+
+        "x > min(a, b)" is logically equivalent to "x > a or x > b" -
+        used below so the aa_scale_factor-scaled branch doesn't need to
+        be spelled out as a separate OR condition the way
+        can_run_on_data() used to.
+        """
+        if self.max_nbseq > 0:
+            effective_max = self.max_nbseq
+            if seqaa:
+                effective_max = min(effective_max, self.max_nbseq // self.aa_scale_factor)
+            if nseq > effective_max:
+                suffix = " (stricter limit for protein data)" if seqaa else ""
+                return "too many sequences: %d given, %d allowed%s" % (
+                    nseq, effective_max, suffix)
+        if self.max_boot > 0 and nboot > self.max_boot:
+            return "too many bootstrap replicates: %d given, %d allowed" % (
+                nboot, self.max_boot)
+        if self.max_length_x_nbseq > 0:
+            effective_max = self.max_length_x_nbseq
+            if seqaa:
+                effective_max = min(effective_max, self.max_length_x_nbseq // self.aa_scale_factor)
+            if length * nseq > effective_max:
+                suffix = " (stricter limit for protein data)" if seqaa else ""
+                return "sequence length x number of sequences too large: %d given, %d allowed%s" % (
+                    length * nseq, effective_max, suffix)
+        return None
+
     def can_run_on_data(self, nseq, length, nboot, seqaa):
         """
-        Returns true if the tool can is authorized to run on 
+        Returns true if the tool can is authorized to run on
         data of the given size false otherwise
         """
-        if (self.max_nbseq > 0 and
-            ((nseq > self.max_nbseq) or
-             (seqaa and nseq > self.max_nbseq//self.aa_scale_factor))):
-            return False
-        if self.max_boot > 0 and nboot > self.max_boot :
-            return False
-        if (self.max_length_x_nbseq > 0 and
-            ((length*nseq > self.max_length_x_nbseq) or
-             (seqaa and length*nseq > self.max_length_x_nbseq//self.aa_scale_factor))):
-            return False
-        return True
+        return self.rejection_reason(nseq, length, nboot, seqaa) is None
 
     def save(self, *args, **kwargs):
 

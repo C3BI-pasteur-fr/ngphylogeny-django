@@ -152,8 +152,10 @@ def tool_exec_view(request, pk, store_output=None):
                             msg='Input Sequence file should contain more than 3 sequences for field %s' % (
                                 fields.get(inputfile))
                             raise ValueError(msg)
-                        if type in ["fasta", "phylip"] and not tool_obj.can_run_on_data(nseq, length, nboot, seqaa):
-                            raise ValueError('Given data is too large to run with this tool')
+                        if type in ["fasta", "phylip"]:
+                            reason = tool_obj.rejection_reason(nseq, length, nboot, seqaa)
+                            if reason:
+                                raise ValueError('Given data is too large to run with this tool: %s' % reason)
                         if type in exts.get(inputfile, ""):
                             if wksph is None:
                                 wksph = create_history(request,
@@ -195,8 +197,10 @@ def tool_exec_view(request, pk, store_output=None):
                                 msg='Input Sequence file should contain more than 3 sequences for field %s' % (
                                     fields.get(inputfile))
                                 raise ValueError(msg)
-                            if type in ["fasta", "phylip"] and not tool_obj.can_run_on_data(nseq, length, nboot, seqaa):
-                                raise ValueError('Given data is too large to run with this tool')
+                            if type in ["fasta", "phylip"]:
+                                reason = tool_obj.rejection_reason(nseq, length, nboot, seqaa)
+                                if reason:
+                                    raise ValueError('Given data is too large to run with this tool: %s' % reason)
                             if type in exts.get(inputfile, ""):
                                 if wksph is None:
                                     wksph = create_history(request,
@@ -247,6 +251,15 @@ def tool_exec_view(request, pk, store_output=None):
 
             except ValueError as ve:
                 message = str(ve)
+                # A ValueError raised here (too-large data, too few
+                # sequences, disallowed format, no input given, ...) can
+                # fire after an earlier input field already created wksph
+                # (a multi-input-field tool) - without this, that history
+                # was left orphaned until the normal 14-day retention
+                # cleanup, unlike the generic except Exception branch
+                # below, which already cleans up correctly.
+                if wksph is not None:
+                    delete_history(request, wksph.history)
             except ConnectionError as ce:
                 message = str(ce)
             except NameError as ne:

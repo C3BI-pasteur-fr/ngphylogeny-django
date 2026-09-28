@@ -537,3 +537,28 @@ class WorkflowAdvancedSubmitCleanupTest(TestCase):
             view.post(request)
 
         delete_history_mock.assert_called_once_with(request, 'fakehistid')
+
+    def test_input_too_large_failure_calls_delete_history_correctly(self):
+        """
+        Regression test: unlike the two branches above,
+        WorkflowInputFileFormatError (raised by analyze_forms() when
+        Tool.can_run_on_data() rejects the input as too large - see
+        CLAUDE.md's Tool input-size-limits section) never called
+        delete_history() at all - the just-created wksph/Galaxy history
+        was silently orphaned on every Advanced-workflow submission
+        rejected for being too large, unlike OneClick (which checks
+        before ever creating a history) or the sibling
+        WorkflowInvalidFormError branch right above this one.
+        """
+        view, request, workflow = self._make_view_and_request()
+        view.analyze_forms = Mock(
+            side_effect=WorkflowInputFileFormatError('too large'))
+
+        with patch('workflows.views.wkadvanced.create_history',
+                   return_value=Mock(history='fakehistid')), \
+             patch('workflows.views.wkadvanced.delete_history') as delete_history_mock, \
+             patch('workflows.views.wkadvanced.render',
+                   return_value=HttpResponse()):
+            view.post(request)
+
+        delete_history_mock.assert_called_once_with(request, 'fakehistid')
