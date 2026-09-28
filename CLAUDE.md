@@ -3695,3 +3695,51 @@ already does.
   guard. Verified by code inspection instead, same reasoning already
   documented elsewhere in this file for other disproportionately
   fragile-to-test cases.
+
+### `max_boot` was never actually enforced for PhyML/PhyML-SMS on the Advanced-workflow path
+
+Real production incident, reported live: a PhyML-SMS Advanced-workflow
+submission with 1000 bootstrap replicates ran on `ngphylogeny.fr`
+despite `max_boot=300` being configured for that tool. Not a bug
+introduced by this session's limit-simplification work - it predates
+it entirely, just never surfaced until a real `max_boot` value was
+actually set tight enough to matter (previously every tool defaulted
+to `-1`/unlimited).
+
+Root cause, confirmed by reading the real Galaxy tool wrappers directly
+(`NGPhylogeny_fr_galaxytools/tools/{phyml,phyml-sms}/*.xml`), not
+guessed: different tools expose their bootstrap on/off toggle under
+different Galaxy parameter names/values - FastME/FastTree use
+`bootstrap|do_bootstrap` == `'true'`, but PhyML uses
+`bootstrap|support` == `'1'` and PhyML-SMS uses `bootstrap|support` ==
+`'boot'` (a `<conditional>` with several non-bootstrap branches - SH-
+like aLRT, aBayes, no support - sharing the same param name).
+`tools/views.py`'s single-tool form already checked both conventions:
+```python
+if (fields.get(key,"") == 'bootstrap|do_bootstrap' and value == 'true' or
+    fields.get(key,"") == 'bootstrap|support' and (value == 'boot' or value == '1')):
+    boot = True
+```
+but `workflows/views/wkadvanced.py`'s `analyze_forms()` (the Advanced-
+workflow submission path) only ever checked the first condition. For
+PhyML/PhyML-SMS specifically, `boot` therefore stayed `False`
+regardless of what the user actually selected, and the very next line,
+`if not boot: nboot = 0`, silently zeroed out whatever replicate count
+they'd entered before it ever reached `can_run_on_data()` - making the
+`max_boot` check a permanent no-op for both tools on this one
+submission path (OneClick isn't affected the same way - see the
+existing `max_nbseq`/`max_boot` field simplification section above for
+why OneClick's own bootstrap handling is a different, already-known
+story: it hardcodes `nboot=-1`, never reads a real value at all).
+Fixed by adding the same `bootstrap|support` branch to
+`analyze_forms()`, matching `tools/views.py` exactly.
+
+Regression tests: `workflows.tests.
+WorkflowAdvancedBootstrapDetectionTest` - drives
+`WorkflowAdvancedFormView.analyze_forms()` directly (a real `Tool` DB
+fixture with `max_boot=300`, a mocked `tool_form` whose
+`fields_ids_mapping`/`cleaned_data` reproduce the real PhyML-SMS/PhyML
+param shape) - confirms both `'boot'` (PhyML-SMS) and `'1'` (PhyML)
+correctly raise `WorkflowInputFileFormatError` naming the real replicate
+count, and that a non-bootstrap `support` choice (`'sh'`) correctly
+does *not* raise.

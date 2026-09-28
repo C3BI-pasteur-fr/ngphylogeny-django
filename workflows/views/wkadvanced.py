@@ -232,7 +232,22 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
                 if key not in inputs_data:
                     if fields.get(key,"") == 'bootstrap|replicates':
                         nboot = value
-                    if fields.get(key,"") == 'bootstrap|do_bootstrap' and value == 'true':
+                    # Different Galaxy tool wrappers expose the bootstrap
+                    # toggle under different param names/values -
+                    # 'bootstrap|do_bootstrap' == 'true' (FastME/FastTree)
+                    # vs. 'bootstrap|support' == 'boot' (PhyML-SMS) or
+                    # == '1' (PhyML) - confirmed directly against
+                    # NGPhylogeny_fr_galaxytools' own tool XML wrappers,
+                    # not guessed. Missing the second form here (unlike
+                    # tools/views.py, which already checked both) meant
+                    # `boot` never became True for a PhyML/PhyML-SMS
+                    # Advanced submission, and the `if not boot: nboot = 0`
+                    # below then silently zeroed out whatever replicate
+                    # count the user actually entered - can_run_on_data()'s
+                    # max_boot check was effectively a no-op for both tools
+                    # on this submission path.
+                    if (fields.get(key,"") == 'bootstrap|do_bootstrap' and value == 'true' or
+                        fields.get(key,"") == 'bootstrap|support' and (value == 'boot' or value == '1')):
                         boot = True
                     tool_inputs.set_param(fields.get(key), value)
             if not boot:
