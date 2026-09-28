@@ -38,6 +38,28 @@ class ToolCanRunOnDataTest(TestCase):
         self.assertTrue(tool.can_run_on_data(nseq=1, length=1, nboot=100, seqaa=False))
         self.assertFalse(tool.can_run_on_data(nseq=1, length=1, nboot=101, seqaa=False))
 
+    def test_max_length_x_nbseq_enforced(self):
+        tool = self.make_tool(max_length_x_nbseq=100)
+        self.assertTrue(tool.can_run_on_data(nseq=10, length=10, nboot=0, seqaa=False))
+        self.assertFalse(tool.can_run_on_data(nseq=10, length=11, nboot=0, seqaa=False))
+
+    def test_max_length_x_nbseq_scaled_for_amino_acids(self):
+        tool = self.make_tool(max_length_x_nbseq=100, aa_scale_factor=2)
+        self.assertTrue(tool.can_run_on_data(nseq=10, length=5, nboot=0, seqaa=True))
+        self.assertFalse(tool.can_run_on_data(nseq=10, length=6, nboot=0, seqaa=True))
+
+    def test_boot_count_is_not_bounded_by_sequence_size_limits(self):
+        """
+        Regression guard for the simplified 3-field model: nboot is no
+        longer combined with nseq/length in any check (the old
+        max_nbseqsquaredxboot/max_lengthxnbseqsquaredxboot fields are
+        gone) - a huge bootstrap replicate count on otherwise-small data
+        is only ever rejected by max_boot itself, never by the size
+        limits.
+        """
+        tool = self.make_tool(max_nbseq=10, max_length_x_nbseq=100)
+        self.assertTrue(tool.can_run_on_data(nseq=5, length=5, nboot=1000000, seqaa=False))
+
     def test_string_representation(self):
         tool = self.make_tool(name="PhyML", version="3.1")
         self.assertEqual(str(tool), "PhyML - 3.1")

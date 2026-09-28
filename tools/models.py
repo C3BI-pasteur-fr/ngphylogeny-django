@@ -31,11 +31,26 @@ class Tool(models.Model):
         default=True, help_text="Display this tool on the user web interface")
     oneclick = models.BooleanField(default=False)
     rank = models.IntegerField(default=0, help_text="tool order")
-    max_nbseq = models.IntegerField(default=-1, help_text="max length")
-    max_boot = models.IntegerField(default=-1, help_text="max boot replicates")
-    max_lengthxnbseqsquared = models.IntegerField(default=-1, help_text="max length x nbseq^2")
-    max_nbseqsquaredxboot = models.IntegerField(default=-1, help_text="max nbseq^2 x boot")
-    max_lengthxnbseqsquaredxboot = models.IntegerField(default=-1, help_text="max length x nbseq^2 x boot")
+    # Simplified from a 5-field model (max_nbseq, max_boot,
+    # max_lengthxnbseqsquared, max_nbseqsquaredxboot,
+    # max_lengthxnbseqsquaredxboot) down to these 3. Two findings drove
+    # this: despite their names implying nseq is squared, can_run_on_data()
+    # never actually squared anything - every check was always a plain
+    # linear product (length*nseq, nseq*nboot, length*nseq*nboot) - so
+    # max_length_x_nbseq's name no longer claims a "squared" term that
+    # never existed. And the two boot-combined fields
+    # (max_nbseqsquaredxboot/max_lengthxnbseqsquaredxboot) were already
+    # fully inert for every OneClick submission specifically, since
+    # workflows/views/generic.py's WorkflowFormView.form_valid() hardcodes
+    # nboot=-1 for that path - they only ever mattered for Advanced/A La
+    # Carte submissions of bootstrap-capable tools (PhyML, PhyML-SMS,
+    # FastTree, MrBayes, TNT), and only in the narrow case of a request
+    # individually under both max_boot and max_length_x_nbseq but too
+    # expensive combined - a case with no documented production incident
+    # behind it, unlike every other cutoff in this codebase.
+    max_nbseq = models.IntegerField(default=-1, help_text="max number of sequences")
+    max_boot = models.IntegerField(default=-1, help_text="max bootstrap replicates")
+    max_length_x_nbseq = models.IntegerField(default=-1, help_text="max sequence length x number of sequences")
     # If input data is aa : limits are divided by this scaling factor
     aa_scale_factor =  models.IntegerField(default=1, help_text="limit scaling for amino acid")
 
@@ -75,15 +90,9 @@ class Tool(models.Model):
             return False
         if self.max_boot > 0 and nboot > self.max_boot :
             return False
-        if (self.max_lengthxnbseqsquared > 0 and
-            ((length*nseq > self.max_lengthxnbseqsquared) or
-             (seqaa and length*nseq > self.max_lengthxnbseqsquared//self.aa_scale_factor))):
-            return False
-        if self.max_nbseqsquaredxboot > 0 and nseq*nboot > self.max_nbseqsquaredxboot:
-            return False
-        if (self.max_lengthxnbseqsquaredxboot > 0 and
-            ((length*nseq*nboot > self.max_lengthxnbseqsquaredxboot) or
-             (seqaa and length*nseq*nboot > self.max_lengthxnbseqsquaredxboot//self.aa_scale_factor))):
+        if (self.max_length_x_nbseq > 0 and
+            ((length*nseq > self.max_length_x_nbseq) or
+             (seqaa and length*nseq > self.max_length_x_nbseq//self.aa_scale_factor))):
             return False
         return True
 

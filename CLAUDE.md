@@ -3528,3 +3528,75 @@ delete-account request with `follow=True` and asserts the success
 message is already visible on the very next page (home), the actual
 end-to-end shape of the reported bug, not just that the template
 snippet renders in isolation.
+
+### `Tool` input-size limits simplified from 5 fields to 3
+
+`Tool.can_run_on_data()` (the per-tool size gate checked before any
+upload/submission is allowed to run - see "App responsibilities" above)
+used to have 5 configurable limit fields: `max_nbseq`, `max_boot`,
+`max_lengthxnbseqsquared`, `max_nbseqsquaredxboot`,
+`max_lengthxnbseqsquaredxboot`. Two findings drove collapsing this to
+3 (`max_nbseq`, `max_boot`, `max_length_x_nbseq`):
+
+- **Despite their names, none of the three "squared" fields ever
+  squared anything.** `can_run_on_data()`'s actual arithmetic was
+  always a plain linear product - `length*nseq`, `nseq*nboot`,
+  `length*nseq*nboot` - never `nseq**2`. The field names implied a
+  quadratic-in-taxa-count model that the code never implemented.
+  `max_lengthxnbseqsquared` is renamed to `max_length_x_nbseq` for this
+  reason regardless of the field-count simplification - the old name
+  actively misled anyone trying to set a sensible value.
+- **`max_nbseqsquaredxboot`/`max_lengthxnbseqsquaredxboot` were already
+  dead code for every OneClick submission.** `workflows/views/
+  generic.py`'s `WorkflowFormView.form_valid()` calls
+  `can_run_on_data()` with a hardcoded `nboot=-1` for OneClick - since
+  `nseq*(-1)` is negative, those two checks could never trigger a
+  rejection there, regardless of configured value. They only ever
+  mattered for Advanced/A La Carte submissions of bootstrap-capable
+  tools (PhyML, PhyML-SMS, FastTree, MrBayes, TNT), and only in the
+  narrow case of a request individually under both `max_boot` and
+  `max_length_x_nbseq` but too expensive combined - a case with no
+  documented production incident behind it anywhere in this file,
+  unlike every other limit/cutoff still here.
+
+Dropped entirely, not folded into anything else: `max_nbseq` (a pure
+taxon-count cap independent of length, kept - it catches a
+many-short-sequences case the `length*nseq` product can't) and the two
+boot-combined fields above. `can_run_on_data()` is now just three
+independent checks, each optionally scaled by `aa_scale_factor` for
+protein input as before.
+
+**Production data preservation - this is not a plain `RemoveField`/
+`AddField` on the live database.** Same "migrations aren't committed,
+`makemigrations`+`migrate` regenerates a same-named initial migration
+and silently no-ops the real `ALTER TABLE` on an already-migrated
+database" gotcha documented throughout this file (see "Migrations vs.
+a persistent database"/every other field-shape change above) - except
+here it matters more than usual, because production's `Tool` rows have
+real, deliberately-configured `max_lengthxnbseqsquared` values per
+tool that a naive drop-and-recreate would silently reset to `-1`
+(unlimited) instead of carrying forward as the new field's value.
+`makemigrations` itself generated a `RemoveField`+`AddField` pair (run
+non-interactively, so it couldn't prompt "did you rename this field"),
+which is fine for a fresh install (nothing to preserve) but wrong for
+any already-populated Postgres. The correct manual fixup there is a
+**rename**, not a drop-and-add, run by hand against the live Postgres
+pod before/alongside a deploy of this change:
+```sql
+ALTER TABLE tools_tool RENAME COLUMN max_lengthxnbseqsquared TO max_length_x_nbseq;
+ALTER TABLE tools_tool DROP COLUMN max_nbseqsquaredxboot;
+ALTER TABLE tools_tool DROP COLUMN max_lengthxnbseqsquaredxboot;
+```
+(Both `max_nbseq`/`max_boot` are untouched at the DB level - their
+migration entries are `AlterField` operations for `help_text` only,
+which Django doesn't materialize as SQL at all.) No `CHECK` constraint
+involved either way - unlike `BlastRun.query_length` elsewhere in this
+file, these are plain `IntegerField`s, not `PositiveIntegerField`s.
+
+Regression tests: `tools.tests.ToolCanRunOnDataTest.
+test_max_length_x_nbseq_enforced`/
+`test_max_length_x_nbseq_scaled_for_amino_acids` (mirroring the
+existing `max_nbseq` boundary tests) and
+`test_boot_count_is_not_bounded_by_sequence_size_limits` (a guard that
+a huge bootstrap count on small data is only ever rejected by
+`max_boot` itself now, never by a removed combined check).
