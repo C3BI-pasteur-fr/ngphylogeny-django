@@ -28,7 +28,8 @@ from workspace.reports import (WEEKLY_TO_MONTHLY_SPAN_DAYS,
 from workspace.tasks import (deleteoldgalaxyhistory, send_daily_report,
                               updateworkspacestatus)
 from workspace.rocrate import build_rocrate_metadata
-from workspace.views import PERMALINK_SALT, build_citations, resolve_dataset_tools
+from workspace.views import (PERMALINK_SALT, build_citations, delete_history,
+                             resolve_dataset_tools)
 
 
 class DeleteOldGalaxyHistoryTest(TestCase):
@@ -2173,3 +2174,61 @@ class PreviousHistoryListViewAccountMergeTest(TestCase):
         self.assertEqual(fresh_response.status_code, 200)
         self.assertEqual(
             set(fresh_client.session['histories']), {'session1', 'mine1'})
+
+
+class DeleteHistoryEmptySessionTest(TestCase):
+    """
+    Regression test: delete_history() crashed with IndexError on
+    request.session['histories'][-1] whenever the history being deleted
+    was the session's *only* one - a brand new session's very first
+    submission, rejected before ever getting a second history, hits
+    this every time. Reported live: a real production 500 right after
+    the max_boot/PhyML-SMS fix (see CLAUDE.md) started actually calling
+    delete_history() from workflows/views/wkadvanced.py's
+    WorkflowInputFileFormatError branch - the traceback showed the
+    *rejection itself* working correctly ("too many bootstrap
+    replicates: 1000 given, 300 allowed"), then a second, unrelated
+    exception raised from inside delete_history()'s own cleanup.
+    """
+
+    def setUp(self):
+        with patch('galaxy.models.requests.get',
+                   return_value=Mock(status_code=200,
+                                      json=lambda: {'version_major': '25.1'})):
+            self.server = Server.objects.create(
+                url='http://fake-galaxy.example.org', current=True)
+        user = User.objects.create_user('admin')
+        GalaxyUser.objects.create(
+            user=user, galaxy_server=self.server, api_key='fakekey',
+            anonymous=True)
+        # No `name` passed - WorkspaceHistory.save()'s own rename() only
+        # fires when self.name is truthy, so this stays a plain DB write
+        # with no live Galaxy call, same as this file's other fixtures.
+        WorkspaceHistory.objects.create(history='h1', galaxy_server=self.server)
+
+    def _make_request(self, histories):
+        request = RequestFactory().get('/')
+        request.session = self.client.session
+        request.session['histories'] = list(histories)
+        request.session['last_history'] = histories[-1] if histories else None
+        request.galaxy_server = self.server
+        return request
+
+    def test_deleting_the_only_history_does_not_raise(self):
+        request = self._make_request(['h1'])
+        # WorkspaceHistory's own pre_delete signal (workspace/signals.py)
+        # queues a real Celery task via .delay() - not relevant to what's
+        # being tested here, just needs a broker to avoid a connection
+        # error in a test environment with no Redis running.
+        with patch('workspace.signals.deletegalaxyhistory.delay'):
+            delete_history(request, 'h1')
+        self.assertIsNone(request.session['last_history'])
+        self.assertEqual(request.session['histories'], [])
+
+    def test_deleting_one_of_several_still_sets_the_new_last_history(self):
+        WorkspaceHistory.objects.create(history='h0', galaxy_server=self.server)
+        request = self._make_request(['h0', 'h1'])
+        with patch('workspace.signals.deletegalaxyhistory.delay'):
+            delete_history(request, 'h1')
+        self.assertEqual(request.session['last_history'], 'h0')
+        self.assertEqual(request.session['histories'], ['h0'])

@@ -228,7 +228,16 @@ def delete_history(request, history_id=None):
             request.session['histories'].remove(history_id)
             request.session.modified = True
 
-        request.session['last_history'] = request.session['histories'][-1]
+        # request.session['histories'][-1] crashed with IndexError once
+        # the removed history was the session's only one - a brand new
+        # session's very first submission, rejected before ever getting
+        # a second history, hits exactly this. Only surfaced once a real
+        # rejection path (Tool.can_run_on_data() - see CLAUDE.md's
+        # max_boot/PhyML-SMS section) started actually calling
+        # delete_history() on a first-ever-session's history; get_history()
+        # already reads this key via .get(), so None degrades cleanly.
+        remaining = request.session['histories']
+        request.session['last_history'] = remaining[-1] if remaining else None
 
     WorkspaceHistory.objects.get(history=history_id).delete()
 
