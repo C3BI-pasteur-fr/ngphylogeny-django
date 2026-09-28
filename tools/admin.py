@@ -52,8 +52,7 @@ class ToolAdmin(admin.ModelAdmin):
 
     fields = ('name', 'version', 'oneclick', 'galaxy_server',
               'toolshed', 'id_galaxy', 'rank', 'max_nbseq',
-              'max_boot', 'max_lengthxnbseqsquared', 'max_nbseqsquaredxboot',
-              'max_lengthxnbseqsquaredxboot','aa_scale_factor')
+              'max_boot', 'max_length_x_nbseq', 'aa_scale_factor')
     inlines = [
         ToolInputDataInline,
         ToolOutputDataInline,
