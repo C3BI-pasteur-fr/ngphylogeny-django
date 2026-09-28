@@ -3743,3 +3743,36 @@ param shape) - confirms both `'boot'` (PhyML-SMS) and `'1'` (PhyML)
 correctly raise `WorkflowInputFileFormatError` naming the real replicate
 count, and that a non-bootstrap `support` choice (`'sh'`) correctly
 does *not* raise.
+
+### `delete_history()` crashed on a session's very first (and only) history
+
+Immediate follow-up production incident to the fix above: once the
+`max_boot`/PhyML-SMS fix started genuinely rejecting an over-the-limit
+submission - and, per the earlier orphaned-history fix, actually calling
+`delete_history()` on the just-created history - a brand new session's
+very first submission (rejected before it ever got a second history)
+hit a second, unrelated crash inside `delete_history()` itself
+(`workspace/views.py`): `request.session['histories'][-1]` on a now-
+empty list, `IndexError: list index out of range`. Real traceback,
+confirmed live: the rejection message itself was correct
+("too many bootstrap replicates: 1000 given, 300 allowed"), followed by
+this second exception raised while handling the first.
+
+This bug is older than today's session - `delete_history()` itself
+wasn't touched by any of today's changes - it just took today's two
+fixes together (a real rejection actually firing, *and* that rejection
+path actually calling cleanup) to reach a genuinely first-ever session
+hitting it. Fixed by guarding the empty case: `request.session
+['last_history']` is set to `None` (not indexed) once the removed
+history was the last one left - `get_history()` already reads this key
+via `.get()`, so `None` degrades cleanly, same as an anonymous visitor
+who's never had a history at all.
+
+Regression tests: `workspace.tests.DeleteHistoryEmptySessionTest` -
+drives `delete_history()` directly (a real `Server`+anonymous
+`GalaxyUser`+`WorkspaceHistory` DB fixture, `WorkspaceHistory`'s own
+`pre_delete` signal - which queues a real Celery task via `.delay()` -
+patched out, unrelated to what's being tested) - confirms deleting a
+session's only history no longer raises and leaves `last_history` as
+`None`, and that deleting one of several still correctly sets
+`last_history` to whatever's left.
