@@ -65,6 +65,72 @@ class ToolCanRunOnDataTest(TestCase):
         self.assertEqual(str(tool), "PhyML - 3.1")
 
 
+class ToolRejectionReasonTest(TestCase):
+    """
+    Tool.rejection_reason() is what can_run_on_data() is now built on
+    top of (see tools/models.py's own docstring) - it names which
+    specific limit was exceeded, with concrete numbers, instead of just
+    returning a bare bool. This is what the 3 submission views (tools/
+    views.py, workflows/views/generic.py, workflows/views/wkadvanced.py)
+    now fold into their rejection messages, so the user sees exactly
+    what criterion was over the limit instead of a generic "too large".
+    """
+
+    def make_tool(self, **limits):
+        return Tool(**limits)
+
+    def test_none_when_allowed(self):
+        tool = self.make_tool(max_nbseq=10, max_boot=100, max_length_x_nbseq=100)
+        self.assertIsNone(
+            tool.rejection_reason(nseq=10, length=5, nboot=100, seqaa=False))
+
+    def test_names_max_nbseq_with_actual_and_allowed_counts(self):
+        tool = self.make_tool(max_nbseq=10)
+        reason = tool.rejection_reason(nseq=11, length=1, nboot=0, seqaa=False)
+        self.assertIn("too many sequences", reason)
+        self.assertIn("11 given", reason)
+        self.assertIn("10 allowed", reason)
+
+    def test_names_max_nbseq_scaled_for_amino_acids(self):
+        tool = self.make_tool(max_nbseq=10, aa_scale_factor=2)
+        reason = tool.rejection_reason(nseq=6, length=1, nboot=0, seqaa=True)
+        self.assertIn("too many sequences", reason)
+        self.assertIn("6 given", reason)
+        self.assertIn("5 allowed", reason)
+        self.assertIn("protein", reason)
+
+    def test_names_max_boot(self):
+        tool = self.make_tool(max_boot=100)
+        reason = tool.rejection_reason(nseq=1, length=1, nboot=101, seqaa=False)
+        self.assertIn("too many bootstrap replicates", reason)
+        self.assertIn("101 given", reason)
+        self.assertIn("100 allowed", reason)
+
+    def test_names_max_length_x_nbseq(self):
+        tool = self.make_tool(max_length_x_nbseq=100)
+        reason = tool.rejection_reason(nseq=10, length=11, nboot=0, seqaa=False)
+        self.assertIn("sequence length x number of sequences too large", reason)
+        self.assertIn("110 given", reason)
+        self.assertIn("100 allowed", reason)
+
+    def test_only_the_first_exceeded_limit_is_reported(self):
+        """
+        can_run_on_data()'s own field order (max_nbseq, then max_boot,
+        then max_length_x_nbseq) is preserved - a request that violates
+        more than one limit at once only gets told about the first one,
+        same short-circuiting order as before this change.
+        """
+        tool = self.make_tool(max_nbseq=1, max_boot=1)
+        reason = tool.rejection_reason(nseq=10, length=1, nboot=10, seqaa=False)
+        self.assertIn("too many sequences", reason)
+        self.assertNotIn("bootstrap", reason)
+
+    def test_can_run_on_data_stays_a_plain_bool(self):
+        tool = self.make_tool(max_nbseq=10)
+        self.assertIs(tool.can_run_on_data(nseq=5, length=1, nboot=0, seqaa=False), True)
+        self.assertIs(tool.can_run_on_data(nseq=11, length=1, nboot=0, seqaa=False), False)
+
+
 class ToolListViewGroupingTest(TestCase):
     """
     Regression test for templates/tools/tool_list.html's

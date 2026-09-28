@@ -232,14 +232,30 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
                 if key not in inputs_data:
                     if fields.get(key,"") == 'bootstrap|replicates':
                         nboot = value
-                    if fields.get(key,"") == 'bootstrap|do_bootstrap' and value == 'true':
+                    # Different Galaxy tool wrappers expose the bootstrap
+                    # toggle under different param names/values -
+                    # 'bootstrap|do_bootstrap' == 'true' (FastME/FastTree)
+                    # vs. 'bootstrap|support' == 'boot' (PhyML-SMS) or
+                    # == '1' (PhyML) - confirmed directly against
+                    # NGPhylogeny_fr_galaxytools' own tool XML wrappers,
+                    # not guessed. Missing the second form here (unlike
+                    # tools/views.py, which already checked both) meant
+                    # `boot` never became True for a PhyML/PhyML-SMS
+                    # Advanced submission, and the `if not boot: nboot = 0`
+                    # below then silently zeroed out whatever replicate
+                    # count the user actually entered - can_run_on_data()'s
+                    # max_boot check was effectively a no-op for both tools
+                    # on this submission path.
+                    if (fields.get(key,"") == 'bootstrap|do_bootstrap' and value == 'true' or
+                        fields.get(key,"") == 'bootstrap|support' and (value == 'boot' or value == '1')):
                         boot = True
                     tool_inputs.set_param(fields.get(key), value)
             if not boot:
                 nboot = 0
-            if not t.can_run_on_data(nseq, length, nboot, seqaa):
+            reason = t.rejection_reason(nseq, length, nboot, seqaa)
+            if reason:
                 raise WorkflowInputFileFormatError(
-                    "Input data is too large for the workflow"
+                    "Input data is too large for the workflow (%s): %s" % (t.name, reason)
                 )
             for inputfile in inputs_data:
                 uploaded_file = ""
@@ -387,6 +403,13 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
             context = self.get_context_data(object=self.object)
             context['fileerror'] = str(e)
             workflow.delete_from_galaxy(gi)
+            # Same cleanup as the sibling WorkflowInvalidFormError branch
+            # just above - wksph/its Galaxy history was already created
+            # before analyze_forms() ever ran (see create_history() call
+            # above), so a can_run_on_data() rejection here left it
+            # orphaned (never deleted, only picked up by the normal
+            # 14-day retention cleanup) until this fix.
+            delete_history(request, wksph.history)
             return render(request, self.template_name, context)
 
         # We run the galaxy workflow

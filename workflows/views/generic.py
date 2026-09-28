@@ -176,9 +176,11 @@ class WorkflowFormView(UploadView, DetailView):
              tid = v.get('tool_id',None)
              if tid :
                  t = Tool.objects.get(id_galaxy=tid)
-                 if not t.can_run_on_data( nseq, length, -1, seqaa):
+                 reason = t.rejection_reason(nseq, length, -1, seqaa)
+                 if reason:
                      form.add_error(
-                         'input_file',"Input data is too large for the workflow")
+                         'input_file',
+                         "Input data is too large for the workflow (%s): %s" % (t.name, reason))
                      workflow.delete_from_galaxy(gi)
                      return self.form_invalid(form)
 

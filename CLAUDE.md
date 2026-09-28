@@ -3646,3 +3646,100 @@ carried `upgrade`'s tree from the earlier "make upgrade branch the new
 master" work (see "`upgrade` vs the old `master` branch" above); this
 change is purely about which branch names the CI pipeline watches for
 each deploy target, not about what code is on either branch.
+
+### Orphaned Galaxy history when a `can_run_on_data()` rejection happens after `create_history()`
+
+OneClick (`workflows/views/generic.py`) checks every tool in the
+workflow against `Tool.can_run_on_data()` *before* ever calling
+`create_history()`, so a rejection there is always clean - nothing was
+ever created. Advanced and the single-tool form don't have that
+luxury - both can create the `WorkspaceHistory`/Galaxy history for an
+earlier input field before a *later* field's size check fails, and
+both had a real gap where that already-created history was never
+cleaned up on rejection, left to the normal 14-day retention cleanup
+instead of being deleted immediately like every other rejection path
+already does.
+
+- **`workflows/views/wkadvanced.py`'s `WorkflowAdvancedFormView.post()`**
+  creates `wksph` unconditionally before calling `analyze_forms()`
+  (which is where `can_run_on_data()` actually runs, per-tool-form).
+  Its `except WorkflowInvalidFormError` branch already called
+  `delete_history(request, wksph.history)` - the sibling
+  `except WorkflowInputFileFormatError` branch (the one
+  `can_run_on_data()` rejections actually raise) did not, despite
+  sitting right next to it. Fixed by adding the same call there.
+  Regression test:
+  `workflows.tests.WorkflowAdvancedSubmitCleanupTest.
+  test_input_too_large_failure_calls_delete_history_correctly` -
+  mirrors this class's existing two tests for the other cleanup call
+  sites (see that class's own docstring for the real production
+  incident, a different bug in this same area, that established this
+  test pattern).
+- **`tools/views.py`'s `tool_exec_view`** (the single-tool form /
+  A La Carte path) can process multiple `data`-type input fields in
+  one request (`inputs_data = set(tool_form.input_file_ids)`), each
+  potentially calling `create_history()` on the first one that needs
+  it. A `ValueError` from a later field's `can_run_on_data()` check
+  (or any of this view's other `ValueError`s - too-few-sequences,
+  disallowed format, no input given) is caught by a plain
+  `except ValueError as ve: message = str(ve)` with no cleanup at
+  all - unlike the generic `except Exception` branch further down,
+  which already calls `delete_history()` correctly. Fixed by adding
+  the same call, guarded on `wksph is not None` (it can still be
+  `None` if the very first field processed is the one that fails).
+  **No automated regression test** - `inputs_data` is iterated as a
+  plain Python `set`, whose order isn't guaranteed deterministic
+  across processes (no `PYTHONHASHSEED=0` pinning anywhere in this
+  project's test setup), so a test asserting "field A is processed
+  before field B" would be a coin flip rather than a real regression
+  guard. Verified by code inspection instead, same reasoning already
+  documented elsewhere in this file for other disproportionately
+  fragile-to-test cases.
+
+### `max_boot` was never actually enforced for PhyML/PhyML-SMS on the Advanced-workflow path
+
+Real production incident, reported live: a PhyML-SMS Advanced-workflow
+submission with 1000 bootstrap replicates ran on `ngphylogeny.fr`
+despite `max_boot=300` being configured for that tool. Not a bug
+introduced by this session's limit-simplification work - it predates
+it entirely, just never surfaced until a real `max_boot` value was
+actually set tight enough to matter (previously every tool defaulted
+to `-1`/unlimited).
+
+Root cause, confirmed by reading the real Galaxy tool wrappers directly
+(`NGPhylogeny_fr_galaxytools/tools/{phyml,phyml-sms}/*.xml`), not
+guessed: different tools expose their bootstrap on/off toggle under
+different Galaxy parameter names/values - FastME/FastTree use
+`bootstrap|do_bootstrap` == `'true'`, but PhyML uses
+`bootstrap|support` == `'1'` and PhyML-SMS uses `bootstrap|support` ==
+`'boot'` (a `<conditional>` with several non-bootstrap branches - SH-
+like aLRT, aBayes, no support - sharing the same param name).
+`tools/views.py`'s single-tool form already checked both conventions:
+```python
+if (fields.get(key,"") == 'bootstrap|do_bootstrap' and value == 'true' or
+    fields.get(key,"") == 'bootstrap|support' and (value == 'boot' or value == '1')):
+    boot = True
+```
+but `workflows/views/wkadvanced.py`'s `analyze_forms()` (the Advanced-
+workflow submission path) only ever checked the first condition. For
+PhyML/PhyML-SMS specifically, `boot` therefore stayed `False`
+regardless of what the user actually selected, and the very next line,
+`if not boot: nboot = 0`, silently zeroed out whatever replicate count
+they'd entered before it ever reached `can_run_on_data()` - making the
+`max_boot` check a permanent no-op for both tools on this one
+submission path (OneClick isn't affected the same way - see the
+existing `max_nbseq`/`max_boot` field simplification section above for
+why OneClick's own bootstrap handling is a different, already-known
+story: it hardcodes `nboot=-1`, never reads a real value at all).
+Fixed by adding the same `bootstrap|support` branch to
+`analyze_forms()`, matching `tools/views.py` exactly.
+
+Regression tests: `workflows.tests.
+WorkflowAdvancedBootstrapDetectionTest` - drives
+`WorkflowAdvancedFormView.analyze_forms()` directly (a real `Tool` DB
+fixture with `max_boot=300`, a mocked `tool_form` whose
+`fields_ids_mapping`/`cleaned_data` reproduce the real PhyML-SMS/PhyML
+param shape) - confirms both `'boot'` (PhyML-SMS) and `'1'` (PhyML)
+correctly raise `WorkflowInputFileFormatError` naming the real replicate
+count, and that a non-bootstrap `support` choice (`'sh'`) correctly
+does *not* raise.

@@ -537,3 +537,114 @@ class WorkflowAdvancedSubmitCleanupTest(TestCase):
             view.post(request)
 
         delete_history_mock.assert_called_once_with(request, 'fakehistid')
+
+    def test_input_too_large_failure_calls_delete_history_correctly(self):
+        """
+        Regression test: unlike the two branches above,
+        WorkflowInputFileFormatError (raised by analyze_forms() when
+        Tool.can_run_on_data() rejects the input as too large - see
+        CLAUDE.md's Tool input-size-limits section) never called
+        delete_history() at all - the just-created wksph/Galaxy history
+        was silently orphaned on every Advanced-workflow submission
+        rejected for being too large, unlike OneClick (which checks
+        before ever creating a history) or the sibling
+        WorkflowInvalidFormError branch right above this one.
+        """
+        view, request, workflow = self._make_view_and_request()
+        view.analyze_forms = Mock(
+            side_effect=WorkflowInputFileFormatError('too large'))
+
+        with patch('workflows.views.wkadvanced.create_history',
+                   return_value=Mock(history='fakehistid')), \
+             patch('workflows.views.wkadvanced.delete_history') as delete_history_mock, \
+             patch('workflows.views.wkadvanced.render',
+                   return_value=HttpResponse()):
+            view.post(request)
+
+        delete_history_mock.assert_called_once_with(request, 'fakehistid')
+
+
+class WorkflowAdvancedBootstrapDetectionTest(TestCase):
+    """
+    Regression test: WorkflowAdvancedFormView.analyze_forms() only
+    recognized the 'bootstrap|do_bootstrap' == 'true' toggle (FastME's/
+    FastTree's own convention, confirmed against their real tool XML in
+    NGPhylogeny_fr_galaxytools) - PhyML and PhyML-SMS instead expose
+    their bootstrap toggle as 'bootstrap|support' == '1'/'boot'
+    respectively (also confirmed directly against their real tool XML,
+    not guessed). Missing that second convention meant `boot` never
+    became True for either tool on the Advanced-workflow submission path,
+    and the subsequent `if not boot: nboot = 0` silently zeroed out
+    whatever replicate count the user actually entered - making
+    can_run_on_data()'s max_boot check a permanent no-op for both tools
+    here, even though tools/views.py's single-tool form path already
+    checked both conventions correctly. Reported live: a PhyML-SMS
+    Advanced submission with 1000 bootstrap replicates ran on production
+    despite a configured max_boot=300.
+    """
+
+    def setUp(self):
+        with patch('galaxy.models.requests.get',
+                   return_value=Mock(status_code=200,
+                                      json=lambda: {'version_major': '25.1'})):
+            self.server = Server.objects.create(
+                url='http://fake-galaxy.example.org', current=True)
+        with patch('tools.models.requests.get',
+                   return_value=Mock(status_code=200, json=lambda: {
+                       'id': 'phyml_sms', 'name': 'PhyML-SMS', 'version': '1.0',
+                       'inputs': [], 'outputs': [],
+                   })):
+            self.tool = Tool.objects.create(
+                galaxy_server=self.server, id_galaxy='phyml_sms',
+                name='PhyML-SMS', description='A tool', version='1.0',
+                max_boot=300)
+
+    def _make_view(self):
+        view = WorkflowAdvancedFormView()
+        view.request = RequestFactory().post('/workflows/advanced/fake/full')
+        return view
+
+    def _make_tool_form(self, support_value):
+        form = Mock()
+        form.is_valid.return_value = True
+        form.prefix = 'p'
+        form.tool_id = 'phyml_sms'
+        form.fields_ids_mapping = {
+            'f_support': 'bootstrap|support',
+            'f_replicates': 'bootstrap|replicates',
+        }
+        form.input_file_ids = []
+        form.cleaned_data = {
+            'f_support': support_value,
+            'f_replicates': 1000,
+        }
+        return form
+
+    def _run(self, support_value):
+        view = self._make_view()
+        workflow = Mock()
+        workflow.json = {'steps': {}}
+        context = {'form_list': [self._make_tool_form(support_value)]}
+        view.analyze_forms(view.request, context, workflow, {}, Mock(),
+                           Mock(history='h1'), nseq=10, length=100, seqaa=False)
+
+    def test_phyml_sms_boot_value_is_recognized_and_enforced(self):
+        with self.assertRaises(WorkflowInputFileFormatError) as ctx:
+            self._run('boot')
+        self.assertIn('too many bootstrap replicates', str(ctx.exception))
+        self.assertIn('1000 given', str(ctx.exception))
+
+    def test_phyml_boot_value_is_recognized_and_enforced(self):
+        # Plain PhyML uses '1' rather than 'boot' for the same toggle.
+        with self.assertRaises(WorkflowInputFileFormatError) as ctx:
+            self._run('1')
+        self.assertIn('too many bootstrap replicates', str(ctx.exception))
+
+    def test_non_bootstrap_support_choice_does_not_falsely_reject(self):
+        # 'sh' (SH-like aLRT) is not bootstrap - a real submission
+        # wouldn't even include the replicates field here, but even with
+        # it lingering, `boot` should stay False and nboot get zeroed.
+        try:
+            self._run('sh')
+        except WorkflowInputFileFormatError:
+            self.fail("should not reject: bootstrap wasn't actually selected")
