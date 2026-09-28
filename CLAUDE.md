@@ -1077,9 +1077,12 @@ Ingress `host`/`ingress.class` all derive from the same two variables,
 not set independently). Expect to hit the same class of
 first-real-deploy issues documented below the first time `deploy-prod`
 is actually triggered against this domain, the same way `deploy-dev`
-did. `deploy-dev` triggers on every push to `upgrade`; `deploy-prod`
-requires a manual trigger from the pipeline page even then, on purpose
-— nothing rolls out to production automatically.
+did. `deploy-dev` triggers on every push to `dev` (renamed from
+`upgrade` on 2026-09-28 - see "Branch rename: `upgrade` -> `dev`, and
+deploy-prod moved to `master`" below); `deploy-prod` runs off `master`
+(this repo's actual GitLab default branch) but still requires a manual
+trigger from the pipeline page even then, on purpose — nothing rolls
+out to production automatically.
 
 **`deploy-prod`'s TLS is via cert-manager, patched in separately from
 the shared `manifest.yaml`.** First attempt was a pre-existing
@@ -1552,6 +1555,14 @@ by a genuinely fresh session hitting these exact code paths before:
   8 years. Fixed by passing `form` through.
 
 ### `upgrade` vs the old `master` branch
+
+**Historical section - `upgrade` was later renamed `dev` and `master`
+was later repointed to this rewrite's own history (see "Branch rename:
+`upgrade` -> `dev`, and deploy-prod moved to `master`" near the end of
+this file). The comparison below is kept as-is since it accurately
+describes real work done at the time, but "upgrade" and "the old
+master" should be read as their state as of this section being
+written, not the current branch layout.**
 
 `upgrade` (this branch) is a from-scratch Python 2→3 / Django 1.11→4.2 /
 Docker-Compose rewrite done independently of `master`, which stalled on the
@@ -3600,3 +3611,38 @@ existing `max_nbseq` boundary tests) and
 `test_boot_count_is_not_bounded_by_sequence_size_limits` (a guard that
 a huge bootstrap count on small data is only ever rejected by
 `max_boot` itself now, never by a removed combined check).
+
+### Branch rename: `upgrade` -> `dev`, and deploy-prod moved to `master`
+
+The branch this whole rewrite lived on (`upgrade`, see "`upgrade` vs
+the old `master` branch" above) is renamed to `dev` on GitLab, and
+`.gitlab-ci.yml` retargeted: `deploy-dev` now triggers on push to
+`dev` (was `upgrade`), `deploy-prod` now triggers on push to `master`
+(this repo's actual GitLab default branch) instead of `upgrade` -
+still manually-gated (`when: manual`), same deliberate "nothing rolls
+out to production automatically" reasoning as before, just re-scoped
+to the branch that now actually represents production-bound code.
+`build`'s own rule was widened from just `upgrade` to `dev ||
+master`, since a deploy off `master` now needs its own freshly built
+image the same way `dev` already did - previously `deploy-prod` reused
+whatever image `upgrade`'s own push had already built.
+
+**GitHub (`origin`) had a real naming collision, not just a rename.**
+`origin/dev` was a genuinely distinct, pre-rewrite legacy branch (last
+touched years before this session, unrelated history to `upgrade`) -
+confirmed directly (`git merge-base`/`git log`) before touching
+anything, since a plain rename would have silently discarded it.
+Per an explicit decision with the user, `origin/dev` was force-pushed
+over with the renamed branch's content anyway (its old content is
+gone from that ref, not preserved under another name) - GitLab is the
+only remote any CI/CD in this project actually runs from
+(`.gitlab-ci.yml` has no GitHub Actions equivalent), so this rename
+only had operational meaning there; GitHub's copy was kept in sync
+purely for the "push both remotes" convention already established
+this session, not because anything reads it.
+
+`master`'s own content is unaffected by any of this - it already
+carried `upgrade`'s tree from the earlier "make upgrade branch the new
+master" work (see "`upgrade` vs the old `master` branch" above); this
+change is purely about which branch names the CI pipeline watches for
+each deploy target, not about what code is on either branch.

@@ -16,13 +16,13 @@ workflow:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
-    # This repo's default branch is `master` (the old pre-rewrite
-    # codebase, kept as-is - see CLAUDE.md's "upgrade vs the old master
-    # branch") - without this rule, pipelines never ran at all on
-    # `upgrade`, which is where every actual deployment in this repo's
-    # history has come from. Adjust if/when `upgrade` is promoted to the
-    # project's actual default branch instead.
-    - if: '$CI_COMMIT_BRANCH == "upgrade"'
+    # This repo's default branch is `master` - deploy-prod now runs from
+    # here (manually-gated, see deploy-prod's own rules below), so the
+    # $CI_DEFAULT_BRANCH rule above already covers it. `dev` (renamed
+    # from the old `upgrade` branch) needs its own explicit rule the same
+    # way `upgrade` used to, since it isn't the default branch - without
+    # this, pipelines never ran at all on it.
+    - if: '$CI_COMMIT_BRANCH == "dev"'
 
 stages:
   - lint
@@ -104,7 +104,10 @@ build:
     - docker push "$CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG"
     - docker push "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA"
   rules:
-    - if: '$CI_COMMIT_BRANCH == "upgrade"'
+    # Both deploy-dev (dev) and deploy-prod (master) need a freshly built
+    # image tagged $CI_COMMIT_REF_SLUG for their own branch - previously
+    # only `upgrade` built one, since deploy-prod also ran off `upgrade`.
+    - if: '$CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master"'
 
 .deploy: &deploy
   stage: deploy
@@ -259,7 +262,7 @@ deploy-dev:
     name: k8sdev-01-ngphylogenyfr-dev
     url: https://ngphylogenyfr.dev.pasteur.cloud
   rules:
-    - if: '$CI_COMMIT_BRANCH == "upgrade"'
+    - if: '$CI_COMMIT_BRANCH == "dev"'
 
 deploy-prod:
   <<: *deploy
@@ -288,5 +291,5 @@ deploy-prod:
     # Manual, not automatic on every push - unlike dev, a production
     # rollout should be a deliberate action even once this pipeline is
     # otherwise green. Trigger it from the pipeline's own page in GitLab.
-    - if: '$CI_COMMIT_BRANCH == "upgrade"'
+    - if: '$CI_COMMIT_BRANCH == "master"'
       when: manual
