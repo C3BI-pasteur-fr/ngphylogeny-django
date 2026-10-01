@@ -3776,3 +3776,61 @@ patched out, unrelated to what's being tested) - confirms deleting a
 session's only history no longer raises and leaves `last_history` as
 `None`, and that deleting one of several still correctly sets
 `last_history` to whatever's left.
+
+### Tree preview disappearing right around when a run finishes
+
+Reported live: the inline tree preview (see "Inline phylotree.js tree
+preview on the history detail page" above) would vanish partway
+through the page's 10s auto-polling, specifically around when the
+workflow finished - a manual reload always brought it back and it
+stayed. No error anywhere, client or server.
+
+Root cause: `#tree-preview-wrapper` lives permanently outside the
+auto-refreshed region and gets *reparented* into the live region on
+each poll via `placeTreePreviewIntoLiveRegion()`
+(`$anchor.replaceWith($('#tree-preview-wrapper'))`). The staged-poll
+swap script in `history_contents_refreshable.html` used to call that
+function *after*
+`$('#history-refreshable-region').empty().append($root.contents())`.
+jQuery's `.empty()` doesn't just hide content - it recursively
+destroys every descendant node still inside the target element, with
+no way to distinguish "reparented in from outside" from "part of the
+stale content actually being replaced". Once an earlier poll had
+already placed the wrapper into the live region, it was sitting as a
+genuine descendant of `#history-refreshable-region` at the exact
+moment `.empty()` ran - so it was destroyed right along with the
+stale content `.empty()` was meant to clear. The `placeTreePreviewIntoLiveRegion()`
+call that followed then found `$('#tree-preview-wrapper')` matching
+nothing, and `.replaceWith()` with an empty jQuery set just silently
+removes the anchor with nothing put back - no exception anywhere.
+
+This fires on the *second* staged poll after the tree is first built
+and placed, regardless of finished state - but since the tree only
+ever appears once a finished `nhx`/`nwk` dataset exists (usually near
+the very end of a pipeline), that poll and "the run just finished"
+typically land within one poll cycle of each other, which is why it
+read as tied to finishing specifically. A manual reload "fixed" it
+only because a finished history's fresh page load stops the polling
+timer (`history_contents_provenance_ajax.html`'s own `$(document).ready`
+block, `{% if object.finished %}`) before this destructive sequence
+ever has a chance to run again.
+
+Fixed by reordering the swap script: the wrapper is now moved into
+*this render's own* fresh `#tree-preview-anchor` - still inside the
+hidden `$root` staging container - **before** the live region gets
+emptied, not after. `placeTreePreviewIntoLiveRegion()` is still called
+unconditionally afterward too, unchanged, as the fallback for a build
+that hasn't finished yet.
+
+**Verified directly, not just reasoned through** - a minimal offline
+reproduction (a bare HTML page, the exact vendored `jquery-2.1.4.min.js`
+this app ships, simulating the two-poll sequence against the real
+`placeTreePreviewIntoLiveRegion()`/swap logic) run through headless
+Chrome: the old ordering reproduced the bug exactly (`survived=false`,
+the live region left with no wrapper and no anchor); the fixed
+ordering correctly left the wrapper in place (`survived=true`). No new
+Python tests - pure client-side DOM-ordering behavior with no server-
+side/context-variable change, same reasoning as this file's other
+tree-preview sections; the existing `workspace.tests.TreePreviewTest`/
+`HistoryContentRefreshViewTest` (markup positioning, staging context)
+still pass unchanged.
