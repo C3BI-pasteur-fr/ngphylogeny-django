@@ -385,7 +385,12 @@ class StaticPagesSmokeTest(TestCase):
         """
         response = self.client.get('/')
         self.assertContains(response, 'href="/workspace/histories"')
-        self.assertNotContains(response, 'text-muted')
+        # Specific to the old broken nav markup (a muted, unclickable
+        # <span>/<a> wrapping "Workspace") - not a blanket "text-muted
+        # never appears anywhere on the page" check, which would also
+        # (correctly) fail once anything else on the page legitimately
+        # uses that class (e.g. the footer's maintainer line).
+        self.assertNotContains(response, 'text-muted">Workspace')
 
     def test_feedback_form_renders_exactly_one_captcha_widget(self):
         """
