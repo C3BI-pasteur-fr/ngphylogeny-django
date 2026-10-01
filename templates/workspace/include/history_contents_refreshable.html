@@ -286,15 +286,41 @@ happens inside a script tag executed asynchronously relative to
     // point) stop mattering the instant this runs - .contents() just
     // moves the already-finished nodes over wholesale.
     $.when(window.__historyStepChainReady, window.__historyTableReady).done(function () {
+	// Relocate the persistent, already-built preview into THIS render's
+	// own fresh #tree-preview-anchor - still inside the hidden $root at
+	// this point, i.e. *before* the live region below gets emptied.
+	// Doing this after the empty()/append() swap instead (as this used
+	// to) was a real bug: once an earlier poll had already placed the
+	// wrapper into the live region, it was sitting as a genuine
+	// descendant of #history-refreshable-region at the moment .empty()
+	// ran - jQuery's .empty() recursively destroys every descendant
+	// node it finds there (it has no way to tell "reparented in from
+	// outside" apart from "part of the stale content being replaced"),
+	// so the wrapper was destroyed right along with the content .empty()
+	// was actually meant to clear. The placeTreePreviewIntoLiveRegion()
+	// call that used to follow then found $('#tree-preview-wrapper')
+	// matching nothing and silently no-op'd (replaceWith with an empty
+	// jQuery set just removes the anchor with nothing put back) - no
+	// error, no console output. Reported live: the tree preview
+	// disappearing specifically right around when a run finished - in
+	// practice the first staged poll after the tree was already built
+	// and placed, since the tree only ever appears once a finished
+	// nhx/nwk dataset exists (usually near the very end of a pipeline),
+	// so that poll and "the run just finished" tend to land within one
+	// poll cycle of each other. A manual reload "fixed" it only because
+	// a finished history's fresh page load stops polling before this
+	// destructive sequence ever runs again.
+	if (window.treePreviewRendered) {
+	    var $newAnchor = $root.find('#tree-preview-anchor');
+	    if ($newAnchor.length) {
+		$newAnchor.replaceWith($('#tree-preview-wrapper'));
+	    }
+	}
 	$('#history-refreshable-region').empty().append($root.contents());
-	// Now that the fresh #tree-preview-anchor placeholder (part of the
-	// content just appended above) actually exists in the live region,
-	// relocate the persistent, already-built preview into it - a plain
-	// reparent of the existing SVG/d3 tree, not a rebuild (see
-	// maybeBuildTreePreview above). A no-op if nothing's been built yet
-	// (window.treePreviewRendered still false) - retried on a later
-	// poll instead, once a fetch this render or a later one kicks off
-	// actually succeeds.
+	// Still called unconditionally afterward - a no-op for the
+	// already-moved case above, and still the real fallback for a build
+	// that hasn't finished yet (window.treePreviewRendered still false),
+	// unchanged from before.
 	window.placeTreePreviewIntoLiveRegion();
 	if (window.historyRefreshWatchdog) {
 	    clearTimeout(window.historyRefreshWatchdog);
