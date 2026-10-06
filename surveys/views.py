@@ -4,7 +4,8 @@ from __future__ import unicode_literals
 import logging
 from smtplib import SMTPException
 
-from django.urls import reverse_lazy
+from django.shortcuts import redirect
+from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, TemplateView
 
 from surveys.emails import send_feedback_notification_email
@@ -21,6 +22,8 @@ class FeedbackCreateView(CreateView):
     success_url = reverse_lazy('feedback_success')
 
     def form_valid(self, form):
+        if form.looks_like_spam():
+            return redirect(reverse('feedback_success'))
         # Saves the Feedback row first (super().form_valid() does the
         # save) - the email is in addition to that, never a replacement
         # for it. Unlike workspace/blast's own completion emails (sent

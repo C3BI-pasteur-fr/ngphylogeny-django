@@ -88,6 +88,15 @@ class AccountCreateView(AccountCreationGateMixin, CreateView):
         return super().dispatch(request, *args, **kwargs)
 
     def form_valid(self, form):
+        # Shown as a visible error, not dropped silently like the contact
+        # form's: a real person who got flagged here (a password-manager
+        # autofill submitting too fast, say) would otherwise be redirected
+        # as if their account was created, then find they can't log in.
+        # Retrying succeeds once the form has been open a few seconds.
+        if form.looks_like_spam():
+            form.add_error(None,
+                "We couldn't verify this sign-up. Please try again.")
+            return self.form_invalid(form)
         response = super().form_valid(form)
         # login() needs to know which backend authenticated this user -
         # normally set by authenticate(), which isn't called here since

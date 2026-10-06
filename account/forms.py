@@ -6,8 +6,10 @@ from django import forms
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
 
+from utils.antispam import AntiSpamFormMixin
 
-class AccountCreationForm(UserCreationForm):
+
+class AccountCreationForm(AntiSpamFormMixin, UserCreationForm):
     """
     Public account sign-up. Builds on django.contrib.auth's own
     UserCreationForm (username uniqueness, password confirmation, and
@@ -16,7 +18,10 @@ class AccountCreationForm(UserCreationForm):
     part of the base form) and a captcha - matching surveys.forms.
     FeedbackForm's own established pattern for this codebase's public-
     facing forms, and if anything more warranted here: an account
-    sign-up form is a more obvious bot/spam target than a contact form.
+    sign-up form is a more obvious bot/spam target than a contact form,
+    so it also gets the same honeypot/form-age layers (utils/antispam.py)
+    - see AccountCreateView.form_valid() for how a flagged submission is
+    handled differently here than on the contact form.
     """
     email = forms.EmailField(required=True)
     captcha = CaptchaField()
@@ -30,6 +35,7 @@ class AccountCreationForm(UserCreationForm):
         self.helper = FormHelper(self)
         self.helper.layout = Layout(
             'username', 'email', 'password1', 'password2',
+            *AntiSpamFormMixin.antispam_layout_fields(),
             Field('captcha', placeholder="Enter captcha"),
             FormActions(
                 Submit('save', 'Create account'),

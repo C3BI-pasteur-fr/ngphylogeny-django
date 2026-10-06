@@ -548,3 +548,13 @@ table.history-table {
     padding: 3px 8px;
     border-radius: 9px;
 }
+
+/* Honeypot field on public forms (utils/antispam.py) - off-screen rather
+   than display:none, since some bots skip display:none inputs. */
+.antispam-hp {
+    position: absolute;
+    left: -10000px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+}

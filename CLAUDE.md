@@ -3834,3 +3834,90 @@ side/context-variable change, same reasoning as this file's other
 tree-preview sections; the existing `workspace.tests.TreePreviewTest`/
 `HistoryContentRefreshViewTest` (markup positioning, staging context)
 still pass unchanged.
+
+### Contact form anti-spam layers
+
+The contact form (`surveys.forms.FeedbackForm`) was receiving real
+spam despite its captcha - `django-simple-captcha` runs with its default
+settings here (5 random uppercase letters, a plain image), which is
+exactly the kind of challenge automated solvers handle routinely. Rather
+than swap in an external captcha service (Turnstile/hCaptcha/reCAPTCHA -
+a new third-party dependency and API keys, still a sensible next step if
+the layers below stop being enough), three cheap, IP-independent checks
+were added on top of the existing captcha, each targeting a different
+class of bot:
+
+- **Honeypot** (`hp_check` field): rendered but hidden off-screen with
+  CSS (`.antispam-hp` in `assets/css/custom.css` -
+  `position: absolute; left: -10000px`, not `display: none`, since some
+  bots skip `display: none` inputs). A real visitor never sees or
+  touches it; anything that fills in every input it finds does. Not
+  named `website`: browsers autofill fields named after standard profile
+  tokens (`website`, `url`, ...) with the visitor's own saved details,
+  which would silently trip the honeypot for a real person.
+- **Signed form-age check** (`form_started` hidden field): the form
+  stamps itself with `signing.dumps(time.time(), salt=FORM_STARTED_SALT)`
+  when rendered. A submission arriving under `MIN_SUBMIT_SECONDS` (3s)
+  after that is treated as a bot; one older than `MAX_FORM_AGE_SECONDS`
+  (1h) or with a missing/tampered token fails validation outright (a
+  visible "please reload" error), so an old token can't be replayed
+  indefinitely.
+- **Link cap** (`clean_comment()`): more than `MAX_LINKS` (2) `http(s)://`
+  or `www.` occurrences in the message is a visible validation error -
+  a legitimate question almost never needs more than that, and most
+  spam payloads are link-heavy.
+
+A honeypot or too-fast hit is **dropped silently**, not rejected with an
+error: `FeedbackCreateView.form_valid()` checks `form.looks_like_spam()`
+after the captcha has already passed and just redirects to the
+thank-you page, with nothing saved and nothing emailed to staff (see
+the notification section above) - so a bot gets no signal about which
+check it tripped, and stops being a useful feedback source for tuning
+its own behavior. The honeypot/timing checks only run after captcha
+validation, not instead of it - a human who solves the captcha still
+goes through the same path, and a bot that solves the captcha but also
+trips a honeypot still gets silently dropped.
+
+**Deliberately not added: per-IP rate limiting.** It's the obvious
+next layer and was considered, but the real deployment sits behind the
+Kubernetes ingress, so `request.META['REMOTE_ADDR']` is the proxy's own
+address, not the visitor's - every real user would share one bucket,
+meaning a single bot's burst could lock out everyone. Doing it properly
+needs a trusted `X-Forwarded-For` parse (rightmost, ingress-appended
+entry only - the leftmost is client-controlled), which in turn depends
+on confirming the exact proxy chain in `manifest.yaml`'s ingress
+setup. Left as a follow-up rather than guessed at. The existing `utils/ip.py`'s `get_client_ip()`
+(used for `WorkspaceHistory.source_ip`) takes the *leftmost*
+`X-Forwarded-For` entry, which a visitor fully controls - fine for a
+logged-only field, not for anything security-relevant like a rate limit,
+where a spoofed header would let one client rotate its apparent address
+per request.
+
+The three layers live in one shared module, `utils/antispam.py`
+(`AntiSpamFormMixin` + `antispam_layout_fields()`), now mixed into both
+`surveys.forms.FeedbackForm` and `account.forms.AccountCreationForm`
+(the sign-up form had the same weak simple-captcha, and is a more
+attractive spam target). Each form decides what a flagged submission
+does for itself: the contact form drops it silently (see above); the
+sign-up form shows a visible "couldn't verify this sign-up, please try
+again" error instead. A silent drop there would redirect a real person
+as if their account existed, then have them unable to log in - a
+real risk with password-manager autofill, which can submit a form in
+under the timing threshold. Retrying works once the form has been open
+for a few seconds, since the token's age keeps growing.
+
+Regression tests: `surveys.tests.FeedbackAntiSpamTest` (honeypot
+filled -> spam; instant submission -> spam; normal timing -> not spam;
+missing/tampered/expired `form_started` -> validation error, with the
+expiry test backdating the signature's own clock via
+`django.core.signing.time.time` - `signing.dumps()` stamps its own
+creation time, so backdating only the payload would not actually
+exercise `max_age`; too many links -> validation error, at-the-cap
+allowed; a fresh unbound form renders a current token) and
+`FeedbackSpamDropViewTest` (a spam submission is not saved, not
+emailed, and still redirects to the thank-you page).
+
+`account.tests.AccountCreationAntiSpamTest` covers the same layers for
+sign-up (honeypot filled, too-fast submission, normal timing), and that
+a flagged sign-up creates no account and goes back through
+`form_invalid()` with an error rather than being dropped.

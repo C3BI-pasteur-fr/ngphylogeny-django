@@ -1,15 +1,20 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
 
+import time
 from smtplib import SMTPException
 from unittest.mock import Mock, patch
 
+from django.core import signing
 from django.test import TestCase, override_settings
+from django.urls import reverse
 
 from surveys.emails import (
     build_feedback_notification_email, send_feedback_notification_email)
+from surveys.forms import MAX_LINKS, FeedbackForm
 from surveys.models import Feedback
 from surveys.views import FeedbackCreateView
+from utils.antispam import FORM_STARTED_SALT, HONEYPOT_FIELD, MAX_FORM_AGE_SECONDS
 
 
 def _feedback(**kwargs):
@@ -94,6 +99,7 @@ class FeedbackCreateViewTest(TestCase):
             email='user@example.org')
         form = Mock()
         form.save.return_value = saved
+        form.looks_like_spam.return_value = False
         return form, saved
 
     def test_form_valid_saves_row_and_sends_notification(self):
@@ -119,3 +125,99 @@ class FeedbackCreateViewTest(TestCase):
             view.form_valid(form)
 
         self.assertEqual(Feedback.objects.count(), 1)
+
+
+class FeedbackAntiSpamTest(TestCase):
+    """
+    Anti-spam layers on FeedbackForm (see surveys/forms.py): a honeypot
+    field, a signed form-age check that rejects instant submissions, and
+    a cap on links in the message. Form-level checks run the real
+    full_clean() - the captcha is intentionally left unanswered here, so
+    assertions only look at the non-captcha fields' errors and
+    looks_like_spam(), not is_valid() as a whole.
+    """
+
+    @staticmethod
+    def _data(**overrides):
+        data = {
+            'type': 'bug',
+            'title': 'Something is broken',
+            'comment': 'It broke when I clicked the button.',
+            'email': 'user@example.org',
+            HONEYPOT_FIELD: '',
+            'form_started': signing.dumps(
+                time.time() - 60, salt=FORM_STARTED_SALT),
+        }
+        data.update(overrides)
+        return data
+
+    def test_normal_submission_is_not_spam(self):
+        form = FeedbackForm(data=self._data())
+        form.is_valid()
+        self.assertNotIn('form_started', form.errors)
+        self.assertFalse(form.looks_like_spam())
+
+    def test_filled_honeypot_is_spam(self):
+        form = FeedbackForm(data=self._data(**{HONEYPOT_FIELD: 'http://spam.example'}))
+        form.is_valid()
+        self.assertTrue(form.looks_like_spam())
+
+    def test_too_fast_submission_is_spam(self):
+        instant = signing.dumps(time.time(), salt=FORM_STARTED_SALT)
+        form = FeedbackForm(data=self._data(form_started=instant))
+        form.is_valid()
+        self.assertNotIn('form_started', form.errors)
+        self.assertTrue(form.looks_like_spam())
+
+    def test_missing_or_tampered_form_started_is_a_validation_error(self):
+        for bad in ['', 'not-a-real-token']:
+            form = FeedbackForm(data=self._data(form_started=bad))
+            form.is_valid()
+            self.assertIn('form_started', form.errors)
+
+    def test_expired_form_started_is_a_validation_error(self):
+        # signing.dumps() stamps the token with its own creation time, so
+        # backdate that clock (not just the payload) to actually expire it.
+        with patch('django.core.signing.time.time',
+                   return_value=time.time() - MAX_FORM_AGE_SECONDS - 60):
+            old = signing.dumps(time.time(), salt=FORM_STARTED_SALT)
+        form = FeedbackForm(data=self._data(form_started=old))
+        form.is_valid()
+        self.assertIn('form_started', form.errors)
+
+    def test_too_many_links_is_a_validation_error(self):
+        comment = ' '.join(['https://a.example'] * (MAX_LINKS + 1))
+        form = FeedbackForm(data=self._data(comment=comment))
+        form.is_valid()
+        self.assertIn('comment', form.errors)
+
+    def test_links_up_to_the_cap_are_allowed(self):
+        comment = ' '.join(['https://a.example'] * MAX_LINKS)
+        form = FeedbackForm(data=self._data(comment=comment))
+        form.is_valid()
+        self.assertNotIn('comment', form.errors)
+
+    def test_unbound_form_renders_a_fresh_form_started_token(self):
+        token = FeedbackForm().initial['form_started']
+        started_at = signing.loads(token, salt=FORM_STARTED_SALT)
+        self.assertLess(time.time() - started_at, 5)
+
+
+class FeedbackSpamDropViewTest(TestCase):
+    """
+    A submission that looks_like_spam() is dropped silently: redirected
+    to the thank-you page exactly like a real one, but nothing saved and
+    nothing emailed to staff.
+    """
+
+    @patch('surveys.views.send_feedback_notification_email')
+    def test_spam_is_not_saved_or_emailed_but_still_redirects_as_success(
+            self, mock_send):
+        form = Mock()
+        form.looks_like_spam.return_value = True
+        response = FeedbackCreateView().form_valid(form)
+
+        self.assertEqual(Feedback.objects.count(), 0)
+        mock_send.assert_not_called()
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('feedback_success'))

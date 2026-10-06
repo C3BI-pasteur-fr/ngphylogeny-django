@@ -2,7 +2,9 @@ from unittest.mock import Mock, patch
 
 from django.contrib.auth.models import User
 from django.contrib.auth.tokens import default_token_generator
-from django.core import mail
+import time
+
+from django.core import mail, signing
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils.encoding import force_bytes
@@ -11,6 +13,7 @@ from django.utils.http import urlsafe_base64_encode
 from galaxy.models import Server
 from workflows.models import Workflow
 from workspace.models import WorkspaceHistory
+from utils.antispam import FORM_STARTED_SALT, HONEYPOT_FIELD
 from .forms import AccountCreationForm
 from .models import UserProfile
 from .views import AccountCreateView
@@ -101,6 +104,7 @@ class AccountCreateViewTest(TestCase):
             password='pw123456789')
         form = Mock()
         form.save.return_value = saved
+        form.looks_like_spam.return_value = False
 
         response = view.form_valid(form)
 
@@ -122,6 +126,7 @@ class AccountCreateViewTest(TestCase):
         view.request = request
         form = Mock()
         form.save.return_value = saved
+        form.looks_like_spam.return_value = False
         view.form_valid(form)
 
         self.assertFalse(UserProfile.objects.filter(user=saved).exists())
@@ -412,3 +417,54 @@ class AccountDeleteViewTest(TestCase):
 
         self.assertContains(
             response, 'Your account and its analyses have been deleted')
+
+
+class AccountCreationAntiSpamTest(TestCase):
+    """
+    The same honeypot/form-age layers as the contact form (utils/
+    antispam.py), but a flagged sign-up gets a visible error instead of
+    being dropped silently - see AccountCreateView.form_valid().
+    """
+
+    @staticmethod
+    def _data(**overrides):
+        data = {
+            'username': 'newbie', 'email': 'newbie@example.org',
+            'password1': 'pw123456789x', 'password2': 'pw123456789x',
+            HONEYPOT_FIELD: '',
+            'form_started': signing.dumps(
+                time.time() - 60, salt=FORM_STARTED_SALT),
+        }
+        data.update(overrides)
+        return data
+
+    def test_normal_timing_and_empty_honeypot_is_not_spam(self):
+        form = AccountCreationForm(data=self._data())
+        form.is_valid()
+        self.assertNotIn('form_started', form.errors)
+        self.assertFalse(form.looks_like_spam())
+
+    def test_filled_honeypot_is_spam(self):
+        form = AccountCreationForm(
+            data=self._data(**{HONEYPOT_FIELD: 'http://spam.example'}))
+        form.is_valid()
+        self.assertTrue(form.looks_like_spam())
+
+    def test_too_fast_submission_is_spam(self):
+        instant = signing.dumps(time.time(), salt=FORM_STARTED_SALT)
+        form = AccountCreationForm(data=self._data(form_started=instant))
+        form.is_valid()
+        self.assertTrue(form.looks_like_spam())
+
+    def test_flagged_signup_creates_no_account_and_shows_an_error(self):
+        view = AccountCreateView()
+        view.request = self.client.get('/').wsgi_request
+        form = Mock()
+        form.looks_like_spam.return_value = True
+        with patch.object(AccountCreateView, 'form_invalid',
+                          return_value=Mock(status_code=200)) as invalid:
+            view.form_valid(form)
+
+        invalid.assert_called_once_with(form)
+        form.add_error.assert_called_once()
+        self.assertEqual(User.objects.filter(username='newbie').count(), 0)
