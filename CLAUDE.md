@@ -4063,3 +4063,60 @@ app from `INSTALLED_APPS` just orphans its table, harmlessly" situation
 already documented elsewhere in this file for other migration-adjacent
 changes, and this table never held anything worth preserving (short-
 lived captcha challenge state, not user data).
+
+### Django bumped 4.2.15 -> 4.2.30 - most of the 24 Dependabot alerts were stale
+
+The push after the proof-of-work captcha work above surfaced GitHub's
+"24 vulnerabilities" banner on `ngphylogeny-django` (the repo's real
+current name - see "Branch rename" above for why `origin`'s push URL
+still says `NGPhylogeny_fr_django`). Checked each of the 24 open alerts
+(`gh api repos/.../dependabot/alerts --paginate`, not just the GitHub UI
+count) against what's actually pinned here, not assumed from the alert
+count alone - most turned out not to apply at all:
+- 8 alerts (CVE-2019-12308/12781/14232/14233/14234/14235,
+  CVE-2020-9402, CVE-2022-36359) list vulnerable ranges entirely within
+  Django 1.11.x/2.1.x/2.2.x/3.0.x/4.0.x - version lines this project
+  left behind in the Python 2->3 rewrite (see "`upgrade` vs the old
+  `master` branch" above). GitHub's dependency graph still carries them
+  because Dependabot alerts a *package name*, not a specific installed
+  version's own CVE applicability at first glance - reading each
+  advisory's actual `vulnerabilities[].vulnerable_version_range` array
+  (not just its headline CVE id) is what actually separates real from
+  stale here.
+- 8 more (CVE-2026-6873/8404/15307/15830/48587/48588/53877/53878) list
+  ranges only in Django 5.2.x/6.0.x/6.1.x - lines this project has never
+  run (it's pinned to the 4.2 LTS line throughout).
+
+5 were genuinely applicable to the pinned `4.2.15` - each advisory's own
+range list includes a `< 4.2.x` entry past what was installed:
+CVE-2025-64459 (critical - SQL injection via the `_connector` kwarg on
+`QuerySet`/`Q`, fixed 4.2.26), CVE-2025-64458 (high - Windows-only DoS
+in `HttpResponseRedirect`, fixed 4.2.26), CVE-2025-57833 (high - SQL
+injection through column aliases, fixed 4.2.24), CVE-2025-48432
+(medium - log injection, fixed 4.2.22), CVE-2024-45231 (medium - user
+email enumeration via password reset, fixed 4.2.16 - this project's
+own password-reset flow, see "Account creation and password reset,
+gated off for now" above, is exactly the feature this one concerns,
+even though it's currently gated off by default).
+
+Bumped straight to `4.2.30` (PyPI's actual latest `4.2.x` release at
+the time, confirmed not yanked and still declaring `requires_python
+>=3.8` - checked directly via PyPI's JSON API, not assumed from the
+version number alone) rather than stopping at `4.2.26` (the minimum
+that clears the critical one) - no reason to leave 4 more patch
+releases of accumulated fixes on the table for a same-line patch bump.
+Verified with the full gate: `makemigrations`/`migrate`/`check` (no
+changes, nothing broke), the full `manage.py test` suite (284 tests,
+unchanged pass), and the narrow `flake8` select - all clean against the
+new version, same as any other change in this file.
+
+Two more alerts turned out real but out of scope for this bump
+specifically - the vendored `assets/js/jquery-2.1.4.min.js` (CVE-2019-
+11358 prototype pollution in `$.extend`, CVE-2015-9251 XSS via
+`$.ajax`) and `biopython==1.70` (CVE-2025-68463, an XXE issue
+specifically in `Bio.Entrez` - grepped the whole codebase and confirmed
+`Entrez` is never imported anywhere here, so this one's open but not
+actually reachable through this app's own code; bumping past it also
+isn't a quick patch bump regardless, see "Known dependency ceilings"
+above for why `Bio.Alphabet` usage blocks it). Left as-is for now -
+flagged to the user, not silently fixed or silently ignored.

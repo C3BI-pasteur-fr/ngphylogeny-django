@@ -1,4 +1,4 @@
-Django==4.2.15
+Django==4.2.30
 django-formtools==2.6.1
 django-crispy-forms==1.9.2
 # Bumped from 0.10 (2017); bioblend's Client classes dropped the
