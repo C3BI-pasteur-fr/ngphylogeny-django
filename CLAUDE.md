@@ -4271,3 +4271,68 @@ this test class - 2 of 3 failed with `WorkspaceHistory.DoesNotExist`
 `refresh_from_db()` expects a merely-soft-deleted row), then reverted
 back to the fix and confirmed all three pass again, same discipline as
 `blast.tests.DeleteBlastRunViewTest`'s own pre-fix verification.
+
+### Footer now shows the running image's git commit, linked to GitHub
+
+Asked where the currently-deployed version could be surfaced on the
+page - the footer (already home to the maintainer-credit line) was the
+obvious spot, same reasoning as that earlier addition. The real
+decision was what "version" even means here: this project has no
+version-number convention of its own (no tags, no `__version__`), and
+a manually-maintained one would drift the moment someone forgot to
+bump it - so the actual git commit the running image was built from,
+not a hand-maintained string, chosen per an explicit decision with the
+user.
+
+**Can't read `.git` at runtime** - `.dockerignore` excludes it from the
+build context entirely (keeps the context small, avoids leaking
+history - a deliberate existing choice, not something to undo for
+this). So the commit has to be baked in at build time instead:
+`.gitlab-ci.yml`'s `build` job now passes `--build-arg
+GIT_COMMIT="$CI_COMMIT_SHA"` to `docker build`, and the `Dockerfile`
+writes that into a plain `GIT_COMMIT` file
+(`ARG GIT_COMMIT=""` / `RUN echo "$GIT_COMMIT" > GIT_COMMIT`) - a flat
+file rather than threading yet another `NGPHYLO_*` env var through
+`docker-compose.yml`/`docker-compose.standalone.yml`/`manifest.yaml`,
+since nothing besides this one read needs it. Deliberately placed
+*after* `COPY . .` in the Dockerfile, not earlier - `COPY . .` already
+busts the build cache on nearly every real commit, so writing the
+commit there costs nothing extra; placing it before the apt-get/pip-
+install layers would have forced those to rebuild on every single
+commit too; confirmed by actually reasoning through which layers
+`--build-arg` invalidates, not assumed.
+
+`settings/base.py`'s `NGPHYLO_GIT_COMMIT` reads that file once at
+import time (same "a file like this only changes by rebuilding the
+image anyway" reasoning as every other process-start-only setting in
+this file) and falls back to `''` via a plain `FileNotFoundError`
+catch - true for every non-CI build (`docker compose build` locally,
+or `manage.py runserver` outside Docker entirely, which is how this
+was actually developed and tested). A new context processor,
+`NGPhylogeny_fr.context_processors.git_commit`, exposes
+`git_commit_short` (the real `git log`-style 7-character convention,
+not the full 40) and `git_commit_url` (pointed at
+`C3BI-pasteur-fr/ngphylogeny-django` - this repo's real current GitHub
+name, not the old `NGPhylogeny_fr_django` one `origin`'s push URL
+still redirects through, so clicking it doesn't cost visitors an extra
+hop) to every template - the footer lives in `base.html`, rendered on
+every page, so a context processor is the right shape here rather than
+adding this to every view's own `get_context_data()`. The footer's own
+`{% if git_commit_short %}` guard means an empty commit (any non-CI
+build) simply shows no version line at all, never a link to nothing.
+
+Verified directly, not just read through: temporarily wrote a real-
+looking SHA into a local `GIT_COMMIT` file and confirmed the footer
+rendered the correct truncated link before removing it again -
+`manage.py runserver` picks up a `GIT_COMMIT` file exactly the same
+way a built image would, with no Docker involved. No existing test file
+is a natural home for either new module (`NGPhylogeny_fr.
+context_processors`/`NGPhylogeny_fr` itself isn't a registered Django
+app with its own `tests.py` convention yet) - added `NGPhylogeny_fr/
+tests.py`, discovered by `manage.py test` the same way `utils/tests.py`
+already is despite `utils/` not being an installed app either (Django's
+test discovery walks the whole project tree, not just `INSTALLED_APPS`).
+Covers the context processor function directly (empty vs. a real SHA)
+and the real rendered home page both ways (`override_settings
+(NGPHYLO_GIT_COMMIT=...)`, no Docker/file needed for this part since
+settings are just read at request time via the context processor).

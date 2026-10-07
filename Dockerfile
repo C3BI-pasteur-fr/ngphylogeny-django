@@ -57,6 +57,20 @@ ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 
 COPY . .
 
+# Baked in at build time, not read from .git at runtime - .dockerignore
+# excludes .git from the build context entirely (keeps the context small,
+# avoids leaking history), so there's nothing to `git rev-parse` inside
+# the running container. .gitlab-ci.yml's build job passes the real
+# commit via --build-arg GIT_COMMIT="$CI_COMMIT_SHA"; a local
+# `docker compose build` (no CI context) leaves this empty, and
+# settings/base.py's own NGPHYLO_GIT_COMMIT falls back to '' the same way
+# - the footer simply shows no version line rather than a broken link.
+# Placed after COPY . . (which already busts the build cache on nearly
+# every real commit) rather than earlier, so changing GIT_COMMIT doesn't
+# also force the expensive apt-get/pip install layers above to rebuild.
+ARG GIT_COMMIT=""
+RUN echo "$GIT_COMMIT" > /home/ngphylo/GIT_COMMIT
+
 RUN chmod +x docker/init.sh
 
 # Baked in at build time, not run by docker/init.sh alone: on Kubernetes,

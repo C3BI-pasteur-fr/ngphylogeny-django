@@ -298,6 +298,14 @@ database trap) hit getting `deploy-dev` working - worth reading before
 setting up `deploy-prod`, since the same class of issues will likely
 recur there.
 
+The footer on every page shows the running image's git commit, linked
+to its page on GitHub - `Dockerfile` bakes it in at build time
+(`--build-arg GIT_COMMIT`, which `.gitlab-ci.yml`'s `build` job passes
+as `$CI_COMMIT_SHA`) into a plain `GIT_COMMIT` file, since `.dockerignore`
+excludes `.git` itself from the build context. A local `docker compose
+build` (no CI context) leaves this unset, and the footer just shows no
+version line rather than a broken link.
+
 `scripts/cleanup_old_galaxy_workflows.sh` is a standalone maintenance
 script (not run by any pipeline) for bulk-deleting old, non-base
 workflows directly from a Galaxy server's own `/api/workflows` - see its

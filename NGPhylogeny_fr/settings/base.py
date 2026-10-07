@@ -109,6 +109,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'NGPhylogeny_fr.context_processors.git_commit',
             ],
         },
     },
@@ -349,6 +350,22 @@ NGPHYLO_PASTEUR_BLAST_STALE_HOURS = int(
 # NGPHYLO_WORKSPACE_RETENTION_DAYS above.
 NGPHYLO_POW_CAPTCHA_DIFFICULTY = int(
     os.environ.get('NGPHYLO_POW_CAPTCHA_DIFFICULTY') or '5')
+
+# The git commit this running image was actually built from - baked into
+# a plain file at Docker build time (see Dockerfile's own comment on
+# this), not read from .git at runtime (.dockerignore excludes .git from
+# the build context entirely). Read once here, not per-request - a
+# GIT_COMMIT file only ever changes by rebuilding the image, which means
+# a fresh process anyway. Empty ('') for a local `docker compose build`
+# (no CI context passes --build-arg GIT_COMMIT) or running manage.py
+# runserver directly outside Docker at all - NGPhylogeny_fr.
+# context_processors.git_commit (wired in below) treats that the same
+# way, showing no version line rather than a broken link.
+try:
+    with open(os.path.join(BASE_DIR, 'GIT_COMMIT')) as _git_commit_file:
+        NGPHYLO_GIT_COMMIT = _git_commit_file.read().strip()
+except FileNotFoundError:
+    NGPHYLO_GIT_COMMIT = ''
 
 # CELERY SETTINGS
 #
