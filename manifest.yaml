@@ -228,6 +228,13 @@ spec:
             # settings/base.py falls back to 14.
             - name: NGPHYLO_WORKSPACE_RETENTION_DAYS
               value: "${WORKSPACE_RETENTION_DAYS}"
+            # web-only - utils/powcaptcha.py's challenge generation only
+            # ever runs inside a request (surveys/account form rendering
+            # and validation), never in a Celery task. Left unset/empty
+            # (the default when POW_CAPTCHA_DIFFICULTY isn't set),
+            # settings/base.py falls back to 5.
+            - name: NGPHYLO_POW_CAPTCHA_DIFFICULTY
+              value: "${POW_CAPTCHA_DIFFICULTY}"
             - name: DJANGO_SETTINGS_MODULE
               # Explicit on every single container below, not left to
               # manage.py's own default (settings.local, DEBUG=True) -

@@ -21,7 +21,6 @@ python-slugify==8.0.4
 bibtexparser==1.4.4
 celery[redis]==5.4.0
 uwsgi==2.0.31
-django-simple-captcha==0.7.0
 python_magic==0.4.15
 # Used directly by galaxy/galaxylib.py (multipart uploads); previously
 # only ever installed transitively via bioblend.

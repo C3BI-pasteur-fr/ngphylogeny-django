@@ -63,7 +63,6 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'formtools',
-    'captcha',
     'crispy_forms',
     'account.apps.AccountConfig',
     'galaxy.apps.GalaxyConfig',
@@ -339,6 +338,17 @@ NGPHYLO_WORKFLOW_RUN_STALE_HOURS = int(
 # reasoning as NGPHYLO_WORKSPACE_RETENTION_DAYS above.
 NGPHYLO_PASTEUR_BLAST_STALE_HOURS = int(
     os.environ.get('NGPHYLO_PASTEUR_BLAST_STALE_HOURS') or '3')
+
+# Leading hex-zero digits a proof-of-work solution's SHA-256 digest must
+# have for utils.powcaptcha's self-hosted CAPTCHA (see that module's own
+# docstring for why this exists instead of django-simple-captcha/an
+# external service) - each extra digit is 16x the expected browser
+# search, so this is a real (if coarse) difficulty knob. Defaults to 5
+# (~1e6 expected attempts), picked by actually timing solves in headless
+# Chrome - see utils/powcaptcha.py. Same empty-string-safety reasoning as
+# NGPHYLO_WORKSPACE_RETENTION_DAYS above.
+NGPHYLO_POW_CAPTCHA_DIFFICULTY = int(
+    os.environ.get('NGPHYLO_POW_CAPTCHA_DIFFICULTY') or '5')
 
 # CELERY SETTINGS
 #

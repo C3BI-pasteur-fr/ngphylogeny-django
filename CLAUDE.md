@@ -3921,3 +3921,145 @@ emailed, and still redirects to the thank-you page).
 sign-up (honeypot filled, too-fast submission, normal timing), and that
 a flagged sign-up creates no account and goes back through
 `form_invalid()` with an error rather than being dropped.
+
+### django-simple-captcha replaced with a self-hosted proof-of-work captcha
+
+The distorted-letter captcha on the contact form and account sign-up
+(`captcha.fields.CaptchaField`, django-simple-captcha) is exactly "the
+kind of challenge automated solvers handle routinely" this file already
+flagged when the honeypot/timing/link-cap layers above were added -
+asked directly, after looking at real production sign-ups, whether a
+more complex *local* scheme was possible without an external service/
+API key (Turnstile/hCaptcha/reCAPTCHA were the obvious alternative, and
+explicitly declined for the same "no new third-party dependency"
+reasoning as everywhere else in this file).
+
+The initial plan was to vendor the real [ALTCHA](https://altcha.org)
+widget - a genuinely self-hosted, MIT-licensed, proof-of-work captcha
+with no API key, matching this project's existing JS-vendoring
+convention (`assets/phylotree-2.6.0/` etc.). Two things found while
+actually trying that ruled it out, not assumed from the README alone:
+- The official `altcha` PyPI package requires **Python >=3.9** - this
+  project is pinned to 3.8 (the `biopython==1.70` ceiling - see "Known
+  dependency ceilings" above), so it can't be added as a dependency at
+  all.
+- Reading the actual `altcha-lib` reference source (not just docs,
+  which 404'd or came back vague from a few different fetch attempts)
+  showed the *current* wire protocol ("v2") is genuinely intricate -
+  per-algorithm KDF-derived key prefixes, a nonce, canonical JSON
+  signing - clearly still evolving, and not something worth hand-
+  matching without the library for something security-adjacent. The
+  *original* "v1" protocol (`algorithm`/`challenge`/`maxnumber`/`salt`/
+  `signature`, `challenge = sha256_hex(salt + number)`, `signature =
+  hmac_sha256_hex(challenge, hmacKey)`) is simple and still kept for
+  backward compatibility in `altcha-lib`'s own source tree, but
+  reverse-engineering which protocol version the current widget build
+  actually speaks for an inline-embedded challenge (vs. one fetched from
+  a URL) added more uncertainty than it was worth.
+
+Built instead as `utils/powcaptcha.py`: the same idea (and literally
+the same hash-based challenge ALTCHA's own "v1" protocol uses) end to
+end in code this project owns - `django.core.signing` (already used for
+the Workspace permalink and `utils/antispam.py`'s own form-age token)
+issues and verifies a signed, 10-minute-expiring `{salt, difficulty}`
+challenge; plain `hashlib.sha256` checks a submitted nonce solves it
+(the hash of `salt + nonce` must have `difficulty` leading hex-zero
+digits); a small vendor-free vanilla-JS snippet (native
+`crypto.subtle.digest`, no vendored library at all) solves it in the
+browser via 16 concurrent in-flight hash attempts per batch, written
+directly into the crispy-forms layout via `PowCaptchaFormMixin.
+pow_layout_html()` (`format_html`, not a template file - matches how
+`AntiSpamFormMixin.antispam_layout_fields()` already injects its own
+fields with no template changes needed in either form's `.html`).
+
+**Difficulty was measured, not guessed.** Calibrating "how many leading
+zero hex digits" against real browser throughput used this session's
+established headless-Chrome/DevTools-Protocol technique (see the
+`reference-headless-chrome-debugging` memory) - a local HTML harness
+exercising the exact same batched-`crypto.subtle.digest` approach the
+real client script uses, run for repeated trials at several difficulty/
+concurrency combinations. Difficulty 5 (20 bits, ~1e6 expected
+attempts) at concurrency 16 landed well under a second up to a few
+seconds across trials - concurrency 32 didn't meaningfully help
+(`crypto.subtle.digest`'s cost is the hashing itself, not per-call
+promise overhead, so batching more calls doesn't parallelize across
+cores the way it might for raw async I/O) - so difficulty 5/concurrency
+16 is the shipped default (`NGPHYLO_POW_CAPTCHA_DIFFICULTY`, see
+README.md), with a 50,000,000-attempt client-side ceiling purely as a
+"something is fundamentally broken" circuit breaker, not a normal-case
+concern, matching this project's general aversion to any truly
+unbounded loop (see every `*_STALE_AFTER` cutoff elsewhere in this
+file).
+
+**Honestly documented limitation, in the module's own docstring**: a
+targeted attacker who reimplements the same hash loop natively solves
+it far faster than a browser running JS - true of ALTCHA itself, not a
+gap introduced by rolling this by hand. What this defends against is
+mass, naive scripted spam (the kind actually observed - see this
+session's own look at `auth_user` for qq.com-domain throwaway
+registrations), by giving every submission a real, non-zero CPU cost,
+not a sophisticated individually-targeted one.
+
+**Validation is a real form field, not a `looks_like_spam()`-style soft
+signal** - unlike the honeypot/timing checks, which the docstring on
+`AntiSpamFormMixin` explicitly keeps soft because a real person could
+plausibly trip them (a fast password-manager autofill). A missing/wrong
+proof-of-work solution can really only mean "JS didn't run" or "this
+challenge already expired/was tampered with" - both get a visible
+`ValidationError` (same two-case split as `AntiSpamFormMixin.
+clean_form_started()`'s own expired-token message), and `clean_pow_nonce()`
+skips raising its own redundant error when `clean_pow_token()` already
+raised for the same submission. A form redisplayed after some other
+field's error (not a pow failure) just keeps its already-solved
+token/nonce pair, which still validates correctly without the browser
+needing to solve anything twice - the inline script also skips re-
+solving in that case (if the nonce input already has a value on page
+load, treat it as already solved).
+
+This incidentally made both forms' own test suites noticeably better,
+not just equivalent: django-simple-captcha had **no established way to
+satisfy it in a test** (see the old docstrings on
+`surveys.tests.FeedbackCreateViewTest._saving_form`/
+`account.tests.AccountCreationFormTest`, both now updated) - every
+existing test before this could only check individual fields' errors or
+a mocked form, never a real `form.is_valid() == True` end to end. A
+plain-Python reference solver, `utils.powcaptcha.solve_challenge()`
+(what the browser's inline script does with `crypto.subtle.digest()`,
+done here with `hashlib` instead) plus a small test helper,
+`pow_proof_for_form()`, now let `FeedbackAntiSpamTest`/
+`AccountCreationFormTest` each add one real "a fully valid submission
+passes as a whole" test - genuine coverage that didn't exist before,
+not just a captcha-field swap.
+
+`utils/tests.py` is new (this module has no natural owning Django app -
+the existing convention for a shared `utils/` helper, e.g.
+`utils/biofile.py`, has been to test it from the app that actually uses
+it, but `powcaptcha.py` is substantial enough, and shared evenly enough
+between two apps, to warrant its own direct tests) - covers
+`make_challenge`/`solve_challenge` directly, and `PowCaptchaFormMixin`
+through a minimal throwaway form: a correct solve validates, a wrong
+nonce fails, a missing nonce fails with a distinct "please wait"
+message (vs. a tampered/expired token's "please reload" message), a
+redisplayed form's already-solved pair stays valid without re-solving,
+and the rendered layout HTML embeds the configured concurrency.
+`data.tests.StaticPagesSmokeTest.test_feedback_form_renders_exactly_one_pow_captcha_widget`
+(renamed from its old captcha-specific name, same underlying regression
+class it guards against - see that test's own docstring) now checks the
+new fields instead. Verified end to end, not just via the Python-side
+tests: a real `GET`+solve+`POST` through both actual views
+(`FeedbackCreateView`, `AccountCreateView`) with the real
+`crypto.subtle.digest` client logic's Python-side equivalent, confirmed
+the Feedback row/User account actually get created.
+
+`django-simple-captcha` is dropped entirely, not left installed
+unused - confirmed by grep that `CaptchaField`/`captcha.urls`/the
+`'captcha'` `INSTALLED_APPS` entry had no other reference anywhere in
+the codebase before removing the package from `requirement.txt`,
+`'captcha'` from `INSTALLED_APPS`, and the `captcha/` URL include from
+`surveys/urls.py` (account's own `urls.py` never included it in the
+first place). A production database that already has the old
+`captcha_captchastore` table isn't touched by this - same "removing an
+app from `INSTALLED_APPS` just orphans its table, harmlessly" situation
+already documented elsewhere in this file for other migration-adjacent
+changes, and this table never held anything worth preserving (short-
+lived captcha challenge state, not user data).

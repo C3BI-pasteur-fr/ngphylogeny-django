@@ -392,30 +392,34 @@ class StaticPagesSmokeTest(TestCase):
         # uses that class (e.g. the footer's maintainer line).
         self.assertNotContains(response, 'text-muted">Workspace')
 
-    def test_feedback_form_renders_exactly_one_captcha_widget(self):
+    def test_feedback_form_renders_exactly_one_pow_captcha_widget(self):
         """
-        Regression test: surveys.forms.FeedbackForm used to append a
-        Field('captcha ', ...) (trailing-space typo) onto
-        FormHelper(self)'s own auto-built default layout, which already
-        includes every form field - including a correctly-named
+        Regression test, originally written against the old django-
+        simple-captcha field (see git history): surveys.forms.FeedbackForm
+        used to append a Field('captcha ', ...) (trailing-space typo)
+        onto FormHelper(self)'s own auto-built default layout, which
+        already includes every form field - including a correctly-named
         'captcha' entry. crispy_forms's FAIL_SILENTLY handling makes an
         unresolvable field name log a warning and render "" rather than
         raise, so test_pages_return_200 above (a plain 200-status check)
         never caught this: the page always returned 200, it just quietly
         never rendered a usable captcha input at all, so no real visitor
         could ever pass this form's captcha check. Naively fixing just
-        the typo surfaced a second bug from the same line: the field
-        was then genuinely resolved *twice* (once by the implicit
-        default layout, once by the explicit append), rendering two
-        captcha widgets on the page - caught by actually reloading the
-        page and counting the widgets, not assumed. Both fixed together
-        by building the layout explicitly instead of appending onto the
-        implicit default.
+        the typo surfaced a second bug from the same line: the field was
+        then genuinely resolved *twice* (once by the implicit default
+        layout, once by the explicit append), rendering two captcha
+        widgets on the page - caught by actually reloading the page and
+        counting the widgets, not assumed. Both fixed together by
+        building the layout explicitly instead of appending onto the
+        implicit default - still the case now that the captcha itself is
+        utils.powcaptcha's proof-of-work field (see CLAUDE.md), so this
+        keeps guarding the same class of bug against the new fields.
         """
         response = self.client.get('/about/feedback')
         html = response.content.decode()
-        self.assertEqual(html.count('id="id_captcha_1"'), 1)
-        self.assertEqual(html.count('name="captcha_0"'), 1)
+        self.assertEqual(html.count('id="id_pow_token"'), 1)
+        self.assertEqual(html.count('id="id_pow_nonce"'), 1)
+        self.assertIn('data-pow-salt', html)
         self.assertNotIn('Could not resolve form field', html)
 
 

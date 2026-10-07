@@ -2,21 +2,20 @@ import re
 
 from crispy_forms.bootstrap import FormActions
 from crispy_forms.helper import FormHelper
-from crispy_forms.layout import Layout, Field, Submit
+from crispy_forms.layout import HTML, Layout, Field, Submit
 from django.core.exceptions import ValidationError
 from django.forms import ModelForm
-from captcha.fields import CaptchaField
 
 from utils.antispam import AntiSpamFormMixin
+from utils.powcaptcha import PowCaptchaFormMixin, TOKEN_FIELD, NONCE_FIELD
 from .models import Feedback
 
 MAX_LINKS = 2
 LINK_RE = re.compile(r'https?://|www\.', re.IGNORECASE)
 
 
-class FeedbackForm(AntiSpamFormMixin, ModelForm):
+class FeedbackForm(AntiSpamFormMixin, PowCaptchaFormMixin, ModelForm):
     """Model Feedback form"""
-    captcha = CaptchaField()
 
     class Meta:
         model = Feedback
@@ -27,13 +26,16 @@ class FeedbackForm(AntiSpamFormMixin, ModelForm):
 
         self.helper = FormHelper(self)
         # FormHelper(self) already builds a default layout with every
-        # form field (including captcha) via build_default_layout() -
-        # appending another Field('captcha', ...) on top of that rendered
-        # the captcha widget twice, so the layout is built explicitly.
+        # form field via build_default_layout() - appending another
+        # Field() for one of those fields on top of that rendered it
+        # twice (see this form's git history for the real bug that hit
+        # exactly this with the old captcha field), so the layout is
+        # built explicitly instead.
         self.helper.layout = Layout(
             'type', 'title', 'comment', 'email',
             *AntiSpamFormMixin.antispam_layout_fields(),
-            Field('captcha', placeholder="Enter captcha"),
+            Field(TOKEN_FIELD), Field(NONCE_FIELD),
+            HTML(self.pow_layout_html()),
             FormActions(
                 Submit('save', 'Send message'),
             ),

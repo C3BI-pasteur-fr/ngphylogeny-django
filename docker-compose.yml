@@ -80,6 +80,10 @@ x-django-env: &django-env
   # blast.tasks.checkblastruns gives up and marks it ERROR - see
   # blast/tasks.py's PASTEUR_RUN_STALE_AFTER.
   NGPHYLO_PASTEUR_BLAST_STALE_HOURS: "${NGPHYLO_PASTEUR_BLAST_STALE_HOURS:-3}"
+  # Leading hex-zero digits a solution must have for utils/powcaptcha.py's
+  # proof-of-work captcha (contact form + account sign-up) - see that
+  # module's docstring. Defaults to 5.
+  NGPHYLO_POW_CAPTCHA_DIFFICULTY: "${NGPHYLO_POW_CAPTCHA_DIFFICULTY:-5}"
 
 services:
   db:

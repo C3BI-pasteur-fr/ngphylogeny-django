@@ -15,6 +15,7 @@ from surveys.forms import MAX_LINKS, FeedbackForm
 from surveys.models import Feedback
 from surveys.views import FeedbackCreateView
 from utils.antispam import FORM_STARTED_SALT, HONEYPOT_FIELD, MAX_FORM_AGE_SECONDS
+from utils.powcaptcha import pow_proof_for_form
 
 
 def _feedback(**kwargs):
@@ -131,10 +132,11 @@ class FeedbackAntiSpamTest(TestCase):
     """
     Anti-spam layers on FeedbackForm (see surveys/forms.py): a honeypot
     field, a signed form-age check that rejects instant submissions, and
-    a cap on links in the message. Form-level checks run the real
-    full_clean() - the captcha is intentionally left unanswered here, so
-    assertions only look at the non-captcha fields' errors and
-    looks_like_spam(), not is_valid() as a whole.
+    a cap on links in the message. Most assertions here only look at
+    the non-pow-captcha fields' errors and looks_like_spam(), not
+    is_valid() as a whole - see test_a_fully_valid_submission_passes_
+    as_a_whole below for the one that does, now that the captcha
+    (utils.powcaptcha) can genuinely be solved in a test.
     """
 
     @staticmethod
@@ -201,6 +203,14 @@ class FeedbackAntiSpamTest(TestCase):
         token = FeedbackForm().initial['form_started']
         started_at = signing.loads(token, salt=FORM_STARTED_SALT)
         self.assertLess(time.time() - started_at, 5)
+
+    def test_a_fully_valid_submission_passes_as_a_whole(self):
+        unbound = FeedbackForm()
+        data = self._data()
+        data.update(pow_proof_for_form(unbound))
+        form = FeedbackForm(data=data)
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertFalse(form.looks_like_spam())
 
 
 class FeedbackSpamDropViewTest(TestCase):

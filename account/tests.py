@@ -14,6 +14,7 @@ from galaxy.models import Server
 from workflows.models import Workflow
 from workspace.models import WorkspaceHistory
 from utils.antispam import FORM_STARTED_SALT, HONEYPOT_FIELD
+from utils.powcaptcha import pow_proof_for_form
 from .forms import AccountCreationForm
 from .models import UserProfile
 from .views import AccountCreateView
@@ -22,14 +23,14 @@ from .views import AccountCreateView
 class AccountCreationFormTest(TestCase):
     """
     Unit tests for AccountCreationForm's own added behavior (the email
-    field/uniqueness check) - not the whole form's validity, since that
-    also needs a real captcha answer and this codebase has no
-    established pattern for satisfying django-simple-captcha in a test
-    (see surveys.tests.FeedbackCreateViewTest's own note on this).
-    is_valid() still runs every field's clean_<field>() and populates
-    self.errors per-field even when the form as a whole fails (captcha
-    always will, here) - enough to test clean_email() for real through
-    the normal validation pipeline, not by calling it directly.
+    field/uniqueness check). Most of these only check one specific
+    field's errors, not the form's validity as a whole - the old
+    django-simple-captcha field had no established way to satisfy in a
+    test, so historically nothing here could get is_valid() to actually
+    return True; see test_a_fully_valid_submission_passes_as_a_whole
+    below for why that's no longer the case now that the captcha is
+    utils.powcaptcha's proof-of-work field, which a test can genuinely
+    solve (utils.powcaptcha.pow_proof_for_form).
     """
 
     def _data(self, **overrides):
@@ -62,6 +63,21 @@ class AccountCreationFormTest(TestCase):
             data=self._data(password2='a-different-pass9'))
         form.is_valid()
         self.assertIn('password2', form.errors)
+
+    def test_a_fully_valid_submission_passes_as_a_whole(self):
+        # Unlike the old django-simple-captcha field, a proof-of-work
+        # challenge can genuinely be solved in a test (that's the whole
+        # point of it being plain hashlib server-side) - this is real
+        # end-to-end coverage of is_valid() actually returning True, not
+        # just individual fields' errors.
+        unbound = AccountCreationForm()
+        data = self._data()
+        data.update(pow_proof_for_form(unbound))
+        data[HONEYPOT_FIELD] = ''
+        data['form_started'] = signing.dumps(
+            time.time() - 10, salt=FORM_STARTED_SALT)
+        form = AccountCreationForm(data=data)
+        self.assertTrue(form.is_valid(), form.errors)
 
 
 class AccountCreateViewTest(TestCase):

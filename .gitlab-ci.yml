@@ -239,6 +239,12 @@ build:
 #     pending/running Pasteur BLAST run is polled before blast.tasks.
 #     checkblastruns gives up and marks it ERROR (blast/tasks.py's
 #     PASTEUR_RUN_STALE_AFTER). Left unset, defaults to 3.
+#   - POW_CAPTCHA_DIFFICULTY (plain, optional): leading hex-zero digits
+#     a solution must have for utils/powcaptcha.py's self-hosted
+#     proof-of-work captcha (contact form + account sign-up) - see that
+#     module's docstring for how this was calibrated. Left unset,
+#     defaults to 5. web-only (see manifest.yaml's own comment on this
+#     var) - no celery-worker/celery-beat/init wiring needed.
 #   - INGRESS_CLUSTER_ISSUER / INGRESS_TLS_SECRET_NAME (plain, optional,
 #     deploy-prod only): wires up TLS via cert-manager's ingress-shim -
 #     see the deploy job's own "TLS via cert-manager" script comment.

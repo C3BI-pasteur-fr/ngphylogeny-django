@@ -558,3 +558,16 @@ table.history-table {
     height: 1px;
     overflow: hidden;
 }
+
+/* Proof-of-work captcha status indicator (utils/powcaptcha.py). */
+.pow-captcha-status {
+    font-size: 0.9em;
+    color: #777;
+    margin: 4px 0 10px;
+}
+.pow-captcha-status-ok {
+    color: #3c763d;
+}
+.pow-captcha-status-error {
+    color: #a94442;
+}

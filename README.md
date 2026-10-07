@@ -198,6 +198,15 @@ A few related, independently configurable cleanup/staleness cutoffs:
   BLAST search is polled before it's given up on and marked `ERROR`
   (`blast/tasks.py`'s `PASTEUR_RUN_STALE_AFTER`). Defaults to `3`.
 
+`NGPHYLO_POW_CAPTCHA_DIFFICULTY` tunes the self-hosted proof-of-work
+CAPTCHA on the contact form and account sign-up (`utils/powcaptcha.py` -
+replaces django-simple-captcha's distorted-letter image, with no
+external service/API key). It's the number of leading hex-zero digits a
+solution's SHA-256 hash must have; each extra digit multiplies the
+browser's expected search by 16x. Defaults to `5` (~1e6 expected
+attempts, measured at well under a second up to a few seconds in a real
+browser - see that module's docstring for how this was calibrated).
+
 ## Email: job-completion notices and the daily report
 
 Both job-completion emails and the daily workflow-usage report (HTML, with
