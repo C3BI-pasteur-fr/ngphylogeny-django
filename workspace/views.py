@@ -828,19 +828,28 @@ class WorkspacePermalinkView(View):
 @method_decorator(connection_galaxy, name="dispatch")
 class WorkspaceDeleteView(WorkspaceHistoryObjectMixin, DeleteView):
     """
-    Delete Workspace and history
+    Delete Workspace and history - GET renders a real confirmation page
+    (templates/workspace/workspacehistory_confirm_delete.html), whose
+    own <form method="post"> then actually performs the delete. Unlike
+    blast.views.DeleteBlastRunView (which never had a confirmation page
+    at all - see that view's own docstring), that GET/confirm-page shape
+    still works fine here; only the actual delete is affected by the
+    same Django 4.x bug class: BaseDeleteView.post() routes through
+    FormMixin's form_valid(), which calls self.object.delete() directly
+    (Django's real hard delete) - overriding delete() itself, as this
+    used to, has had no effect on a real POST since that rewrite (see
+    the DeleteViewCustomDeleteWarning it used to trigger on every
+    request). A real production incident from exactly this: posting
+    here hard-deleted the local WorkspaceHistory row outright and never
+    queued deletegalaxyhistory.delay(), permanently orphaning the real
+    Galaxy-side history - caught live testing a real OneClick submission
+    against galaxy.pasteur.fr, not assumed. Fixed per Django's own
+    suggested migration path: the soft-delete-and-queue-cleanup logic
+    moved into form_valid() instead of delete().
     """
     success_url = reverse_lazy('previous_analyses')
 
-    # Overrides the DeletionMixin delete method to prevent actual
-    # deletion, but instead mark it as deleted and delete the
-   # galaxy history asyynchronously
-    def delete(self, request, *args, **kwargs):
-        """
-        Calls the delete() method on the fetched object and then
-        redirects to the success URL.
-        """
-        self.object = self.get_object()
+    def form_valid(self, form):
         self.object.deleted = True
         self.object.save()
         if self.object.workflow is not None:

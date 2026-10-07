@@ -4192,3 +4192,82 @@ see this file's own repeated notes elsewhere on why that's not mockable
 in this codebase's test suite) - the `.size()` fix was confirmed at the
 jQuery-API level directly, not by driving the whole upload UI through a
 real file selection.
+
+### A real OneClick submission against galaxy.pasteur.fr, and a second `DeleteView` bug found cleaning up after it
+
+Asked to actually verify the jQuery bump above rather than stop at
+static inspection, since the one surface it couldn't reach without a
+connected Galaxy (`jquery.filer`'s real upload flow) was explicitly
+called out as unverified. Linked a fresh local instance to the real
+`galaxy.pasteur.fr` using `.env`'s own real API key (same `creategalaxyserver`/
+`addgalaxykey`/`importtools`/`import_links`/`importworkflows --wfids=...`
+sequence `docker/init.sh` runs, done by hand here), started a real
+local Redis + Celery worker (neither installed/running on this machine
+before this), and drove a real FastME OneClick submission through
+headless Chrome end to end: pasted 5 real sequences into the actual
+form, clicked the real submit button, and polled the resulting real
+history page (`/workspace/history/<id>`) for ~280 seconds while
+watching for JS exceptions.
+
+**Result: a real Galaxy job ran to completion** (upload -> sequence-
+type detection -> MAFFT -> FastME -> tree rendering, all 15 steps
+`Done` in ~113s) **with zero JS exceptions** across roughly 15 polling
+cycles of the single most jQuery-dependent page in the app (the 10s
+auto-refresh `.load()`, step-chain building, table grouping, and the
+phylotree.js tree preview, which rendered a real 58-element SVG) - the
+strongest confirmation available in this codebase that the jQuery
+3.7.1 + jquery-migrate bump above didn't break anything real,
+`jquery.filer` included (confirmed separately, in the same session,
+with a direct file-input test showing a correctly-rendered
+`.jFiler-item` - "size: 38.0 Bytes" - see that section above).
+
+**Cleaning up the resulting real test history afterward surfaced a
+second, independent Django-4.x `DeleteView` bug - the same class
+already fixed once for `blast.views.DeleteBlastRunView`, but never
+ported to `workspace.views.WorkspaceDeleteView`.** Unlike BLAST's view
+(which never had a real confirmation template, so both GET and POST
+were broken), Workspace's own `workspacehistory_confirm_delete.html`
+genuinely exists and GET already worked - only POST (that confirmation
+page's own `<form method="post">`) was affected: Django 4.x's
+`BaseDeleteView.post()` goes through `FormMixin.form_valid()`, which
+calls `self.object.delete()` directly (Django's real hard delete),
+never reaching `WorkspaceDeleteView`'s own overridden `delete()`
+(intended to soft-delete and queue `deletegalaxyworkflow.delay()`/
+`deletegalaxyhistory.delay()`). Caught live, not assumed: posting the
+real delete confirmation hard-deleted the local `WorkspaceHistory` row
+outright (confirmed directly against the raw sqlite file, not just the
+ORM) and never queued the real Galaxy-side cleanup - permanently
+orphaning that test history on `galaxy.pasteur.fr` until it was found
+and purged by hand afterward (`workspace.tasks.deletegalaxyhistory()`,
+called directly, not `.delay()`'d, for both this run's real history
+and an earlier one orphaned the same way by a *different* bug hit
+mid-session: submitting before a local Redis/Celery worker existed
+left the view's own Celery-task queuing call raising
+`OperationalError` after the real Galaxy-side history had already been
+created). This endpoint has **no session/ownership gate at all**
+(`WorkspaceHistoryObjectMixin.get_object()` looks up purely by Galaxy
+history id - see "Permalink to Workspace" above for why that's an
+already-accepted property of this app, not new), so this bug meant
+*any* visitor who knew or guessed a history id could silently and
+permanently orphan its real Galaxy-side data with a single POST.
+
+Fixed exactly per Django's own suggested migration for this situation
+(the very `DeleteViewCustomDeleteWarning` this view was silently
+triggering on every request says as much): the soft-delete-and-queue-
+cleanup logic moved from the dead `delete()` override into
+`form_valid()`, which `BaseDeleteView.post()` actually calls. The GET/
+confirmation-page behavior needed no change at all, since that part
+was never broken.
+
+Regression tests: `workspace.tests.WorkspaceDeleteViewTest` - a GET
+renders the real confirmation template without deleting anything; a
+POST with no linked `Workflow` soft-deletes and queues only
+`deletegalaxyhistory.delay()`; a POST with a linked `Workflow` also
+marks it `deleted` and queues `deletegalaxyworkflow.delay()`.
+Confirmed these actually catch the bug, not just exercise the happy
+path: temporarily reverted the `workspace/views.py` fix and re-ran
+this test class - 2 of 3 failed with `WorkspaceHistory.DoesNotExist`
+(the real hard-delete happening exactly where the fixed code's
+`refresh_from_db()` expects a merely-soft-deleted row), then reverted
+back to the fix and confirmed all three pass again, same discipline as
+`blast.tests.DeleteBlastRunViewTest`'s own pre-fix verification.

@@ -2232,3 +2232,90 @@ class DeleteHistoryEmptySessionTest(TestCase):
             delete_history(request, 'h1')
         self.assertEqual(request.session['last_history'], 'h0')
         self.assertEqual(request.session['histories'], ['h0'])
+
+
+class WorkspaceDeleteViewTest(TestCase):
+    """
+    Regression test: WorkspaceDeleteView had the same Django 4.x
+    BaseDeleteView bug already fixed once for blast.views.
+    DeleteBlastRunView (see that view's own docstring) - except here,
+    unlike BLAST, there's a real confirmation page
+    (workspacehistory_confirm_delete.html) and GET already worked;
+    only POST (the confirmation page's own <form method="post">) was
+    affected, since BaseDeleteView.post() calls self.object.delete()
+    directly (Django's real hard delete) rather than ever reaching the
+    view's own overridden delete() method. Caught live testing a real
+    OneClick submission against galaxy.pasteur.fr: posting here hard-
+    deleted the local WorkspaceHistory row outright and never queued
+    deletegalaxyhistory.delay(), permanently orphaning the real Galaxy-
+    side history - both fixed test cases below reproduce that exact
+    failure mode against the pre-fix code (a hard self.object.delete()
+    would raise WorkspaceHistory.DoesNotExist on the refresh_from_db()
+    below, not just leave deleted=False).
+
+    Same established pattern as ExportRoCrateViewTest/
+    HistoryContentRefreshViewTest above: a real Server + anonymous
+    GalaxyUser DB fixture, connection_galaxy's own Galaxy calls never
+    actually exercised by this view, and both updateworkspacestatus.delay()
+    (called by WorkspaceHistoryObjectMixin.get_object(), used for every
+    GET/POST here) and the two cleanup tasks this view itself queues
+    patched out - no broker needed, same "don't need CELERY_TASK_ALWAYS_EAGER,
+    just patch .delay()" reasoning as this file's other Celery-task-
+    queuing tests.
+    """
+
+    def setUp(self):
+        with patch('galaxy.models.requests.get',
+                   return_value=Mock(status_code=200,
+                                      json=lambda: {'version_major': '25.1'})):
+            self.server = Server.objects.create(
+                url='http://fake-galaxy.example.org', current=True)
+        user = User.objects.create_user('admin')
+        GalaxyUser.objects.create(
+            user=user, galaxy_server=self.server, api_key='fakekey',
+            anonymous=True)
+
+    def test_get_renders_the_confirmation_page_without_deleting_anything(self):
+        h = WorkspaceHistory.objects.create(
+            history='hist1', name='Test run', galaxy_server=self.server)
+        with patch('workspace.views.updateworkspacestatus.delay'):
+            response = self.client.get(
+                reverse('history_delete', kwargs={'history_id': 'hist1'}))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(
+            response, 'workspace/workspacehistory_confirm_delete.html')
+        h.refresh_from_db()
+        self.assertFalse(h.deleted)
+
+    def test_post_soft_deletes_and_queues_galaxy_cleanup_without_a_workflow(self):
+        h = WorkspaceHistory.objects.create(
+            history='hist1', name='Test run', galaxy_server=self.server)
+        with patch('workspace.views.updateworkspacestatus.delay'), \
+             patch('workspace.views.deletegalaxyhistory.delay') as mock_delete_history, \
+             patch('workspace.views.deletegalaxyworkflow.delay') as mock_delete_workflow:
+            response = self.client.post(
+                reverse('history_delete', kwargs={'history_id': 'hist1'}))
+        self.assertRedirects(response, reverse('previous_analyses'))
+        h.refresh_from_db()
+        self.assertTrue(h.deleted)
+        mock_delete_history.assert_called_once_with('hist1')
+        mock_delete_workflow.assert_not_called()
+
+    def test_post_also_marks_the_linked_workflow_deleted_and_queues_its_cleanup(self):
+        workflow = Workflow.objects.create(
+            galaxy_server=self.server, id_galaxy='wf1', name='FastME/OneClick',
+            description='', slug='fastme-oneclick')
+        h = WorkspaceHistory.objects.create(
+            history='hist1', name='Test run', galaxy_server=self.server,
+            workflow=workflow)
+        with patch('workspace.views.updateworkspacestatus.delay'), \
+             patch('workspace.views.deletegalaxyhistory.delay'), \
+             patch('workspace.views.deletegalaxyworkflow.delay') as mock_delete_workflow:
+            response = self.client.post(
+                reverse('history_delete', kwargs={'history_id': 'hist1'}))
+        self.assertRedirects(response, reverse('previous_analyses'))
+        h.refresh_from_db()
+        workflow.refresh_from_db()
+        self.assertTrue(h.deleted)
+        self.assertTrue(workflow.deleted)
+        mock_delete_workflow.assert_called_once_with('wf1')
