@@ -6,7 +6,13 @@
 
     <meta http-equiv="Content-type" content="text/html;charset=UTF-8"/>
     <title>NGPhylogeny.fr{% block title-block %}{% endblock %}</title>
-    <script src="{% static 'js/jquery-2.1.4.min.js' %}"></script>
+    <script src="{% static 'js/jquery-3.7.1.min.js' %}"></script>
+    <!-- Restores jQuery APIs removed in 3.0 (e.g. .size(), still used by
+         the vendored jquery.filer plugin - see CLAUDE.md's jQuery bump
+         section) that stayed removed through 3.7.1. Load order matters:
+         must come right after jQuery itself, before anything that might
+         call one of those restored APIs. -->
+    <script src="{% static 'js/jquery-migrate-3.6.0.min.js' %}"></script>
     <script src="{% static 'js/ngphylo.js' %}"></script>
 
     <!-- Bootstrap -->

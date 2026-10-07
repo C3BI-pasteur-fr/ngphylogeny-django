@@ -4120,3 +4120,75 @@ actually reachable through this app's own code; bumping past it also
 isn't a quick patch bump regardless, see "Known dependency ceilings"
 above for why `Bio.Alphabet` usage blocks it). Left as-is for now -
 flagged to the user, not silently fixed or silently ignored.
+
+### Vendored jQuery bumped 2.1.4 -> 3.7.1, plus jquery-migrate for one real breakage
+
+The two jQuery Dependabot alerts flagged alongside the Django ones above
+(CVE-2015-9251, CVE-2019-11358) are real: `assets/js/jquery-2.1.4.min.js`
+(loaded in `base.html`/`maintenance.html`, every page on the site) falls
+inside both CVEs' affected ranges.
+
+**Deliberately targeted 3.7.1, not the actual latest (4.0.0), per an
+explicit choice with the user.** Both fix both CVEs (3.0.0 and 3.4.0
+respectively), but jQuery 4.0 removes the back-compat shims 3.x still
+keeps for 1.x/2.x-era APIs (`.bind()`/`.unbind()`/`.delegate()`/
+`.undelegate()`/`.load()` as an event-binding shorthand, etc.) - a real
+risk for a codebase this old, built with no bundler/linter to catch a
+removed API statically, and loaded on every single page. 3.7.1 (the
+latest 3.x) was the safer incremental step.
+
+**Verified the actual downloaded file, not just trusted the version
+number**: fetched the real `jquery-3.7.1.min.js` from both
+`code.jquery.com` and `cdn.jsdelivr.net` independently and diffed them
+byte-for-byte identical before vendoring either copy - same discipline
+as verifying any other third-party asset pulled into this repo.
+
+**A real breakage was found and fixed, not just a hypothetical risk.**
+`assets/js/jquery.filer.min.js` (the file-upload widget on
+`upload_form.html`/the OneClick/Advanced submission pages - see
+`templates/upload_form.html`'s own `{% block stylesheet %}`) calls
+`.size()` five times - and unlike `.bind()`/`.load()`, `.size()` was
+genuinely *removed* in jQuery 3.0, not just deprecated-and-kept. Found
+by grepping the vendored plugin for exactly this class of API
+(`$.browser`, `.size()`, `$.isArray`, `.bind`/`.unbind`/`.delegate`/
+`.load`), then confirmed empirically in headless Chrome against jQuery
+3.7.1 directly (`typeof jQuery(document).size === "undefined"`) rather
+than assumed from the jQuery 3.0 upgrade guide alone - every other API
+that grep turned up (`.bind`/`.unbind`/`.load`) was confirmed still
+present (`typeof === "function"`) the same way, so `.size()` really is
+the one actual incompatibility, not a guess padded with extra fixes
+for things that were never broken.
+
+Fixed with jQuery's own officially-maintained compatibility shim,
+**jquery-migrate 3.6.0** (the latest release in the 3.x line - the one
+that restores jQuery-3.0-removed APIs under jQuery 3.x, as opposed to
+migrate 4.x, which does the equivalent for sites moving *to* jQuery
+4.0 and wouldn't help here) - vendored the same way, verified
+byte-identical across `code.jquery.com` and `cdn.jsdelivr.net` before
+use. Loaded in both `base.html` and `maintenance.html` immediately
+after jQuery itself and before `ngphylo.js`/anything else - load order
+matters, since a script between jQuery and migrate that calls a
+removed API would still break. Confirmed directly in headless Chrome,
+not assumed: with migrate loaded, `jQuery(document).size()` is a real
+function again and returns the correct count.
+
+No new Python tests - this is a pure vendored-static-asset swap with
+no server-side/context-variable change, same reasoning as this file's
+other pure-frontend sections (see the tree-toolbar work earlier in this
+file). Verified instead the way those sections were: `manage.py test`
+(284 tests, unchanged) + the narrow `flake8` select both stayed clean
+(template changes only, no Python touched), plus real headless-Chrome
+checks against the actual running dev server - home page, documentation,
+the contact form, and the login page all load with zero console
+errors/exceptions under the new jQuery+migrate pair; Bootstrap 3.3.7's
+dropdown plugin (a real jQuery-plugin dependency already in this stack)
+still opens/closes correctly; and the proof-of-work captcha's own
+vanilla-JS solver (section above) still solves end-to-end on the real
+contact form page, confirming the jQuery bump didn't collide with that
+unrelated, non-jQuery script sharing the same page. **Not verified**:
+`jquery.filer`'s own upload flow itself, since exercising it for real
+needs a connected Galaxy server (`connection_galaxy`-decorated views -
+see this file's own repeated notes elsewhere on why that's not mockable
+in this codebase's test suite) - the `.size()` fix was confirmed at the
+jQuery-API level directly, not by driving the whole upload UI through a
+real file selection.
