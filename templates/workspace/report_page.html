@@ -1,7 +1,11 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title-block %} - Daily Workflow Report{% endblock %}
 {% block stylesheet %}
 {% include "workspace/_report_styles.html" %}
+{% endblock %}
+{% block javascripts %}
+<script src="{% static 'js/chart-4.5.1.umd.min.js' %}"></script>
 {% endblock %}
 {% block content %}
 <div class="report-wrapper">
@@ -11,4 +15,5 @@
 </p>
 {% include "workspace/_report_body.html" %}
 </div>
+{% include "workspace/_report_charts_init.html" %}
 {% endblock %}

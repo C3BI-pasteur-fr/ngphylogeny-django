@@ -25,6 +25,7 @@ from workspace.reports import (WEEKLY_TO_MONTHLY_SPAN_DAYS,
                                 gather_all_time, gather_last_7_days,
                                 gather_period_totals, gather_user_growth,
                                 render_report_html)
+from workspace.reports import _gather_all
 from workspace.tasks import (deleteoldgalaxyhistory, send_daily_report,
                               updateworkspacestatus)
 from workspace.rocrate import build_rocrate_metadata
@@ -548,40 +549,49 @@ class DailyReportTest(TestCase):
             content_id = attachment['Content-ID'].strip('<>')
             self.assertIn('cid:%s' % content_id, html_body)
 
-    def test_build_report_web_context_uses_data_uris_not_cid(self):
+    def test_build_report_web_context_embeds_interactive_chart_data(self):
         """
-        Unlike the emailed report, the web page is rendered directly in a
-        browser, which has no trouble with data: URI images (it's only
-        mail clients like Outlook that don't render them - see
-        reports.py's module docstring) - so it embeds charts that way
-        instead of needing a separate cid:-matched attachment mechanism.
+        Unlike the emailed report (static matplotlib PNGs - mail clients
+        like Outlook don't run JS at all, see reports.py's module
+        docstring), the web page is rendered directly in a browser, which
+        can run Chart.js - so instead of a rendered image, the context
+        carries the raw chart data as JSON (chart_data_json, read by
+        templates/workspace/_report_charts_init.html) for the browser's
+        own JS to chart interactively. The daily_*_chart/etc. keys mean
+        the same "is there data" thing they do for the email (truthy =
+        show a chart), just as a plain bool here instead of a cid:/
+        data: URI string.
         """
         self._make_history('Tool', workflow_steps='MAFFT')
         context = build_report_web_context()
-        self.assertTrue(context['alltime_category_chart'].startswith(
-            'data:image/png;base64,'))
-        self.assertIsNone(context['daily_oneclick_chart'])
+        self.assertNotIn('data:image/png;base64,', context['chart_data_json'])
+        chart_data = json.loads(context['chart_data_json'])
+        self.assertEqual(chart_data['alltimeCategory']['labels'], ['Single Tool'])
+        self.assertEqual(chart_data['alltimeCategory']['data'], [1])
+        self.assertTrue(context['alltime_category_chart'])
+        self.assertFalse(context['daily_oneclick_chart'])
+        self.assertEqual(chart_data['dailyOneclick']['datasets'], [])
 
     def test_build_report_web_context_is_cached(self):
         """
-        Rendering 5 matplotlib charts on every single page view was the
-        actual slow part a real user hit - build_report_web_context()
-        caches its result rather than rebuilding it from scratch on every
-        call within REPORT_WEB_CACHE_TTL.
+        Assembling this report (the gather_* queries) is the actual slow
+        part a real user hit - build_report_web_context() caches its
+        result rather than rebuilding it from scratch on every call
+        within REPORT_WEB_CACHE_TTL.
         """
         self._make_history('Tool', workflow_steps='MAFFT')
 
-        with patch('workspace.reports.build_report_context',
-                   wraps=build_report_context) as mock_build:
+        with patch('workspace.reports._gather_all',
+                   wraps=_gather_all) as mock_gather:
             first = build_report_web_context()
             second = build_report_web_context()
-            self.assertEqual(mock_build.call_count, 1)
+            self.assertEqual(mock_gather.call_count, 1)
         self.assertEqual(first, second)
 
-        with patch('workspace.reports.build_report_context',
-                   wraps=build_report_context) as mock_build:
+        with patch('workspace.reports._gather_all',
+                   wraps=_gather_all) as mock_gather:
             build_report_web_context(force_refresh=True)
-            self.assertEqual(mock_build.call_count, 1)
+            self.assertEqual(mock_gather.call_count, 1)
 
 
 class DailyReportViewTest(TestCase):
@@ -624,7 +634,12 @@ class DailyReportViewTest(TestCase):
         content = response.content.decode()
         self.assertIn('Daily Workflow Report', content)
         self.assertIn('MAFFT', content)
-        self.assertIn('data:image/png;base64,', content)
+        # Interactive Chart.js canvases, not static PNGs - see
+        # DailyReportTest.test_build_report_web_context_embeds_interactive_chart_data
+        # for the underlying context-data assertions this renders from.
+        self.assertIn('chart-alltime-category', content)
+        self.assertIn('js/chart-4.5.1.umd.min.js', content)
+        self.assertNotIn('data:image/png;base64,', content)
 
     def test_refresh_param_bypasses_the_cache(self):
         User.objects.create_user('staffuser', password='pw', is_staff=True)

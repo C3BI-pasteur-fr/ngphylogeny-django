@@ -1,0 +1,194 @@
+{% comment %}
+Chart.js wiring for the interactive web report (report_page.html only -
+never included by daily_report_email.html, which keeps the static
+matplotlib PNGs - see workspace/reports.py's build_report_web_chart_data()
+docstring for why). Included after _report_body.html, so every <canvas>
+it creates already exists in the DOM by the time this runs.
+
+chart_data_json is server-built JSON (workspace.reports.
+build_report_web_chart_data(), colors already picked from the dataviz
+skill's validated palette - see that module's own comment) - the only
+place this script touches untrusted-shaped data, and it goes through
+JSON.parse(), never string concatenation into the DOM, matching this
+codebase's established escapejs-embedding convention elsewhere (e.g.
+the workspace history page's historySteps). Chart.js itself draws every
+label/tooltip straight onto the canvas via the 2D drawing API, not as
+DOM/innerHTML, so there's no second injection point to guard here.
+{% endcomment %}
+<script>
+(function() {
+    var data = JSON.parse("{{ chart_data_json|escapejs }}");
+
+    var FONT = "Arial, Helvetica, sans-serif";
+    var MUTED = "#898781";
+    var GRID = "#e1e0d9";
+    var INK = "#0b0b0b";
+
+    Chart.defaults.font.family = FONT;
+    Chart.defaults.color = MUTED;
+
+    // Shared "every series at this X" readout (dataviz skill's
+    // interaction.md: "One tooltip, every series" / "the crosshair
+    // finds the X") - used by every multi-point chart below except the
+    // pie (which has its own per-slice default, the standard shape for
+    // a part-to-whole chart).
+    var INDEX_TOOLTIP = { mode: "index", intersect: false };
+
+    function axisGrid() {
+        return { grid: { color: GRID }, ticks: { color: MUTED } };
+    }
+
+    function makeChart(canvasId, config) {
+        var canvas = document.getElementById(canvasId);
+        if (!canvas) { return; }
+        new Chart(canvas.getContext("2d"), config);
+    }
+
+    makeChart("chart-daily-category", {
+        type: "bar",
+        data: {
+            labels: data.dailyCategory.labels,
+            datasets: data.dailyCategory.datasets.map(function(ds) {
+                return {
+                    label: ds.label, data: ds.data,
+                    backgroundColor: ds.color, borderColor: ds.color,
+                };
+            }),
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            scales: {
+                x: Object.assign({ stacked: true }, axisGrid()),
+                y: Object.assign({ stacked: true, beginAtZero: true,
+                    title: { display: true, text: "Workflows run", color: MUTED } },
+                    axisGrid()),
+            },
+            plugins: {
+                legend: { display: true, labels: { color: INK } },
+                tooltip: INDEX_TOOLTIP,
+            },
+        },
+    });
+
+    makeChart("chart-daily-oneclick", {
+        type: "bar",
+        data: {
+            labels: data.dailyOneclick.labels,
+            datasets: data.dailyOneclick.datasets.map(function(ds) {
+                return {
+                    label: ds.label, data: ds.data,
+                    backgroundColor: ds.color, borderColor: ds.color,
+                };
+            }),
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            scales: {
+                x: Object.assign({ stacked: true }, axisGrid()),
+                y: Object.assign({ stacked: true, beginAtZero: true,
+                    title: { display: true, text: "OneClick workflows run", color: MUTED } },
+                    axisGrid()),
+            },
+            plugins: {
+                legend: { display: true, labels: { color: INK } },
+                tooltip: INDEX_TOOLTIP,
+            },
+        },
+    });
+
+    makeChart("chart-weekly", {
+        type: "bar",
+        data: {
+            labels: data.weekly.labels,
+            datasets: [{ label: "Workflows run", data: data.weekly.data,
+                backgroundColor: data.weekly.color, borderColor: data.weekly.color }],
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            scales: { x: axisGrid(), y: Object.assign({ beginAtZero: true }, axisGrid()) },
+            plugins: { legend: { display: false }, tooltip: INDEX_TOOLTIP },
+        },
+    });
+
+    makeChart("chart-alltime-category", {
+        type: "pie",
+        data: {
+            labels: data.alltimeCategory.labels,
+            datasets: [{ data: data.alltimeCategory.data,
+                backgroundColor: data.alltimeCategory.colors }],
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+                legend: { display: true, position: "bottom", labels: { color: INK } },
+                tooltip: {
+                    callbacks: {
+                        label: function(ctx) {
+                            var total = ctx.dataset.data.reduce(function(a, b) { return a + b; }, 0);
+                            var pct = total ? Math.round(1000 * ctx.parsed / total) / 10 : 0;
+                            return ctx.label + ": " + ctx.parsed + " (" + pct + "%)";
+                        },
+                    },
+                },
+            },
+        },
+    });
+
+    makeChart("chart-alltime-workflow", {
+        type: "bar",
+        data: {
+            labels: data.alltimeWorkflow.labels,
+            datasets: [{ label: "Total workflows run", data: data.alltimeWorkflow.data,
+                backgroundColor: data.alltimeWorkflow.color,
+                borderColor: data.alltimeWorkflow.color }],
+        },
+        options: {
+            indexAxis: "y",
+            responsive: true, maintainAspectRatio: false,
+            scales: {
+                x: Object.assign({ beginAtZero: true }, axisGrid()),
+                y: axisGrid(),
+            },
+            plugins: { legend: { display: false } },
+        },
+    });
+
+    makeChart("chart-blast-histogram", {
+        type: "bar",
+        data: {
+            labels: data.blastHistogram.labels,
+            datasets: [{ label: "BLAST searches", data: data.blastHistogram.data,
+                backgroundColor: data.blastHistogram.color,
+                borderColor: data.blastHistogram.color,
+                barPercentage: 1.0, categoryPercentage: 1.0 }],
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            scales: {
+                x: Object.assign({
+                    title: { display: true, text: "Query length (bp/aa)", color: MUTED } },
+                    axisGrid()),
+                y: Object.assign({ beginAtZero: true,
+                    title: { display: true, text: "BLAST searches", color: MUTED } },
+                    axisGrid()),
+            },
+            plugins: { legend: { display: false } },
+        },
+    });
+
+    makeChart("chart-user-growth", {
+        type: "line",
+        data: {
+            labels: data.userGrowth.labels,
+            datasets: [{ label: "Total registered accounts", data: data.userGrowth.data,
+                borderColor: data.userGrowth.color, backgroundColor: data.userGrowth.color + "33",
+                fill: true, tension: 0.15, pointRadius: 3 }],
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            scales: { x: axisGrid(), y: Object.assign({ beginAtZero: true }, axisGrid()) },
+            plugins: { legend: { display: false }, tooltip: INDEX_TOOLTIP },
+        },
+    });
+})();
+</script>

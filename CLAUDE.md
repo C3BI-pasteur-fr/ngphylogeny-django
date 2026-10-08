@@ -4336,3 +4336,142 @@ Covers the context processor function directly (empty vs. a real SHA)
 and the real rendered home page both ways (`override_settings
 (NGPHYLO_GIT_COMMIT=...)`, no Docker/file needed for this part since
 settings are just read at request time via the context processor).
+
+### Daily report web page: interactive Chart.js charts, email keeps static PNGs
+
+Asked for "dynamic plots, with mouse hover, etc." on both the daily
+report web page and the email. The two can't get the same answer:
+**email clients don't run JS at all** - this file's own `workspace/
+reports.py` module docstring already documented choosing matplotlib
+PNGs over anything JS-based for exactly this reason, and that reasoning
+hasn't changed. So this only touches the web page
+(`workspace.views.daily_report_view`, `/workspace/report`) - the email
+keeps rendering the same static matplotlib charts via `cid:` inline
+attachments, completely unchanged, with one addition: a "View the
+interactive report online" link at the top, since the web page is now
+the only place the hover experience actually exists.
+
+**Chart.js, not hand-built SVG, used to implement the dataviz skill's
+method.** The skill's own component reference describes building chart
+marks/tooltips/crosshairs by hand in plain SVG - for 7 chart types in
+one pass that's a lot of bespoke interaction code to get right, and
+Chart.js's own tooltip system already matches the skill's behavioral
+spec closely out of the box: `mode: "index", intersect: false` is
+exactly interaction.md's "the crosshair finds the X... one tooltip,
+every series", and its default tooltip draws directly on the canvas via
+the 2D API, not as DOM/innerHTML - so the skill's "labels are untrusted
+data, use textContent" rule is satisfied by construction, not by care
+taken per-chart. The skill's actual non-negotiables (validated color,
+one axis, fixed hue order, hover-by-default, a legend for >=2 series)
+are all still honored - just configured into Chart.js rather than drawn
+by hand. Vendored `chart-4.5.1.umd.min.js` (latest at the time, MIT,
+verified byte-identical across `cdn.jsdelivr.net` and `unpkg.com` before
+use - same discipline as every other vendored JS file in this project).
+
+**The existing matplotlib palette (`CATEGORY_COLORS` in reports.py)
+fails the dataviz skill's own validator - checked, not assumed.**
+Running `node scripts/validate_palette.js
+"#4C72B0,#DD8452,#55A868,#C44E52,#937860" --mode light` (seaborn's
+"deep" palette, this project's existing choice) hard-FAILs on chroma
+floor and CVD separation - specifically `#937860` (BLAST, brown) and
+`#C44E52` (Tool, red) sit only ΔE 2.2 apart under deuteranopia, below
+the floor by a wide margin. Since this work was already building new
+charts from scratch per the skill's own method, the new web charts use
+the skill's validated default categorical palette instead (`#2a78d6
+#eb6834 #1baf7a #eda100 #e87ba4` - slots 1-5, both the 5-category and
+the separate 4-OneClick-tool legend reuse this same validated order,
+each as its own chart's own independent legend) - confirmed passing via
+the same validator script, both 5- and 4-color subsets, before writing
+any chart code. The email's own matplotlib charts were deliberately
+left on their existing (non-validated) palette - re-coloring the email
+charts was out of scope for "I want dynamic plots" and would have been
+a visual mismatch between what this file documents as validated and
+what the email actually ships; worth a separate pass if the email's
+palette is ever revisited on its own. This site has no dark mode
+(checked directly - no `prefers-color-scheme`/`data-theme` anywhere in
+`assets/css`/`templates`), so there's no second, dark-surface-validated
+set to carry here either - light mode only, matching the rest of the
+site.
+
+**`workspace/reports.py` refactored so email and web stop duplicating
+the same seven `gather_*` calls and the same table-building logic.**
+`_gather_all()` is the one place every `gather_*` function is called;
+`_build_common_context()` builds the tables/totals both
+`daily_report_email.html` and `report_page.html` render identically
+(unchanged output - this is a pure extraction, not a behavior change,
+confirmed by the full existing email-side test suite passing unchanged).
+`build_report_context()` (email) still renders the 7 matplotlib figures
+exactly as before; the new `build_report_web_context()` (web) no longer
+calls `build_report_context()`/renders any matplotlib figure at all -
+it calls the new `build_report_web_chart_data()` instead, which returns
+plain JSON-serializable `{labels, datasets}` dicts per chart (color
+already picked from the validated palette above, server-side). This is
+a genuine performance win on top of being the actual point of the
+change: assembling a dict of numbers for the browser to chart is
+cheaper than rendering 7 PNG figures, on the same 15-minute cache
+(`REPORT_WEB_CACHE_TTL`) this page already had for exactly this "don't
+redo slow work on every page view" reason.
+
+**One real wrinkle Chart.js forced that matplotlib didn't need**: it
+has no built-in histogram chart type, so the BLAST query-length
+distribution (`render_blast_query_length_histogram`'s web counterpart)
+needed its own bucketing - `_histogram_bins()`, a plain-Python
+equal-width bucketer matching matplotlib's own `ax.hist` default
+behavior (min..max split into N equal-width buckets), deliberately not
+reaching for `numpy.histogram` even though numpy is already installed
+(biopython's own build-time dependency, not a declared runtime
+dependency of this app - see `requirement.txt`'s own comment on this) -
+no reason to lean on that for one bucket count.
+
+**Shared template, branched rendering, not two copies.**
+`templates/workspace/_report_body.html` is still the single template
+both `daily_report_email.html` and `report_page.html` include (tables,
+headings, totals - all unchanged, all still identical between the two)
+- only each of the 7 chart slots gained a `{% if chart_mode == 'web' %}`
+branch: an `<img>` referencing the matplotlib PNG in email mode (as
+before), an empty `<canvas id="...">` in web mode, filled in by a new
+`templates/workspace/_report_charts_init.html` (Chart.js config per
+chart, reading `chart_data_json` - a single `JSON.parse("{{
+chart_data_json|escapejs }}")` call, the one place this touches
+server-built data, matching this codebase's established escapejs-
+embedding convention elsewhere e.g. the workspace history page's
+`historySteps`) - included only by `report_page.html`, after
+`_report_body.html`, so every canvas it looks for already exists. The
+`daily_category_chart`/etc. context keys mean the same "is there data"
+thing in both modes (truthy shows a chart, falsy shows the existing
+empty-state message) - just a `cid:`/`data:` string in email mode vs. a
+plain bool in web mode now that web no longer renders an image at all;
+`{% if %}` doesn't care which.
+
+**Verified for real, not just read over** - the dataviz skill's own
+final step ("render it and look at it"): seeded a real sqlite DB with
+400 synthetic `WorkspaceHistory` rows across categories/days, 60
+`BlastRun` rows, 31 `User` signups, loaded the real page in headless
+Chrome as a logged-in staff user, and confirmed zero JS console errors,
+all 7 canvases present, Chart.js genuinely loaded. Screenshotted the
+full page (two captures, scrolled) and eyeballed every chart - stacked
+bars, the pie's bottom legend, the horizontal ranked bar, the histogram
+bins, the filled line chart - for label collisions/overflow per the
+skill's own checklist; none found. Confirmed hover is real, not just
+styled to look interactive: computed an exact on-bar coordinate from
+Chart.js's own internal bar geometry (a guessed coordinate initially
+missed the bar and showed zero active elements - worth noting, since a
+naive hover test can give a false negative), dispatched a real
+`Input.dispatchMouseEvent` mousemove there, and confirmed Chart.js
+registered an active element with `tooltip.opacity === 1`. Separately
+confirmed the email side is genuinely untouched: `render_report_email()`
+still returns all 7 PNG images, the HTML has zero real `<canvas>`
+elements and no Chart.js script reference, and the new "view online"
+link resolves via the existing `site_url()` helper
+(`workspace/emails.py`) to `/workspace/report` (`reverse('daily_report')`).
+
+Regression tests: `workspace.tests.DailyReportTest.
+test_build_report_web_context_embeds_interactive_chart_data` (replaces
+the old base64-data-URI test - asserts `chart_data_json` carries real
+per-chart data and contains no `data:image/png;base64,` at all) and
+`.test_build_report_web_context_is_cached` (rewritten to wrap/count
+`_gather_all()` instead of the now-email-only `build_report_context()`,
+since the web path no longer calls that at all).
+`workspace.tests.DailyReportViewTest.test_staff_user_sees_the_report`
+now asserts a real `<canvas>` id and the vendored Chart.js script path
+are present, and that no base64 PNG data URI is.

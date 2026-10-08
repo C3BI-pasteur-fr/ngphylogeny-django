@@ -1,10 +1,17 @@
 {% comment %}
 Shared report content, included by both daily_report_email.html
-(chart src values already prefixed "cid:...") and report_page.html
-(chart src values already full "data:image/png;base64,..." URIs) - see
-workspace/reports.py's render_report_email()/build_report_web_context().
-This partial never decides the src format itself, just renders whatever's
-already in context.
+(chart_mode="email", chart src values prefixed "cid:...") and
+report_page.html (chart_mode="web") - see workspace/reports.py's
+render_report_email()/build_report_web_context(). In email mode each
+chart slot below is a static <img> (the matplotlib PNG, referenced by
+its cid:); in web mode it's an empty <canvas>, filled in by Chart.js
+once templates/workspace/_report_charts_init.html's script runs -
+report_page.html includes that script only after this partial, so every
+canvas already exists in the DOM by the time it looks for them. Either
+way, the daily_category_chart/daily_oneclick_chart/etc. context keys
+mean the same thing to this partial regardless of mode: truthy means
+"there's data to show a chart for" (a cid: string in email mode, a
+plain bool in web mode - {% if %} doesn't care which).
 {% endcomment %}
 <h1>NGPhylogeny.fr &ndash; Daily Workflow Report</h1>
 <p class="report-subtitle">Generated {{ generated_at|date:"l, F j, Y H:i" }} UTC</p>
@@ -13,7 +20,11 @@ already in context.
   <h2>Last 7 days ({{ week_total }} workflow{{ week_total|pluralize }} run)</h2>
 
   {% if daily_category_chart %}
-    <img class="report-chart" src="{{ daily_category_chart }}" alt="Workflows per day, by category">
+    {% if chart_mode == 'web' %}
+      <div class="report-chart-wrap"><canvas id="chart-daily-category" role="img" aria-label="Workflows per day, by category"></canvas></div>
+    {% else %}
+      <img class="report-chart" src="{{ daily_category_chart }}" alt="Workflows per day, by category">
+    {% endif %}
   {% else %}
     <p class="report-empty">No workflows were run in the last 7 days.</p>
   {% endif %}
@@ -40,7 +51,11 @@ already in context.
 
   {% if daily_oneclick_chart %}
     <h3>OneClick workflows, by tool</h3>
-    <img class="report-chart" src="{{ daily_oneclick_chart }}" alt="OneClick workflows per day, by tool">
+    {% if chart_mode == 'web' %}
+      <div class="report-chart-wrap"><canvas id="chart-daily-oneclick" role="img" aria-label="OneClick workflows per day, by tool"></canvas></div>
+    {% else %}
+      <img class="report-chart" src="{{ daily_oneclick_chart }}" alt="OneClick workflows per day, by tool">
+    {% endif %}
   {% endif %}
 </div>
 
@@ -49,12 +64,20 @@ already in context.
 
   {% if weekly_chart %}
     <h3>Per week or month</h3>
-    <img class="report-chart" src="{{ weekly_chart }}" alt="Workflow history, since the beginning">
+    {% if chart_mode == 'web' %}
+      <div class="report-chart-wrap"><canvas id="chart-weekly" role="img" aria-label="Workflow history, since the beginning"></canvas></div>
+    {% else %}
+      <img class="report-chart" src="{{ weekly_chart }}" alt="Workflow history, since the beginning">
+    {% endif %}
   {% endif %}
 
   <h3>By category</h3>
   {% if alltime_category_chart %}
-    <img class="report-chart" src="{{ alltime_category_chart }}" alt="All-time workflows by category">
+    {% if chart_mode == 'web' %}
+      <div class="report-chart-wrap report-chart-wrap-square"><canvas id="chart-alltime-category" role="img" aria-label="All-time workflows by category"></canvas></div>
+    {% else %}
+      <img class="report-chart" src="{{ alltime_category_chart }}" alt="All-time workflows by category">
+    {% endif %}
   {% else %}
     <p class="report-empty">No workflows have been run yet.</p>
   {% endif %}
@@ -67,7 +90,11 @@ already in context.
 
   <h3>By workflow / tool</h3>
   {% if alltime_workflow_chart %}
-    <img class="report-chart" src="{{ alltime_workflow_chart }}" alt="All-time workflows by workflow or tool">
+    {% if chart_mode == 'web' %}
+      <div class="report-chart-wrap"><canvas id="chart-alltime-workflow" role="img" aria-label="All-time workflows by workflow or tool"></canvas></div>
+    {% else %}
+      <img class="report-chart" src="{{ alltime_workflow_chart }}" alt="All-time workflows by workflow or tool">
+    {% endif %}
   {% endif %}
   <table>
     <tr><th>Workflow / tool</th><th class="report-num">Count</th></tr>
@@ -78,7 +105,11 @@ already in context.
 
   <h3>BLAST query lengths ({{ blast_length_count }} search{{ blast_length_count|pluralize }} with a known length)</h3>
   {% if blast_length_chart %}
-    <img class="report-chart" src="{{ blast_length_chart }}" alt="All-time BLAST query length histogram">
+    {% if chart_mode == 'web' %}
+      <div class="report-chart-wrap"><canvas id="chart-blast-histogram" role="img" aria-label="All-time BLAST query length histogram"></canvas></div>
+    {% else %}
+      <img class="report-chart" src="{{ blast_length_chart }}" alt="All-time BLAST query length histogram">
+    {% endif %}
   {% else %}
     <p class="report-empty">No BLAST searches with a known query length yet.</p>
   {% endif %}
@@ -88,7 +119,11 @@ already in context.
   <h2>Users ({{ total_users }} registered account{{ total_users|pluralize }})</h2>
 
   {% if user_growth_chart %}
-    <img class="report-chart" src="{{ user_growth_chart }}" alt="Registered accounts over time">
+    {% if chart_mode == 'web' %}
+      <div class="report-chart-wrap"><canvas id="chart-user-growth" role="img" aria-label="Registered accounts over time"></canvas></div>
+    {% else %}
+      <img class="report-chart" src="{{ user_growth_chart }}" alt="Registered accounts over time">
+    {% endif %}
   {% else %}
     <p class="report-empty">No registered accounts yet.</p>
   {% endif %}
