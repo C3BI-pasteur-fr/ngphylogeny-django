@@ -4578,3 +4578,27 @@ production (caught by `TestCase`'s own FK-constraint teardown check,
 sqlite enforces deferred FK checks the same way Postgres does here),
 the other with the pre-fix (missing) `update_fields` - then reverted
 back and confirmed all six pass.
+
+**The code fix alone doesn't help until `deploy-prod` actually ships
+it** - the running `ngphylogeny-celery-worker` pod is still the old
+image. Rather than leave the real 524/158-row backlog sitting until
+that redeploy happens, cleared it manually in the meantime: `kubectl
+exec`'d into the live worker pod and called both task functions
+directly (`python manage.py shell -c "..."`, not `.delay()` - a Celery
+`.delay()` call would just hand them back to the same
+`--concurrency=2` worker to run concurrently, reproducing the exact
+race being worked around here) **strictly sequentially, waiting for
+`deleteoldgalaxyworkflows()` to fully finish before starting
+`deleteoldgalaxyhistory()`**. This works around the bug without needing
+the code fix deployed yet, for a reason worth being precise about: the
+bug is triggered by *concurrent* execution leaving a stale in-memory
+reference on an already-fetched object in the *other* task - running
+them one after another, each against a freshly-evaluated queryset
+reading already-committed DB state, never creates that condition in
+the first place, regardless of which code version is running. Confirmed
+directly against the real DB afterward: both the stale-history and
+stale-workflow counts (from the same two queries used throughout this
+investigation) dropped to **0**. This doesn't make the code fix
+unnecessary - the scheduled 00:00 UTC run will go back to running both
+tasks concurrently again on every future night until the fixed image is
+actually deployed.
