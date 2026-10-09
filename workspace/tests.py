@@ -8,6 +8,7 @@ import requests
 from django.contrib.auth.models import User
 from django.core import mail, signing
 from django.core.cache import cache
+from django.db import connection
 from django.template.loader import render_to_string
 from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
@@ -128,6 +129,77 @@ class DeleteOldGalaxyHistoryTest(TestCase):
         h_ok.refresh_from_db()
         self.assertFalse(h_fail.deleted)
         self.assertTrue(h_ok.deleted)
+
+    def test_concurrently_deleted_linked_workflow_does_not_block_the_history(self):
+        """
+        Real production incident, caught live: workflows.tasks.
+        deleteoldgalaxyworkflows() runs at the exact same scheduled time
+        as this task, on a separate worker process (CELERY_BEAT_SCHEDULE).
+        When it deletes a Workflow this task's own already-fetched
+        WorkspaceHistory row still points to, e.workflow_id is stale in
+        memory - accessing e.workflow used to raise Workflow.DoesNotExist
+        uncaught, aborting that row via the generic except Exception
+        below (399 rows hit this in a single real run on 2026-10-09).
+
+        Deletes the Workflow via raw SQL, not wf.delete()/the ORM - the
+        ORM's own SET_NULL emulation would correctly null out
+        workspace_workspacehistory.workflow_id as part of that delete,
+        which wouldn't reproduce the bug at all (a freshly re-fetched row
+        would just see workflow=None, no exception). The real race is
+        specifically that Django's SET_NULL never touches an *already*
+        in-memory Python object fetched before the concurrent delete -
+        this reproduces that exact stale-reference condition.
+        """
+        wf = Workflow.objects.create(
+            galaxy_server=self.server, id_galaxy='wfid-race',
+            name='FastME OneClick', category='duplicated',
+            description='FastME OneClick', slug='wfid-race_copy')
+        h = self._make_old_history(workflow=wf)
+        with connection.cursor() as cursor:
+            cursor.execute(
+                'DELETE FROM workflows_workflow WHERE id = %s', [wf.pk])
+
+        with patch('workspace.tasks.deletegalaxyhistory', return_value=True):
+            deleteoldgalaxyhistory()
+
+        h.refresh_from_db()
+        self.assertTrue(h.deleted)
+        # The row's own workflow_id is still the deliberately-dangling
+        # value from the raw DELETE above (real-world, Django's SET_NULL
+        # emulation would have updated it - see this test's own docstring
+        # for why that's not usable here) - TestCase's own teardown runs
+        # a real FK constraint check against the test DB, which would
+        # otherwise fail on exactly the inconsistent state this test
+        # intentionally created. Clean it up now that the assertions
+        # that needed it are done.
+        WorkspaceHistory.objects.filter(pk=h.pk).update(workflow_id=None)
+
+    def test_does_not_rewrite_a_stale_workflow_id_on_the_final_save(self):
+        """
+        The other half of the same race: if the concurrent delete lands
+        between the e.workflow access above and this task's own final
+        e.save(), a bare save() would rewrite every field as loaded in
+        memory - including the now-stale workflow_id - which Postgres's
+        own FK constraint rejects outright ("violates foreign key
+        constraint ...workflow_id", 6 occurrences in the same real run).
+        update_fields restricts the UPDATE to just what this task
+        actually changes, so workflow_id is never part of it regardless
+        of what happened to it concurrently - checked directly against
+        the real save() call, not just that the row ends up correct
+        (which test_marks_deleted_and_clears_json_on_success above
+        already covers and wouldn't, on its own, catch a regression back
+        to a bare save()).
+        """
+        h = self._make_old_history()
+        with patch('workspace.tasks.deletegalaxyhistory', return_value=True), \
+             patch('workspace.models.WorkspaceHistory.save',
+                   autospec=True) as mock_save:
+            deleteoldgalaxyhistory()
+        mock_save.assert_called_once()
+        _, kwargs = mock_save.call_args
+        self.assertEqual(
+            set(kwargs.get('update_fields', [])),
+            {'deleted', 'history_content_json', 'history_info_json'})
 
 
 class UpdateWorkspaceStatusStaleRunTest(TestCase):

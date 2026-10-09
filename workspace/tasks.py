@@ -14,6 +14,7 @@ from email.mime.image import MIMEImage
 from smtplib import SMTPException
 from workspace.models import WorkspaceHistory
 from galaxy.decorator import galaxy_connection
+from workflows.models import Workflow
 from workflows.tasks import deletegalaxyworkflow
 
 from django.conf import settings
@@ -203,11 +204,29 @@ def deleteoldgalaxyhistory():
     for e in WorkspaceHistory.objects.filter(deleted=False).filter(finished=True).filter(created_date__lte=datecutoff):
         try:
             workflow_deleted = True
-            if e.workflow is not None:
-                workflow_deleted = deletegalaxyworkflow(e.workflow.id_galaxy)
+            try:
+                linked_workflow = e.workflow
+            except Workflow.DoesNotExist:
+                # workflows.tasks.deleteoldgalaxyworkflows() runs at the
+                # exact same scheduled time as this task, on a separate
+                # worker process (see CELERY_BEAT_SCHEDULE) - if it
+                # already deleted this row's linked Workflow (a real
+                # w.delete(), not a soft delete) between when this
+                # queryset was evaluated and this point, e.workflow_id is
+                # a stale in-memory value Django's own SET_NULL emulation
+                # never updated on this already-fetched object. Confirmed
+                # live in production: this raised uncaught on ~400 rows
+                # in a single run, aborting all of them via the generic
+                # except Exception below. There's genuinely nothing left
+                # to delete on the workflow side either way, so this is
+                # exactly the same as e.workflow having been None to
+                # begin with.
+                linked_workflow = None
+            if linked_workflow is not None:
+                workflow_deleted = deletegalaxyworkflow(linked_workflow.id_galaxy)
                 if workflow_deleted:
-                    e.workflow.deleted = True
-                    e.workflow.save()
+                    linked_workflow.deleted = True
+                    linked_workflow.save()
 
             history_deleted = deletegalaxyhistory(e.history)
 
@@ -219,7 +238,17 @@ def deleteoldgalaxyhistory():
                 # reclaims this (potentially sizeable) storage.
                 e.history_content_json = ""
                 e.history_info_json = ""
-                e.save()
+                # update_fields, not a bare save(): e.workflow_id can be
+                # just as stale here as above (same concurrent-delete
+                # race, same already-fetched object) - a full save()
+                # would write that stale id straight back and hit
+                # Postgres's own FK constraint ("violates foreign key
+                # constraint ...workflow_id") exactly as confirmed live in
+                # production. Restricting the UPDATE to the fields this
+                # task actually changes means workflow_id is never part
+                # of it, regardless of what happened to it concurrently.
+                e.save(update_fields=[
+                    'deleted', 'history_content_json', 'history_info_json'])
             else:
                 # Leave deleted=False: deletegalaxyworkflow/
                 # deletegalaxyhistory already logged why, and this will be

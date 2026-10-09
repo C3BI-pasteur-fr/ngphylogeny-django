@@ -4475,3 +4475,106 @@ since the web path no longer calls that at all).
 `workspace.tests.DailyReportViewTest.test_staff_user_sees_the_report`
 now asserts a real `<canvas>` id and the vendored Chart.js script path
 are present, and that no base64 PNG data URI is.
+
+### Real production race between `deleteoldgalaxyhistory` and `deleteoldgalaxyworkflows`
+
+Asked to check that old-history/workflow cleanup was actually working
+on the real Kubernetes prod cluster. First pass (`ngphylogenyfr-prod`,
+2026-10-08) looked clean: zero `WorkspaceHistory`/`Workflow` rows past
+their retention window still `deleted=false`. That used the *default*
+retention (14 days) though - the user pointed out prod actually has
+`NGPHYLO_WORKSPACE_RETENTION_DAYS`/`NGPHYLO_WORKFLOW_RETENTION_DAYS`
+both set to **7**, confirmed directly (`kubectl exec ... env`) and via
+`kubectl rollout history` back to revision 60 - not a value that had
+just changed. Re-checked against the real 7-day window: 771 stale
+`WorkspaceHistory` rows and 138 stale `Workflow` rows, both genuinely
+overdue. First theory (these settings are read once at Django process
+start - same convention as every other `*_DAYS`/`*_HOURS` setting in
+this file - so a long-running worker could be enforcing a stale cached
+value): plausible and partially true (today's pod had just restarted,
+`0` rows older than 14 days remained, consistent with a worker that had
+been enforcing 14 days until that restart) - a real Galaxy delete+purge
+call against one sample row succeeded instantly with zero error, ruling
+out any Galaxy-side cause.
+
+**Scheduled a one-shot follow-up check for the next day via `CronCreate`
+(`recurring: false`) to verify the backlog actually cleared** once a
+real 2am-equivalent run happened under the freshly-loaded config -
+session-only (no disk persistence), which is why resuming it the next
+day needed the user to paste the original prompt back in (the session
+had been idle overnight) rather than it firing on its own silently.
+
+**It hadn't cleared - 524 of 771 history rows and, worse, more (158 vs
+138) workflow rows than the day before.** That ruled out "just needed a
+restart" as the full story. Checked `kubectl logs --since=24h` for both
+tasks directly: `deleteoldgalaxyworkflows` and `deleteoldgalaxyhistory`
+are **scheduled at the exact same time** (see `CELERY_BEAT_SCHEDULE`)
+and genuinely run **concurrently**, confirmed live - both tasks'
+"Start"/"received" log lines share the identical timestamp
+(`00:00:00,03x`), on two different `ForkPoolWorker`s. 405 of 405
+warnings in that single run were the same two symptoms:
+
+- **399x `Workflow matching query does not exist`** -
+  `deleteoldgalaxyhistory()`'s `if e.workflow is not None:` check is
+  itself what raises: `deleteoldgalaxyworkflows()` calls `w.delete()`
+  (a real hard delete, with Django's own `SET_NULL` emulation updating
+  any `WorkspaceHistory.workflow_id` pointing to it) on the *same*
+  `Workflow` row, concurrently, on the other worker process - but that
+  `SET_NULL` UPDATE only ever touches the *database* row, never an
+  already-fetched Python object sitting in `deleteoldgalaxyhistory()`'s
+  own queryset iteration. Accessing `e.workflow` on that stale object
+  re-queries by the now-stale `workflow_id` and finds nothing -
+  `Workflow.DoesNotExist`, uncaught, falling into the generic `except
+  Exception` and silently skipping that entire row, forever (it stays
+  `deleted=False`, gets re-selected and re-fails the same way on every
+  future run, for as long as both tasks keep racing on it).
+- **6x `violates foreign key constraint
+  ...workflow_id`** - the other half of the same race: when the timing
+  lands *after* `e.workflow` was already resolved successfully but
+  *before* this task's own final `e.save()`, that bare `save()`
+  rewrites every field as loaded in memory - including the now-stale
+  `workflow_id` - straight back into the row, which Postgres's own FK
+  constraint rejects outright (confirmed earlier this same session,
+  separately, that this constraint really is enforced at the DB level
+  here, `NO ACTION` not `CASCADE` - see "Workflow duplicates and the
+  Celery cleanup jobs" above).
+
+Both bugs live in `workspace.tasks.deleteoldgalaxyhistory()` alone
+(`workflows.tasks.deleteoldgalaxyworkflows()` only ever calls `w.delete()`,
+never a partial field save, so it isn't exposed to the second failure
+mode). Fixed with two independent changes, not a scheduling change
+(staggering the two tasks' cron times would reduce how *often* this
+race fires, but wouldn't fix either underlying defect, and nothing
+guarantees two independently-scheduled tasks never overlap again in
+the future anyway):
+- `e.workflow` access wrapped in `try/except Workflow.DoesNotExist`,
+  treated identically to `e.workflow` having been `None` to begin with
+  - there's genuinely nothing left to delete on the workflow side
+    either way.
+- The final `e.save()` now passes `update_fields=['deleted',
+  'history_content_json', 'history_info_json']` - restricting the
+  `UPDATE` to only the fields this task actually changes means
+  `workflow_id` is never part of it, regardless of what happened to it
+  concurrently.
+
+Regression tests: `workspace.tests.DeleteOldGalaxyHistoryTest.
+test_concurrently_deleted_linked_workflow_does_not_block_the_history`
+deletes the linked `Workflow` via a **raw SQL** `DELETE` rather than
+`wf.delete()`/the ORM - deliberately, since the ORM's own `SET_NULL`
+emulation would correctly null out `workflow_id` as part of that
+delete, which wouldn't reproduce the bug at all (a freshly re-fetched
+row would just see `workflow=None` already). The raw delete reproduces
+the one thing that actually matters: a *stale in-memory* reference on
+an object already fetched before the concurrent delete happened - the
+same thing Django's `SET_NULL` can never retroactively fix.
+`.test_does_not_rewrite_a_stale_workflow_id_on_the_final_save`
+patches `WorkspaceHistory.save` directly and asserts the exact
+`update_fields` set, since the end-DB-state alone (already covered by
+the pre-existing success test) wouldn't itself catch a regression back
+to a bare `save()`. Confirmed both tests actually catch the original
+bug: reverted the `workspace/tasks.py` fix and re-ran this class - one
+failed with the exact same `IntegrityError` message seen live in
+production (caught by `TestCase`'s own FK-constraint teardown check,
+sqlite enforces deferred FK checks the same way Postgres does here),
+the other with the pre-fix (missing) `update_fields` - then reverted
+back and confirmed all six pass.
