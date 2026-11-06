@@ -1,0 +1,11 @@
+{% extends "error.html" %}
+{% block code-error %}
+    <h1>413</h1>
+{% endblock %}
+{% block message-error %}
+    <h4>This file is too large</h4>
+    <p>
+        NGPhylogeny.fr accepts files of up to {{ max_upload_mb }} MB. Please
+        go back and choose a smaller file.
+    </p>
+{% endblock %}

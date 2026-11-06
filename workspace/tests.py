@@ -1,7 +1,7 @@
 import io
 import json
 import zipfile
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone
 from unittest.mock import Mock, patch
 
 import requests
@@ -2625,6 +2625,21 @@ class GalaxyLoadTest(TestCase):
         stop = 'clearInterval(window.historyRefreshTimer)'
         self.assertContains(unmonitored, stop)
         self.assertNotContains(running, stop)
+
+    def test_pause_outlasts_the_next_monitoring_beat(self):
+        """
+        Prod: failures land just after a beat and DatabaseCache truncates
+        expiry to the second, so a 60s pause was over by the next beat.
+        """
+        started = 1794000000
+        with patch('django.core.cache.backends.base.time.time',
+                   return_value=started + 0.36):
+            pause_galaxy_polling()
+        next_beat = datetime.fromtimestamp(
+            started + 60.09, tz=dt_timezone.utc)
+        with patch('django.core.cache.backends.db.tz_now',
+                   return_value=next_beat):
+            self.assertTrue(galaxy_polling_paused())
 
     def test_outage_pauses_monitoring_for_every_history(self):
         self._history('hist1')

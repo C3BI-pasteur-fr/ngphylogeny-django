@@ -2,8 +2,10 @@ from crispy_forms.bootstrap import FormActions
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Layout, Field, Div, Fieldset
 from django import forms
+from django.core.exceptions import ValidationError
 from .models import ToolFieldWhiteList
 import json
+import math
 
 
 def map_galaxy_tool_input(attr):
@@ -37,6 +39,37 @@ def map_galaxy_tool_input(attr):
             field_map['choices'].append((data.get('id'), data.get('name')))
 
     return field_map
+
+
+def numeric_bound(attr, key, cast):
+    """
+    A tool parameter's min or max as Galaxy declares it, None if it has none.
+    """
+    try:
+        return cast(float(attr.get(key)))
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def float_range_validator(minimum, maximum):
+    """
+    Float parameters stay plain text fields, so that what Galaxy receives is
+    what the visitor typed. Empty values never reach a validator.
+    """
+    def validate(value):
+        try:
+            number = float(value)
+        except ValueError:
+            raise ValidationError("Enter a number.")
+        if not math.isfinite(number):
+            raise ValidationError("Enter a number.")
+        if minimum is not None and number < minimum:
+            raise ValidationError(
+                "Ensure this value is greater than or equal to %s." % minimum)
+        if maximum is not None and number > maximum:
+            raise ValidationError(
+                "Ensure this value is less than or equal to %s." % maximum)
+    return validate
 
 
 class ToolForm(forms.Form):
@@ -106,7 +139,18 @@ class ToolForm(forms.Form):
                 **map_galaxy_tool_input(attrfield))
 
         elif fieldtype == "integer":
+            # Galaxy refuses an out-of-range value with a 400 once the run
+            # is submitted: catching it here gives a field error instead.
             self.fields[field_id] = forms.IntegerField(
+                min_value=numeric_bound(attrfield, 'min', int),
+                max_value=numeric_bound(attrfield, 'max', int),
+                **map_galaxy_tool_input(attrfield))
+
+        elif fieldtype == "float":
+            self.fields[field_id] = forms.CharField(
+                validators=[float_range_validator(
+                    numeric_bound(attrfield, 'min', float),
+                    numeric_bound(attrfield, 'max', float))],
                 **map_galaxy_tool_input(attrfield))
 
         else:

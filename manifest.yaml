@@ -707,11 +707,10 @@ metadata:
     role: web
   annotations:
     kubernetes.io/ingress.class: "${INGRESS_CLASS}"
-    # Uploaded alignment files can be sizeable - don't let nginx's
-    # default body-size cap silently reject them (matches drmab-web,
-    # which handles arbitrarily large FASTQ uploads for the same
-    # reason).
-    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    # settings.NGPHYLO_MAX_UPLOAD_MB plus UPLOAD_FORM_OVERHEAD_MB. An upload
+    # is spooled to the pod's disk, and a large one gets the pod evicted
+    # for exceeding its 256Mi ephemeral-storage limit - see CLAUDE.md.
+    nginx.ingress.kubernetes.io/proxy-body-size: "51m"
 spec:
   rules:
     - host: ${PUBLIC_URL}

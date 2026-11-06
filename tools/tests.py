@@ -6,7 +6,61 @@ from django.test import TestCase
 from django.urls import reverse
 
 from galaxy.models import GalaxyUser, Server
+from tools.forms import ToolForm
 from tools.models import Citation, Tool, ToolFlag
+
+
+class ToolFormNumericBoundsTest(TestCase):
+    """
+    Prod: windowsSize=-13 only got refused by Galaxy, with a 400 once the run
+    was submitted, which surfaced as a 500. Parameters as Galaxy describes
+    them, from show_tool(io_details=True).
+    """
+    PARAMS = [
+        {'name': 'windowsSize', 'type': 'integer', 'min': 1, 'max': None,
+         'value': '3', 'label': 'Window'},
+        {'name': 'iterations', 'type': 'integer', 'min': 0, 'max': 1000,
+         'value': '0', 'label': 'Iterations'},
+        {'name': 'cutoff', 'type': 'float', 'min': 0.0, 'max': 1.0,
+         'value': '0.8', 'label': 'Cutoff'},
+        {'name': 'ep', 'type': 'float', 'min': None, 'max': None,
+         'value': '0.123', 'label': 'Offset'},
+    ]
+
+    def _form(self, **values):
+        fields = {'windowsSize': '1', 'iterations': '2', 'cutoff': '3',
+                  'ep': '4'}
+        data = {fields[name]: value for name, value in values.items()}
+        return ToolForm(tool_params=self.PARAMS, data=data,
+                        fields_ids_mapping={}, n=0)
+
+    def test_values_outside_the_bounds_are_field_errors(self):
+        for name, value in (('windowsSize', '-13'), ('iterations', '1001'),
+                            ('cutoff', '1.5'), ('cutoff', '-0.1')):
+            form = self._form(**{name: value})
+            self.assertFalse(form.is_valid(), (name, value))
+
+    def test_the_bounds_themselves_are_accepted(self):
+        form = self._form(windowsSize='1', iterations='1000', cutoff='1')
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_float_without_bounds_only_has_to_be_a_number(self):
+        self.assertTrue(self._form(ep='-99.5').is_valid())
+        for value in ('abc', '0,5', 'nan', 'inf'):
+            self.assertFalse(self._form(ep=value).is_valid(), value)
+
+    def test_float_reaches_galaxy_as_typed(self):
+        form = self._form(cutoff='0.50')
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data['3'], '0.50')
+
+    def test_empty_values_stay_allowed(self):
+        self.assertTrue(self._form().is_valid())
+
+    def test_integer_bounds_reach_the_browser(self):
+        html = str(self._form()['2'])
+        self.assertIn('min="0"', html)
+        self.assertIn('max="1000"', html)
 
 
 class ToolCanRunOnDataTest(TestCase):

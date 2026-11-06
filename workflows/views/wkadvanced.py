@@ -303,6 +303,15 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
             if not params[step_id]:
                 del params[step_id]
 
+    def discard_copy(self, wf, workflow, gi):
+        """
+        Removes the copy post() made for a submission that went nowhere.
+        A workflow built by the user or being rerun has no copy, it's the
+        original the visitor is about to correct and resubmit.
+        """
+        if workflow is not wf:
+            workflow.delete_from_galaxy(gi)
+
     def post(self, request, *args, **kwargs):
         gi = request.galaxy
 
@@ -347,7 +356,7 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
             elif not uploaded_file:
                 context = self.get_context_data(object=self.object)
                 context['fileerror'] = "No input file given"
-                workflow.delete_from_galaxy(gi)
+                self.discard_copy(wf, workflow, gi)
                 return render(request, self.template_name, context)
             elif isinstance(uploaded_file, InMemoryUploadedFile) or isinstance(uploaded_file, TemporaryUploadedFile):
                 upload_filename = uploaded_file.name.encode('ascii','ignore').decode('ascii')
@@ -362,12 +371,12 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
             except WorkflowInputFileFormatError as e:
                 context = self.get_context_data(object=self.object)
                 context['fileerror'] = str(e)
-                workflow.delete_from_galaxy(gi)
+                self.discard_copy(wf, workflow, gi)
                 return render(request, self.template_name, context)
 
         # We check form validity
         if not self.check_form_validity(request, context):
-            workflow.delete_from_galaxy(gi)
+            self.discard_copy(wf, workflow, gi)
             return self.get(request, *args, **kwargs)
 
         # We create an history (local and on galaxy)
@@ -396,13 +405,13 @@ class WorkflowAdvancedFormView(SingleObjectMixin,
             self.analyze_forms(request, context, workflow, params, gi, wksph, nseq, length, seqaa)
         except WorkflowInvalidFormError as e:
             # if one form is not valid
-            workflow.delete_from_galaxy(gi)
+            self.discard_copy(wf, workflow, gi)
             delete_history(request, wksph.history)
             return self.get(request, *args, **kwargs)
         except WorkflowInputFileFormatError as e:
             context = self.get_context_data(object=self.object)
             context['fileerror'] = str(e)
-            workflow.delete_from_galaxy(gi)
+            self.discard_copy(wf, workflow, gi)
             # Same cleanup as the sibling WorkflowInvalidFormError branch
             # just above - wksph/its Galaxy history was already created
             # before analyze_forms() ever ran (see create_history() call

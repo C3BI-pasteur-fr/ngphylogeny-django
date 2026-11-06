@@ -181,6 +181,9 @@ class AccountCreationDisabledTest(TestCase):
         self.assertFalse(
             User.objects.filter(username='shouldnotexist').exists())
 
+    def test_login_page_requests_no_missing_stylesheet(self):
+        self.assertNotContains(self.client.get(reverse('login')), 'login.css')
+
     def test_login_page_no_longer_links_to_signup(self):
         response = self.client.get(reverse('login'))
         self.assertNotContains(response, reverse('create_account'))

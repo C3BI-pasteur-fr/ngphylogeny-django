@@ -57,6 +57,30 @@ class MaintenanceModeMiddleware:
         return self.get_response(request)
 
 
+class UploadSizeLimitMiddleware:
+    """
+    Refuses an oversized request from its Content-Length, before Django reads
+    the body. Uploads are spooled to /tmp, and going past the pod's 256Mi
+    ephemeral-storage limit gets it evicted, taking the site down (see
+    CLAUDE.md). On Kubernetes the ingress enforces the same limit first; this
+    covers deployments without one, such as docker-compose.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        limit = (settings.NGPHYLO_MAX_UPLOAD_MB
+                 + settings.UPLOAD_FORM_OVERHEAD_MB) * 1024 * 1024
+        try:
+            content_length = int(request.META.get('CONTENT_LENGTH') or 0)
+        except ValueError:
+            content_length = 0
+        if content_length > limit:
+            return TemplateResponse(request, '413.html', status=413).render()
+        return self.get_response(request)
+
+
 class GalaxyUnavailableMiddleware:
     """
     Turns a Galaxy outage raised by any view into the friendly 503 page

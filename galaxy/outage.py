@@ -15,7 +15,11 @@ from django.core.cache import cache
 GALAXY_UNREACHABLE_EXCEPTIONS = (
     ConnectionError, requests.exceptions.RequestException)
 
-GALAXY_POLLING_PAUSE_SECONDS = 60
+# Must outlast launchmonitorworkspaces' 60s beat period by a clear margin.
+# A failure lands a fraction of a second after a beat, and DatabaseCache
+# truncates expiry to the second, so a 60s pause expired just before the next
+# beat and never skipped a single one (seen on prod, 2026-11-06).
+GALAXY_POLLING_PAUSE_SECONDS = 90
 GALAXY_POLLING_PAUSE_KEY = 'galaxy_polling_paused'
 
 

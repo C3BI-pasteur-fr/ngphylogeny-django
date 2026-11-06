@@ -610,6 +610,32 @@ class WorkflowAdvancedSubmitCleanupTest(TestCase):
 
         delete_history_mock.assert_called_once_with(request, 'fakehistid')
 
+    def _reject_form(self, view, request):
+        view.check_form_validity = Mock(return_value=False)
+        view.get = Mock(return_value=HttpResponse())
+        view.post(request)
+        view.get.assert_called_once()
+
+    def test_rejected_form_keeps_the_users_own_workflow(self):
+        """
+        wkmake and rerun submit the user's own workflow rather than a copy,
+        so deleting it here left them nothing to correct and resubmit.
+        """
+        for category in ('automaker', 'duplicated'):
+            view, request, workflow = self._make_view_and_request()
+            workflow.category = category
+            self._reject_form(view, request)
+            workflow.delete_from_galaxy.assert_not_called()
+
+    def test_rejected_form_deletes_the_copy_of_a_base_workflow(self):
+        view, request, workflow = self._make_view_and_request()
+        workflow.category = 'base'
+        copy = Mock(json=workflow.json)
+        workflow.duplicate.return_value = copy
+        self._reject_form(view, request)
+        copy.delete_from_galaxy.assert_called_once_with(request.galaxy)
+        workflow.delete_from_galaxy.assert_not_called()
+
 
 class WorkflowAdvancedBootstrapDetectionTest(TestCase):
     """

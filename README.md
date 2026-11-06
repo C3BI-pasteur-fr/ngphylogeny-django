@@ -305,8 +305,12 @@ so tightening either one turns a slow site into an unavailable one. uwsgi
 runs with `--die-on-term`, so a rollout stops the old pod straight away
 rather than waiting out the 30s grace period.
 
+Uploads are capped at 50 MiB (`NGPHYLO_MAX_UPLOAD_MB` in
+`settings/base.py`, and `proxy-body-size` in `manifest.yaml`, which has to
+be kept in step with it).
+
 If Galaxy is unreachable, pages that need it return a 503 "Galaxy
-unavailable" page, and background polling pauses for 60s at a time. No
+unavailable" page, and background polling pauses for 90s at a time. No
 action is needed once Galaxy is back. A run's status on its history page
 can lag by up to about 50s, because each run is checked at most every 30s
 to limit the load on Galaxy (every 9s until its steps first appear).

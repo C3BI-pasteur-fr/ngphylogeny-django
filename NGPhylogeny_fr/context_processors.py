@@ -18,3 +18,7 @@ def git_commit(request):
         'git_commit_short': sha[:7],
         'git_commit_url': '%s/commit/%s' % (GITHUB_REPO_URL, sha) if sha else '',
     }
+
+
+def max_upload(request):
+    return {'max_upload_mb': settings.NGPHYLO_MAX_UPLOAD_MB}

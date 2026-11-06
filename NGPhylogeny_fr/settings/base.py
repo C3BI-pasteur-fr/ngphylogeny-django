@@ -75,6 +75,12 @@ INSTALLED_APPS = [
     'blast.apps.BlastConfig',
 ]
 
+# Largest file a visitor can upload, in MiB. Keep manifest.yaml's
+# proxy-body-size at this plus UPLOAD_FORM_OVERHEAD_MB.
+NGPHYLO_MAX_UPLOAD_MB = 50
+# Room for the rest of the form around a file of exactly that size.
+UPLOAD_FORM_OVERHEAD_MB = 1
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     # Serves STATIC_ROOT directly from the app process - needed because
@@ -85,6 +91,8 @@ MIDDLEWARE = [
     # Must stay right after WhiteNoiseMiddleware - see
     # NGPhylogeny_fr/middleware.py's own docstring for why.
     'NGPhylogeny_fr.middleware.MaintenanceModeMiddleware',
+    # Before anything that would read the request body.
+    'NGPhylogeny_fr.middleware.UploadSizeLimitMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -112,6 +120,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'NGPhylogeny_fr.context_processors.git_commit',
+                'NGPhylogeny_fr.context_processors.max_upload',
             ],
         },
     },

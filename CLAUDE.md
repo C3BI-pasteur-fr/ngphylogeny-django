@@ -4810,7 +4810,7 @@ a poll otherwise takes the free lock.
 `GALAXY_UNREACHABLE_EXCEPTIONS`/`is_galaxy_outage` moved here from
 `workflows/views/generic.py`, because `workspace/views.py` now needs them and
 `generic.py` imports `workspace.views`. Two separate mechanisms:
-- A 60s pause of *background* polling (`pause_galaxy_polling()`), set when a
+- A 90s pause of *background* polling (`pause_galaxy_polling()`), set when a
   monitoring cycle hits an outage or a poll hits repeated ones: no monitoring
   tasks get queued and no uncached provenance is fetched. Anything a visitor
   explicitly asks for still goes through. Doing nothing here meant 2,008
@@ -4842,3 +4842,77 @@ first: `deleteoldgalaxyhistory` deletes a history's linked workflow, so without
 one it would delete the *base* workflow from Galaxy); and caching A La Carte's
 `/build` per tool to avoid a temporary history per build, if its result turns
 out not to depend on the history.
+
+### First checks on prod after that rollout, and an upload limit nobody knew about
+
+Reading 6.5 hours of prod logs after the rollout above (2026-11-06, 16:25-23:03
+UTC) found nothing broken by it: no restarts, `/refresh` back to a median of
+167ms, and the first real completion emails sent with no SMTP error. The 28 503s
+were the new outage page doing its job during short Galaxy maintenance windows.
+It did turn up these:
+
+**The 60s polling pause never skipped a beat.** The failures that set it land a
+fraction of a second after a `launchmonitorworkspaces` beat, and `DatabaseCache`
+truncates expiry to the second, so it had already expired by the next one, 60s
+later. It only ever stopped the page-triggered checks in between.
+`GALAXY_POLLING_PAUSE_SECONDS` is 90 now. Anything shorter than the 60s beat plus
+a margin has the same problem, and `LocMemCache` wouldn't show it: the regression
+test depends on `DatabaseCache`'s truncation.
+
+**Tool forms ignored the bounds Galaxy publishes.** `show_tool(io_details=True)`
+gives `min`/`max` for numeric parameters, but `ToolForm` dropped them, so
+`windowsSize = -13` only got refused by Galaxy, as a 400 on `invoke_workflow`,
+surfacing as a 500. The earlier `randstart` incident (see
+`WorkflowAdvancedSubmitCleanupTest`) was the same gap. Integers now pass them to
+`IntegerField`, so the browser enforces them too. Floats stay `CharField`s with a
+validator, so Galaxy still receives exactly what was typed. All 71 numeric
+parameters on prod's 26 tools have defaults within their bounds, checked before
+turning this on, so a default can't block a form from a hidden conditional
+branch.
+
+**Rejecting a form deleted the user's own workflow.** `post()` only makes a copy
+for base workflows. `automaker` and `duplicated` ones (wkmake, rerun) are used
+as they are, so every `workflow.delete_from_galaxy(gi)` on a rejection path
+deleted the original the visitor was about to correct: already true for a bad
+input file, and validation would have made it routine. `discard_copy()` only
+deletes a real copy.
+
+**One large upload can evict the web pod.** `manifest.yaml` sets no
+`ephemeral-storage` for `web`, so it inherits the namespace's 256Mi limit, and
+Django spools uploads over 2.5MB to `/tmp`, on that same storage. A 225MB POST on
+dev was enough: `Pod ephemeral local storage usage exceeds the total limit of
+containers 256Mi`, at about 181MB sent, with a new pod ready within a minute. That
+was an unintended result of a test, not a planned one, and uploads aren't capped
+anywhere (`proxy-body-size: "0"` on the ingress). Prod has the same limit, and
+the same test can't safely be repeated there.
+
+Uploads are now capped at 50 MiB, a decision made with the user, enforced three
+ways: the ingress (`proxy-body-size: "51m"`, 1 MiB over for the rest of the form),
+`UploadSizeLimitMiddleware` for deployments with no ingress, and jquery.filer in
+the browser. That last one had never worked: OneClick's `fileMaxSize: 5` isn't an
+option the plugin reads (it's `maxSize`), which is how a 225MB POST reached a page
+that looked limited to 5MB. The middleware checks `Content-Length`, before
+anything reads the body. It sits ahead of `CsrfViewMiddleware` on purpose, since
+reading `request.POST` is what spools the file. The advanced and single-tool
+forms have no jquery.filer, so on Kubernetes an oversized file there gets nginx's
+bare 413 page rather than `templates/413.html`.
+
+The cap reduces the risk without removing it: `post()` spools a file to `/tmp`
+and `process_file_to_upload()` copies it there again, so about three maximum-size
+uploads at once could still reach 256Mi. Raising `ephemeral-storage` for `web` in
+`manifest.yaml` would close that, within the namespace's quota. Not done yet.
+
+**Large uploads failing with "CSRF token missing" on prod are still unexplained.**
+Six POSTs between 17:19 and 17:24 got that 403, three of them after exactly 60s.
+The one logged size was 225MB, with 2.6MB read after 30s. A body that can't be
+read leaves Django with no token, hence the misleading error. Dev's internal
+ingress took about 5MB/s without stalling, so it doesn't reproduce there, which
+points at the external ingress or the visitor's connection, but neither is
+confirmed.
+
+Regression tests: `tools.tests.ToolFormNumericBoundsTest`,
+`workflows.tests.WorkflowAdvancedSubmitCleanupTest`'s two rejected-form tests,
+`workspace.tests.GalaxyLoadTest.test_pause_outlasts_the_next_monitoring_beat` and
+`account.tests`' login stylesheet test (`css/login.css` never existed, and
+`STATIC_URL` isn't in the template context). Each fix was removed in turn to
+confirm a test fails.

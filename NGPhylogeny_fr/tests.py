@@ -1,4 +1,9 @@
-from django.test import TestCase, override_settings
+from unittest.mock import patch
+
+from django import forms
+from django.template.loader import render_to_string
+from django.test import RequestFactory, TestCase, override_settings
+from django.urls import reverse
 
 from NGPhylogeny_fr.context_processors import git_commit
 
@@ -40,3 +45,35 @@ class GitCommitContextProcessorTest(TestCase):
             'https://github.com/C3BI-pasteur-fr/ngphylogeny-django/'
             'commit/9b81d5aabc1234567890abcdef1234567890abcd')
         self.assertContains(response, '9b81d5a')
+
+
+class UploadSizeLimitTest(TestCase):
+    LIMIT = 51 * 1024 * 1024
+
+    def _post(self, content_length):
+        return self.client.post(
+            reverse('home'), data='', content_type='application/octet-stream',
+            CONTENT_LENGTH=content_length)
+
+    def test_oversized_request_is_refused_before_its_body_is_read(self):
+        with patch('django.middleware.csrf.CsrfViewMiddleware.process_view') \
+                as csrf:
+            response = self._post(self.LIMIT + 1)
+        csrf.assert_not_called()
+        self.assertEqual(response.status_code, 413)
+        self.assertTemplateUsed(response, '413.html')
+        self.assertContains(response, '50 MB', status_code=413)
+
+    def test_a_file_of_exactly_the_cap_gets_through(self):
+        self.assertNotEqual(self._post(self.LIMIT).status_code, 413)
+
+    def test_unparseable_content_length_is_left_alone(self):
+        self.assertNotEqual(self._post('abc').status_code, 413)
+
+    def test_browser_check_uses_the_option_the_plugin_actually_reads(self):
+        request = RequestFactory().get('/')
+        html = render_to_string(
+            'workflows/workflows_form.html', {'form': forms.Form()},
+            request=request)
+        self.assertIn('maxSize: 50', html)
+        self.assertNotIn('fileMaxSize', html)
