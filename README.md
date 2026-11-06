@@ -306,8 +306,8 @@ runs with `--die-on-term`, so a rollout stops the old pod straight away
 rather than waiting out the 30s grace period.
 
 Uploads are capped at 50 MiB (`NGPHYLO_MAX_UPLOAD_MB` in
-`settings/base.py`, and `proxy-body-size` in `manifest.yaml`, which has to
-be kept in step with it).
+`settings/base.py`). Django enforces this, and `proxy-body-size` in
+`manifest.yaml` should be kept in step with it as a backstop.
 
 If Galaxy is unreachable, pages that need it return a 503 "Galaxy
 unavailable" page, and background polling pauses for 90s at a time. No

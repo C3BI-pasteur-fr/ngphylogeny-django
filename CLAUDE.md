@@ -29,8 +29,7 @@ python manage.py migrate
 python manage.py createcachetable
 python manage.py runserver
 
-# Tests (currently: static-page + crispy/captcha rendering smoke tests in
-# data/tests.py, Tool.can_run_on_data() boundary tests in tools/tests.py)
+# Tests (a tests.py per app, plus utils/ and NGPhylogeny_fr/)
 python manage.py test
 python manage.py test data.tests.StaticPagesSmokeTest.test_pages_return_200   # single test
 
@@ -4882,22 +4881,33 @@ deletes a real copy.
 Django spools uploads over 2.5MB to `/tmp`, on that same storage. A 225MB POST on
 dev was enough: `Pod ephemeral local storage usage exceeds the total limit of
 containers 256Mi`, at about 181MB sent, with a new pod ready within a minute. That
-was an unintended result of a test, not a planned one, and uploads aren't capped
+was an unintended result of a test, not a planned one, and uploads weren't capped
 anywhere (`proxy-body-size: "0"` on the ingress). Prod has the same limit, and
 the same test can't safely be repeated there.
 
-Uploads are now capped at 50 MiB, a decision made with the user, enforced three
-ways: the ingress (`proxy-body-size: "51m"`, 1 MiB over for the rest of the form),
-`UploadSizeLimitMiddleware` for deployments with no ingress, and jquery.filer in
-the browser. That last one had never worked: OneClick's `fileMaxSize: 5` isn't an
+Uploads are now capped at 50 MiB, a decision made with the user.
+`UploadSizeLimitMiddleware` is what enforces it, allowing 1 MiB more for the rest
+of the form, and the browser checks below just warn sooner. `proxy-body-size:
+"51m"` is in `manifest.yaml` too, but dev's ingress ignores it: the annotation is
+applied, yet a 225 MiB POST still reached Django. A leftover from assuming nginx,
+as this cluster's error pages have pointed at HAProxy. Prod's ingress is a
+different class and wasn't tested. jquery.filer's browser check had never worked: OneClick's `fileMaxSize: 5` isn't an
 option the plugin reads (it's `maxSize`), which is how a 225MB POST reached a page
 that looked limited to 5MB. The middleware checks `Content-Length`, before
 anything reads the body. It sits ahead of `CsrfViewMiddleware` on purpose, since
 reading `request.POST` is what spools the file. The Advanced, Workflow Maker and
 single-tool forms have no jquery.filer, so `include/upload_size_check.html` does
 the browser check there, adding up every file in the form since a tool can take
-several. A visitor with JS off, on any form, gets nginx's bare 413 page on
-Kubernetes rather than `templates/413.html`.
+several. With JS off, any form gets `templates/413.html` instead.
+
+Checked live on dev with a wrong CSRF token, so nothing reached Galaxy: 1 and 49
+MiB reached Django (403), while 52, 60 and 225 MiB got a 413 within about 50ms,
+having sent under 200KB, with `/tmp` left empty and no restart. curl reported a
+stream error (exit 92) on one of those, so a browser with JS off might sometimes
+show a connection error rather than the page while still mid-upload. Also live:
+`-13` for `windowsSize` gets a field error on both the Advanced form and a
+workflow built through A La Carte, which then survives, reloads and runs when
+resubmitted. A real OneClick run started as normal.
 
 The cap reduces the risk without removing it: `post()` spools a file to `/tmp`
 and `process_file_to_upload()` copies it there again, so about three maximum-size

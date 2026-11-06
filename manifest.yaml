@@ -710,6 +710,8 @@ metadata:
     # settings.NGPHYLO_MAX_UPLOAD_MB plus UPLOAD_FORM_OVERHEAD_MB. An upload
     # is spooled to the pod's disk, and a large one gets the pod evicted
     # for exceeding its 256Mi ephemeral-storage limit - see CLAUDE.md.
+    # Only a backstop: dev's ingress ignores it, and
+    # UploadSizeLimitMiddleware is what enforced the cap there.
     nginx.ingress.kubernetes.io/proxy-body-size: "51m"
 spec:
   rules:

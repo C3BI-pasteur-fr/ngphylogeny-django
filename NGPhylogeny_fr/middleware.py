@@ -62,8 +62,8 @@ class UploadSizeLimitMiddleware:
     Refuses an oversized request from its Content-Length, before Django reads
     the body. Uploads are spooled to /tmp, and going past the pod's 256Mi
     ephemeral-storage limit gets it evicted, taking the site down (see
-    CLAUDE.md). On Kubernetes the ingress enforces the same limit first; this
-    covers deployments without one, such as docker-compose.
+    CLAUDE.md). This is the check that counts: dev's ingress ignores
+    manifest.yaml's proxy-body-size, and docker-compose has no ingress.
     """
 
     def __init__(self, get_response):
