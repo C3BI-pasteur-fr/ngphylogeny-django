@@ -4893,9 +4893,11 @@ the browser. That last one had never worked: OneClick's `fileMaxSize: 5` isn't a
 option the plugin reads (it's `maxSize`), which is how a 225MB POST reached a page
 that looked limited to 5MB. The middleware checks `Content-Length`, before
 anything reads the body. It sits ahead of `CsrfViewMiddleware` on purpose, since
-reading `request.POST` is what spools the file. The advanced and single-tool
-forms have no jquery.filer, so on Kubernetes an oversized file there gets nginx's
-bare 413 page rather than `templates/413.html`.
+reading `request.POST` is what spools the file. The Advanced, Workflow Maker and
+single-tool forms have no jquery.filer, so `include/upload_size_check.html` does
+the browser check there, adding up every file in the form since a tool can take
+several. A visitor with JS off, on any form, gets nginx's bare 413 page on
+Kubernetes rather than `templates/413.html`.
 
 The cap reduces the risk without removing it: `post()` spools a file to `/tmp`
 and `process_file_to_upload()` copies it there again, so about three maximum-size

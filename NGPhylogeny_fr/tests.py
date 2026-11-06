@@ -77,3 +77,12 @@ class UploadSizeLimitTest(TestCase):
             request=request)
         self.assertIn('maxSize: 50', html)
         self.assertNotIn('fileMaxSize', html)
+
+    def test_forms_without_the_plugin_check_the_size_in_the_browser(self):
+        request = RequestFactory().get('/')
+        for template, context in (
+                ('tools/tool_form.html', {'toolform': forms.Form()}),
+                ('workflows/workflows_adv_singlepage_form.html', {}),
+                ('workflows/workflows_maker_form.html', {})):
+            html = render_to_string(template, context, request=request)
+            self.assertIn('total > 50 * 1024 * 1024', html, template)

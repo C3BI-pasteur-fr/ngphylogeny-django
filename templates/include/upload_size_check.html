@@ -1,0 +1,13 @@
+{# For forms without jquery.filer, whose own maxSize covers the others. #}
+<script>
+    $(document).on('change', 'input[type=file]', function () {
+        var total = 0;
+        $(this).closest('form').find('input[type=file]').each(function () {
+            $.each(this.files, function () { total += this.size; });
+        });
+        if (total > {{ max_upload_mb }} * 1024 * 1024) {
+            $(this).val('');
+            alert('This file is too large: NGPhylogeny.fr accepts files of up to {{ max_upload_mb }} MB.');
+        }
+    });
+</script>
