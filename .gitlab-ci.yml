@@ -42,7 +42,18 @@ cache:
     - .cache/pip
 
 before_script:
-  - apt-get update -qq && apt-get install -y -qq libpq-dev libmagic1
+  # Debian buster is EOL and deb.debian.org no longer mirrors it, so point
+  # apt at the snapshot archive, same as the Dockerfile. Separate lines, not
+  # `&&`: a failure in a non-final command of an && chain doesn't fail the
+  # job, which is how `apt-get update` went on failing unnoticed here.
+  - >-
+    sed -i
+    -e 's|^deb http://deb\.debian\.org|# deb http://deb.debian.org|'
+    -e 's|^# deb http://snapshot\.debian\.org|deb http://snapshot.debian.org|'
+    -e '/debian-security/d'
+    /etc/apt/sources.list
+  - apt-get update -qq --fix-missing
+  - apt-get install -y -qq libpq-dev libmagic1
   - pip install -r requirement.txt
 
 lint:
