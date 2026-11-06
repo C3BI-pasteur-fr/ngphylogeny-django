@@ -29,7 +29,8 @@ from workspace.reports import (WEEKLY_TO_MONTHLY_SPAN_DAYS,
                                 gather_period_totals, gather_user_growth,
                                 render_report_html)
 from workspace.reports import _gather_all
-from workspace.tasks import (LOCK_EXPIRE_SHORT, deleteoldgalaxyhistory,
+from workspace.tasks import (LOCK_EXPIRE_SHORT, LOCK_EXPIRE_WAITING,
+                             deleteoldgalaxyhistory,
                               launchmonitorworkspaces, send_daily_report,
                               updateworkspacestatus)
 from workspace.rocrate import build_rocrate_metadata
@@ -2562,6 +2563,21 @@ class GalaxyLoadTest(TestCase):
 
     def test_lock_limits_checks_to_every_30_seconds(self):
         self.assertEqual(LOCK_EXPIRE_SHORT, 30)
+
+    def test_a_history_with_its_datasets_keeps_the_30s_lock(self):
+        self._history()
+        with patch('workspace.tasks.cache.set') as shorten:
+            self._cycle(self.RUNNING)
+        shorten.assert_not_called()
+
+    def test_a_run_still_waiting_for_its_datasets_is_rechecked_sooner(self):
+        self._history(history_content_json='[]')
+        with patch('workspace.tasks.cache.set') as shorten:
+            self._cycle(self.RUNNING[:1])
+        shorten.assert_called_once_with(
+            'lock_ngphylo_workspacemonitoring_hist1', 'true',
+            LOCK_EXPIRE_WAITING)
+        self.assertLess(LOCK_EXPIRE_WAITING, 10)
 
     def test_only_a_real_rename_reaches_galaxy(self):
         with patch('bioblend.galaxy.histories.HistoryClient.update_history') as put:

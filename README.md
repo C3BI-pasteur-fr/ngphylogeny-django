@@ -309,8 +309,8 @@ rather than waiting out the 30s grace period.
 If Galaxy is unreachable, pages that need it return a 503 "Galaxy
 unavailable" page, and background polling pauses for 60s at a time. No
 action is needed once Galaxy is back. A run's status on its history page
-can lag by up to about 40s, because each run is checked at most every 30s
-to limit the load on Galaxy.
+can lag by up to about 50s, because each run is checked at most every 30s
+to limit the load on Galaxy (every 9s until its steps first appear).
 
 The footer on every page shows the running image's git commit, linked
 to its page on GitHub - `Dockerfile` bakes it in at build time

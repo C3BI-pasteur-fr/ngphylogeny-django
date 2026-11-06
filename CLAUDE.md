@@ -4780,7 +4780,19 @@ become true; both polling checks in the templates now stop for those as well.
 (`#release_lock()` is commented out in the task), which makes it a per-history
 rate limit: a page's own 10s polling only ever reads the database, so Galaxy
 sees at most one check per 30s however many tabs are open. The visible cost is
-that status can lag by up to about 40s (30s lock plus the next 10s poll tick).
+that status can lag by up to about 50s: the 30s lock, up to 10s until a page
+poll queues the next check, then up to 10s until a poll shows its result.
+
+That cost mattered most at the very start of a run, measured live on dev
+against the real Galaxy once it came back (bioblend's HTTP calls counted from
+a throwaway process in the worker pod). The check right after submission finds
+under 2 datasets and takes the lock, so two real runs sat on "please wait" for
+about 50s while Galaxy already had their steps. `LOCK_EXPIRE_WAITING` (9s, the
+old value) now replaces the lock while a history has fewer than 2 datasets,
+the same threshold the template uses for that screen. The same live test
+confirmed 0 PUTs, 0 calls when the lock is held, 0 calls for a finished
+history, and one provenance call per dataset once, then 0 on later polls. A
+plain contents-only cycle wasn't caught: both runs finished too fast.
 
 **Backing off during an outage** (`galaxy/outage.py`).
 `GALAXY_UNREACHABLE_EXCEPTIONS`/`is_galaxy_outage` moved here from

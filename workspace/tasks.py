@@ -33,6 +33,10 @@ LOCK_EXPIRE = 60 * 5 # Lock expires in 5 minutes
 # checked on Galaxy, however many pages are polling it (page polls also
 # queue updateworkspacestatus, every 10s).
 LOCK_EXPIRE_SHORT = 30
+# Until a run's datasets exist, its page can only show "please wait", and
+# they appear within seconds of submission: at 30s, the check right after
+# submission would hold that screen for up to ~50s (measured on dev).
+LOCK_EXPIRE_WAITING = 9
 
 # A stuck Galaxy job (a hung cluster node, a tool that never returns) used
 # to leave a WorkspaceHistory as finished=False forever - launchmonitorworkspaces
@@ -168,7 +172,9 @@ def updateworkspacestatus(historyid):
 
             w.history_content_json = json.dumps(hc)
             w.save()
-            if len(hc) > 1:
+            if len(hc) < 2:
+                cache.set(lock_id, "true", LOCK_EXPIRE_WAITING)
+            else:
                 finished = True
                 for file in hc:
                     if ( 'running' in file.get('state','') or
