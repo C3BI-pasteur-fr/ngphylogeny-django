@@ -289,14 +289,13 @@ every other deployment path in this repo.
 
 `deploy-dev` is live and confirmed working end to end against
 `ngphylogenyfr-dev` (a real OneClick workflow has been submitted and
-completed there); `deploy-prod`'s namespace/domain are still a
-placeholder pending real provisioning. See CLAUDE.md's "Kubernetes
-deployment" section for the full detail, including what each manifest
-does, the required GitLab CI/CD variables, and a list of real-cluster-
-only issues (RBAC, runner selection, the migrations-vs-a-persistent-
-database trap) hit getting `deploy-dev` working - worth reading before
-setting up `deploy-prod`, since the same class of issues will likely
-recur there.
+completed there). `deploy-prod` serves `ngphylogeny.fr` from
+`ngphylogenyfr-prod`, runs from `master`, and only starts when triggered
+by hand from the pipeline page. See CLAUDE.md's "Kubernetes deployment"
+section for the full detail, including what each manifest does, the
+required GitLab CI/CD variables, and a list of real-cluster-only issues
+(RBAC, runner selection, the migrations-vs-a-persistent-database trap)
+worth reading before setting up another deployment.
 
 `/status` shares its worker slots with every other request, so under
 heavy load a healthy `web` pod can be slow to answer it. Its probes are

@@ -42,8 +42,12 @@ flake8 --select=E9,F63,F7,F82 --exclude=migrations .
 ```
 
 GitLab CI (`.gitlab-ci.yml`) runs exactly `flake8` then
-`makemigrations && migrate && check && test` on `python:3.8-buster`. There's
-no Docker build/push/deploy stage yet.
+`makemigrations && migrate && check && test` on `python:3.8-buster`, then
+`build` and the deploy jobs (see "Kubernetes deployment" below). Debian buster
+is EOL, so both `.gitlab-ci.yml`'s `before_script` and the `Dockerfile` point
+apt at `snapshot.debian.org`. Keep CI's apt commands on separate lines: in an
+`&&` chain, a failing `apt-get update` doesn't fail the job, which is how it
+failed unnoticed.
 
 ### One-time / operational management commands
 
@@ -3060,7 +3064,12 @@ migrations aren't committed and regenerate fresh per deploy (see
 "Migrations are not committed" above), so `migrate` alone silently
 no-ops these on the already-migrated production database - each needed
 the equivalent `CREATE INDEX CONCURRENTLY` run by hand directly against
-the live Postgres. Claude Code's own auto-mode classifier blocks
+the live Postgres. `ngphylogenyfr-dev` lacked all four until 2026-11-06, when
+they were added the same way, with `launchmonitorworkspaces` taking 6-10s
+there until then: a new database built by `init` gets them, one restored
+or already migrated doesn't. To get the exact SQL, Django's own
+`schema_editor(collect_sql=True)._model_indexes_sql(Model)` works here, since
+the pods hold no migration files for `sqlmigrate` to read. Claude Code's own auto-mode classifier blocks
 running DDL against a database directly (even read-only diagnostic
 `EXPLAIN ANALYZE` queries were fine; the actual `CREATE INDEX`
 executions were not) - the exact SQL was handed to the user to run
@@ -4791,8 +4800,11 @@ about 50s while Galaxy already had their steps. `LOCK_EXPIRE_WAITING` (9s, the
 old value) now replaces the lock while a history has fewer than 2 datasets,
 the same threshold the template uses for that screen. The same live test
 confirmed 0 PUTs, 0 calls when the lock is held, 0 calls for a finished
-history, and one provenance call per dataset once, then 0 on later polls. A
-plain contents-only cycle wasn't caught: both runs finished too fast.
+history, and one provenance call per dataset once, then 0 on later polls.
+Rerunning with this fix on a slower PhyML-SMS run: steps visible after 22s
+instead of about 50s, and a normal mid-run cycle was exactly 1 GET of the
+contents. Catching that cycle meant pausing page polls for 33s first, since
+a poll otherwise takes the free lock.
 
 **Backing off during an outage** (`galaxy/outage.py`).
 `GALAXY_UNREACHABLE_EXCEPTIONS`/`is_galaxy_outage` moved here from
@@ -4819,8 +4831,8 @@ Test coverage: `workspace.tests.GalaxyLoadTest`, which asserts exact bioblend
 calls per cycle/page view rather than behaviour alone. Each of the five
 changes was individually reverted to confirm a test fails. The two
 `galaxy.tests.AccountPageOwnHistoriesTest` shared-key tests used row creation
-to trigger `rename()`, so they now perform a real rename instead. Not verified
-against a live Galaxy: `galaxy.pasteur.fr` was in maintenance throughout.
+to trigger `rename()`, so they now perform a real rename instead. See
+`LOCK_EXPIRE_SHORT` above for what the live test on dev covered.
 
 Candidates identified but not done: pausing polling in hidden tabs and slowing
 it with run age; browser cache headers for finished datasets, and fewer repeat
