@@ -298,6 +298,20 @@ database trap) hit getting `deploy-dev` working - worth reading before
 setting up `deploy-prod`, since the same class of issues will likely
 recur there.
 
+`/status` shares its worker slots with every other request, so under
+heavy load a healthy `web` pod can be slow to answer it. Its probes are
+patient on purpose: readiness allows about 60s of failures, liveness
+about 120s, matching uwsgi's `--harakiri`. There's only one `web` replica,
+so tightening either one turns a slow site into an unavailable one. uwsgi
+runs with `--die-on-term`, so a rollout stops the old pod straight away
+rather than waiting out the 30s grace period.
+
+If Galaxy is unreachable, pages that need it return a 503 "Galaxy
+unavailable" page, and background polling pauses for 60s at a time. No
+action is needed once Galaxy is back. A run's status on its history page
+can lag by up to about 40s, because each run is checked at most every 30s
+to limit the load on Galaxy.
+
 The footer on every page shows the running image's git commit, linked
 to its page on GitHub - `Dockerfile` bakes it in at build time
 (`--build-arg GIT_COMMIT`, which `.gitlab-ci.yml`'s `build` job passes

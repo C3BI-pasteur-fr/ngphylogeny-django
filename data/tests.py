@@ -5,6 +5,7 @@ from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.http import HttpResponse
 from django.test import TestCase, override_settings
+from django.urls import reverse
 
 from galaxy.models import GalaxyUser, Server
 from utils import biofile
@@ -529,6 +530,47 @@ class DisplayViewsAjaxDetectionTest(TestCase):
                    return_value={'history_id': 'hist1'}):
             response = self.client.get('/data/displaymsa/ff5476bcf6c921fa')
         self.assertEqual(response.status_code, 200)
+
+
+class RemoveFileFromSessionTest(TestCase):
+    """
+    Real production 500, KeyError: 'files': with no files in the session,
+    this set a plain attribute (request.session.files) instead of the
+    session key, then read the key anyway.
+    """
+
+    def setUp(self):
+        with patch('galaxy.models.requests.get',
+                   return_value=Mock(status_code=200,
+                                      json=lambda: {'version_major': '25.1'})):
+            server = Server.objects.create(
+                url='http://fake-galaxy.example.org', current=True)
+        GalaxyUser.objects.create(
+            user=User.objects.create_user('admin'), galaxy_server=server,
+            api_key='fakekey', anonymous=True)
+        self.url = reverse('remove_file_from_session',
+                           kwargs={'file_id': 'f1'})
+
+    def _remove(self):
+        with patch('bioblend.galaxy.datasets.DatasetClient.show_dataset',
+                   return_value={'history_id': 'h1'}):
+            return self.client.get(self.url)
+
+    def test_session_without_files_redirects_instead_of_crashing(self):
+        response = self._remove()
+        self.assertRedirects(
+            response, reverse('history_detail', kwargs={'history_id': 'h1'}),
+            fetch_redirect_response=False)
+
+    def test_removes_only_the_requested_file_and_persists_it(self):
+        session = self.client.session
+        session['files'] = {'f1': {'id': 'f1'}, 'f2': {'id': 'f2'}}
+        session.save()
+
+        self._remove()
+
+        self.assertEqual(
+            self.client.session['files'], {'f2': {'id': 'f2'}})
 
 
 class DownloadFileContentTest(TestCase):

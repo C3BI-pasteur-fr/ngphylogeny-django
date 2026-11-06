@@ -7,6 +7,7 @@ import requests
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.core import signing
+from django.core.cache import cache
 from django.db.models import Q
 from django.http import HttpResponse
 from django.urls import reverse, reverse_lazy
@@ -23,6 +24,9 @@ from .tasks import deletegalaxyhistory
 from workflows.tasks import deletegalaxyworkflow
 
 from galaxy.decorator import connection_galaxy
+from galaxy.outage import (
+    GALAXY_UNREACHABLE_EXCEPTIONS, galaxy_polling_paused, is_galaxy_outage,
+    pause_galaxy_polling)
 from .models import WorkspaceHistory
 from .reports import CATEGORY_LABELS, build_report_web_context
 from .rocrate import build_rocrate_metadata
@@ -241,6 +245,16 @@ def delete_history(request, history_id=None):
 
     WorkspaceHistory.objects.get(history=history_id).delete()
 
+# Only needs to outlive an open history page: a miss just means asking
+# Galaxy again, not wrong data.
+DATASET_TOOLS_CACHE_TTL = 24 * 60 * 60
+
+# Outage-shaped failures in a row before giving up for this poll. More than
+# one so that a single dataset that always fails can't stop every dataset
+# after it from ever resolving, or pause polling for everyone.
+MAX_CONSECUTIVE_GALAXY_FAILURES = 2
+
+
 def resolve_dataset_tools(gi, galaxy_server, history_id, dataset_ids):
     """
     Resolve {dataset_id: tool_id} for every dataset in dataset_ids (via
@@ -269,30 +283,76 @@ def resolve_dataset_tools(gi, galaxy_server, history_id, dataset_ids):
     rather than raising - callers already treat "not resolved yet" as a
     normal state (a step chain box/table row just keeps its fallback
     label).
+
+    Already-resolved mappings are cached, one entry per history: the tool
+    that produced a dataset never changes once Galaxy reports it, so each
+    dataset only ever needs one provenance call, not one per 10s poll
+    (see CLAUDE.md's "Worker pool saturation" section for the real
+    incident). Anything unresolved isn't cached and gets retried on the
+    next poll.
+
+    Stops calling Galaxy for the rest of the poll once it looks down:
+    each failed call can hold a request slot for the full
+    GALAXY_REQUEST_TIMEOUT, so trying every remaining dataset anyway
+    could take minutes.
     """
+    cache_key = 'history_dataset_tools:%s' % history_id
+    cached = cache.get(cache_key) or {}
+    known_tool_ids = cached.get('dataset_tool_ids', {})
+    known_tool_names = cached.get('tool_names', {})
+
+    galaxy_available = not galaxy_polling_paused()
+    consecutive_failures = 0
     dataset_tool_ids = {}
     for dataset_id in dataset_ids:
+        if dataset_id in known_tool_ids:
+            dataset_tool_ids[dataset_id] = known_tool_ids[dataset_id]
+            continue
+        if not galaxy_available:
+            continue
         try:
             provenance = gi.histories.show_dataset_provenance(
                 history_id, dataset_id, follow=False)
-        except (ConnectionError, requests.exceptions.RequestException):
+        except GALAXY_UNREACHABLE_EXCEPTIONS as e:
+            consecutive_failures = (
+                consecutive_failures + 1 if is_galaxy_outage(e) else 0)
+            if consecutive_failures >= MAX_CONSECUTIVE_GALAXY_FAILURES:
+                galaxy_available = False
+                pause_galaxy_polling()
             continue
+        consecutive_failures = 0
         tool_id = provenance.get('tool_id')
         if tool_id:
             dataset_tool_ids[dataset_id] = tool_id
 
     tool_names = {}
     for tool_id in set(dataset_tool_ids.values()):
+        if known_tool_names.get(tool_id):
+            tool_names[tool_id] = known_tool_names[tool_id]
+            continue
         local_tool = Tool.objects.filter(
             galaxy_server=galaxy_server, id_galaxy=tool_id).first()
         if local_tool:
             tool_names[tool_id] = local_tool.name
             continue
+        if not galaxy_available:
+            continue
         try:
             tool = gi.tools.show_tool(tool_id=tool_id)
             tool_names[tool_id] = tool.get('name')
-        except (ConnectionError, requests.exceptions.RequestException):
-            pass
+        except GALAXY_UNREACHABLE_EXCEPTIONS as e:
+            if is_galaxy_outage(e):
+                galaxy_available = False
+
+    updated_tool_ids = dict(known_tool_ids, **dataset_tool_ids)
+    updated_tool_names = dict(
+        known_tool_names,
+        **{tool_id: name for tool_id, name in tool_names.items() if name})
+    if (updated_tool_ids != known_tool_ids
+            or updated_tool_names != known_tool_names):
+        cache.set(cache_key, {'dataset_tool_ids': updated_tool_ids,
+                              'tool_names': updated_tool_names},
+                  DATASET_TOOLS_CACHE_TTL)
 
     return dataset_tool_ids, tool_names
 
@@ -374,9 +434,10 @@ class WorkspaceHistoryObjectMixin(SingleObjectMixin):
         hist_id = self.kwargs.get(self.pk_url_kwarg)
         if not hist_id:
             hist_id = self.request.session["last_history"]
-        updateworkspacestatus.delay(hist_id)
         w = queryset.get(history=hist_id,
                          galaxy_server=server)
+        if w.monitored and not w.finished and not w.deleted:
+            updateworkspacestatus.delay(hist_id)
 
         w.history_content = _parse_history_json(w.history_content_json, [])
         # Falls back to just the real history id (not {}) so the

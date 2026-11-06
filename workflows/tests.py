@@ -1,6 +1,7 @@
 from datetime import timedelta
 from unittest.mock import Mock, patch
 
+import requests
 from bioblend.galaxy.client import ConnectionError
 from django.contrib.auth.models import AnonymousUser, User
 from django.core.management import call_command
@@ -356,6 +357,52 @@ class GalaxyUnavailableTest(TestCase):
             'bioblend.galaxy.workflows.WorkflowClient.show_workflow',
             side_effect=ConnectionError(
                 "GET: error 503: b'Site Maintenance'", status_code=503))
+
+    def test_maintenance_page_on_a_data_view_returns_503(self):
+        """
+        Real shape of the production outage: the maintenance page comes
+        back as a 200 with an HTML body, not a 503, so bioblend raises
+        "invalid JSON" with status_code=200.
+        """
+        with patch('bioblend.galaxy.datasets.DatasetClient.show_dataset',
+                   side_effect=ConnectionError(
+                       "GET: invalid JSON : b'<html>'", status_code=200)):
+            response = self.client.get(
+                reverse('display_raw', kwargs={'file_id': 'abc'}))
+        self.assertEqual(response.status_code, 503)
+        self.assertTemplateUsed(
+            response, 'workflows/galaxy_unavailable.html')
+
+    def test_maintenance_redirect_on_alacarte_post_returns_503(self):
+        with patch('tools.models.requests.get',
+                   return_value=Mock(status_code=200, json=lambda: {
+                       'id': 'mafft', 'name': 'ignored', 'version': '1.0',
+                       'inputs': [], 'outputs': [],
+                   })):
+            tool = Tool.objects.create(
+                galaxy_server=self.server, id_galaxy='mafft',
+                name='MAFFT', description='Alignment', version='1.0')
+        with patch('bioblend.galaxy.histories.HistoryClient.create_history',
+                   side_effect=ConnectionError(
+                       'Unexpected HTTP status code: 302', status_code=302)):
+            response = self.client.post(
+                reverse('workflows_alacarte'), {'algn': tool.pk})
+        self.assertEqual(response.status_code, 503)
+
+    def test_request_timeout_returns_503(self):
+        with patch('bioblend.galaxy.datasets.DatasetClient.show_dataset',
+                   side_effect=requests.exceptions.ReadTimeout('slow')):
+            response = self.client.get(
+                reverse('display_raw', kwargs={'file_id': 'abc'}))
+        self.assertEqual(response.status_code, 503)
+
+    def test_a_real_galaxy_4xx_is_not_reported_as_an_outage(self):
+        with patch('bioblend.galaxy.datasets.DatasetClient.show_dataset',
+                   side_effect=ConnectionError(
+                       "GET: error 403: b'Access denied'", status_code=403)):
+            with self.assertRaises(ConnectionError):
+                self.client.get(
+                    reverse('display_raw', kwargs={'file_id': 'abc'}))
 
     def test_oneclick_list_view_returns_503_not_500(self):
         with self._galaxy_unreachable():

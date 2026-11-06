@@ -182,7 +182,7 @@
 	// own "the run is finished" check - re-evaluated on every reload of
 	// that fragment, including this first one - can clearInterval it.
 	window.historyRefreshTimer = setInterval(refresh, interval);
-	{% if object.finished %}
+	{% if object.finished or not object.monitored %}
 	clearInterval(window.historyRefreshTimer);
 	{% endif %}
     });

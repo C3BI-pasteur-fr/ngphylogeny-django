@@ -14,6 +14,8 @@ from email.mime.image import MIMEImage
 from smtplib import SMTPException
 from workspace.models import WorkspaceHistory
 from galaxy.decorator import galaxy_connection
+from galaxy.outage import (
+    galaxy_polling_paused, is_galaxy_outage, pause_galaxy_polling)
 from workflows.models import Workflow
 from workflows.tasks import deletegalaxyworkflow
 
@@ -27,7 +29,10 @@ from workspace.emails import send_job_completion_email
 from workspace.reports import render_report_email
 
 LOCK_EXPIRE = 60 * 5 # Lock expires in 5 minutes
-LOCK_EXPIRE_SHORT = 9 # Lock expires in 9 seconds
+# Deliberately never released: this is what limits how often a history is
+# checked on Galaxy, however many pages are polling it (page polls also
+# queue updateworkspacestatus, every 10s).
+LOCK_EXPIRE_SHORT = 30
 
 # A stuck Galaxy job (a hung cluster node, a tool that never returns) used
 # to leave a WorkspaceHistory as finished=False forever - launchmonitorworkspaces
@@ -72,6 +77,8 @@ def launchmonitorworkspaces():
     and send a mail at the end, if the mail has been
     given by the user.
     """
+    if galaxy_polling_paused():
+        return
     for w in WorkspaceHistory.objects.filter(monitored=True, finished=False, deleted=False):
         historyid = w.history
         updateworkspacestatus.delay(historyid)
@@ -102,11 +109,21 @@ def cancel_stale_jobs(galaxycon, historyid):
 
 @shared_task
 def updateworkspacestatus(historyid):
-    
+
+    if galaxy_polling_paused():
+        return
+
+    # Checked before any Galaxy call, not only after: this also gets
+    # queued by page views, and the answer would just be thrown away.
+    if not WorkspaceHistory.objects.filter(
+            history=historyid, monitored=True, finished=False,
+            deleted=False).exists():
+        return
+
     ## To be sure that the task is not reexecuted in parallel while
     ## the previous one is still running
     lock_id = "lock_ngphylo_workspacemonitoring_"+historyid
-    # We lock this history for 9 seconds, to avoid too frequent refreshs 
+    # We lock this history for LOCK_EXPIRE_SHORT, to avoid too frequent refreshs
     acquire_lock = lambda: cache.add(lock_id, "true", LOCK_EXPIRE_SHORT)
     release_lock = lambda: cache.delete(lock_id)
 
@@ -123,8 +140,12 @@ def updateworkspacestatus(historyid):
         error = False
         email = None
 
+        # Contents only: they're what finish detection reads, and they
+        # list every step's dataset, pending ones included (checked
+        # against Galaxy's own state_ids on 3000 real runs - see CLAUDE.md).
+        # The history's metadata is fetched at the start of a run
+        # (initializeworkspacejob) and once more at the end, below.
         hc = galaxycon.histories.show_history(historyid, contents=True)
-        hi = galaxycon.histories.show_history(historyid)
         w = WorkspaceHistory.objects.get(history=historyid)
         if w.monitored and not w.finished and not w.deleted:
             stale_states = ('new', 'queued', 'running')
@@ -146,7 +167,6 @@ def updateworkspacestatus(historyid):
                         file['state'] = 'error'
 
             w.history_content_json = json.dumps(hc)
-            w.history_info_json =  json.dumps(hi)
             w.save()
             if len(hc) > 1:
                 finished = True
@@ -160,6 +180,11 @@ def updateworkspacestatus(historyid):
                         finished = True
                         break
             if finished:
+                # For update_time, which the RO-Crate export uses as the
+                # run's end time. Before w.finished is saved, so a failure
+                # here just retries on the next cycle.
+                w.history_info_json = json.dumps(
+                    galaxycon.histories.show_history(historyid))
                 w.finished = finished
                 logging.warning("history %s finished? %r" % (historyid, w.finished))
                 if w and w.email and re.match(r"[^@]+@[^@]+\.[^@]+", w.email):
@@ -171,8 +196,10 @@ def updateworkspacestatus(historyid):
                     except Exception as e:
                         logging.warning("Unknown Problem while sending e-mail: %s" % (e))
             w.save()
-    except:
+    except Exception as e:
         logging.warning('Problem with Galaxy server, will retry later')
+        if is_galaxy_outage(e):
+            pause_galaxy_polling()
 
     #release_lock()
     

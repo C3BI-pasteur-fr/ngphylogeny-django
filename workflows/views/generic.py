@@ -1,7 +1,5 @@
 import logging
 
-import requests
-from bioblend.galaxy.client import ConnectionError
 from django.urls import reverse_lazy
 from django.http import HttpResponseRedirect
 from django.shortcuts import render
@@ -14,6 +12,7 @@ from django.db.models import Q
 
 from data.views import UploadView
 from galaxy.decorator import connection_galaxy
+from galaxy.outage import GALAXY_UNREACHABLE_EXCEPTIONS
 from workflows.models import Workflow, WorkflowStepInformation
 from workspace.views import create_history
 from tools.models import Tool
@@ -26,17 +25,6 @@ from io import StringIO
 from utils import biofile
 
 logger = logging.getLogger(__name__)
-
-# Raised by bioblend itself (ConnectionError, once its own retries are
-# exhausted) or by the underlying requests call (e.g. a ReadTimeout -
-# see GalaxyUser.GALAXY_REQUEST_TIMEOUT in galaxy/models.py) whenever
-# the configured Galaxy server can't actually be reached (e.g. Galaxy's
-# own maintenance mode, a 503) - same broadened pair used throughout
-# workspace/views.py for the same reason, see CLAUDE.md's "pod restart"
-# section for why ConnectionError alone isn't enough.
-GALAXY_UNREACHABLE_EXCEPTIONS = (
-    ConnectionError, requests.exceptions.RequestException)
-
 
 def galaxy_unavailable_response(request):
     """

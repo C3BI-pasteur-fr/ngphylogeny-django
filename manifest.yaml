@@ -198,6 +198,14 @@ spec:
             - "2"
             - "--harakiri"
             - "120"
+            # Without this, uWSGI treats SIGTERM as a "brutal reload", not
+            # as a request to stop: on a failed liveness probe or a
+            # rollout, it kills its workers and re-execs itself, while
+            # Kubernetes keeps waiting for an exit that never comes and
+            # SIGKILLs it (exit 137) terminationGracePeriodSeconds later -
+            # two outages for one restart. See CLAUDE.md's "Worker pool
+            # saturation" section.
+            - "--die-on-term"
           ports:
             - containerPort: 8000
           env:
@@ -368,19 +376,33 @@ spec:
             # of 500m shared across all --processes) and shortly
             # afterwards OOMKilled - the process wasn't broken, just too
             # slow under load to answer within 1s. 1s is razor-thin for
-            # a Python/WSGI process under any real load; 3s still keeps
-            # failureThreshold's own 30s-of-sustained-failure detection
-            # window meaningful for an actually hung process.
-            timeoutSeconds: 3
-            failureThreshold: 3
+            # a Python/WSGI process under any real load.
+            #
+            # 5s x 6 (60s), up from 3s x 3 (30s): there's only one web
+            # replica, so failing readiness empties the Service and every
+            # visitor gets an ingress error instead of a slow page. It
+            # also gives the pool little relief, since requests already
+            # queued keep running. Kept shorter than liveness below, so a
+            # pod that's really stuck stops getting traffic first.
+            timeoutSeconds: 5
+            failureThreshold: 6
+          # Twice as patient as readinessProbe: /status shares the same
+          # 16 request slots as everything else, so a
+          # saturated pool looks exactly like a dead process from here.
+          # Restarting then only makes things worse - it drops every
+          # in-flight request and the same load comes straight back. 12
+          # failures x 10s lines up with uwsgi's own 120s --harakiri: by
+          # then any genuinely stuck worker has been killed and replaced
+          # anyway, so a probe still failing means something's really
+          # wrong. See CLAUDE.md's "Worker pool saturation" section.
           livenessProbe:
             httpGet:
               path: /status
               port: 8000
             initialDelaySeconds: 30
             periodSeconds: 10
-            timeoutSeconds: 3
-            failureThreshold: 3
+            timeoutSeconds: 5
+            failureThreshold: 12
 ---
 apiVersion: apps/v1
 kind: Deployment

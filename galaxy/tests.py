@@ -1,5 +1,6 @@
 from unittest.mock import Mock, patch
 
+import requests
 from django.contrib.auth.models import AnonymousUser, User
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
@@ -7,6 +8,7 @@ from django.urls import reverse
 from account.models import UserProfile
 from workspace.models import WorkspaceHistory
 from .decorator import connection_galaxy
+from .galaxylib import GalaxyInstance
 from .models import GalaxyUser, Server
 
 
@@ -206,11 +208,13 @@ class AccountPageOwnHistoriesTest(TestCase):
 
         with patch('bioblend.galaxy.histories.HistoryClient.update_history',
                    return_value={}) as update_history:
-            WorkspaceHistory.objects.create(
+            history = WorkspaceHistory.objects.create(
                 history='mine1', name='Analyse mine1', email='',
                 monitored=True, finished=True, source_ip='127.0.0.1',
                 workflow_category='OneClick', workflow_steps='',
                 galaxy_server=self.server, user=self.user)
+            history.name = 'Renamed mine1'
+            history.save()
 
         update_history.assert_called_once()
 
@@ -231,10 +235,86 @@ class AccountPageOwnHistoriesTest(TestCase):
 
         with patch('bioblend.galaxy.histories.HistoryClient.update_history',
                    return_value={}) as update_history:
-            WorkspaceHistory.objects.create(
+            history = WorkspaceHistory.objects.create(
                 history='mine2', name='Analyse mine2', email='',
                 monitored=True, finished=True, source_ip='127.0.0.1',
                 workflow_category='OneClick', workflow_steps='',
                 galaxy_server=self.server, user=self.user)
+            history.name = 'Renamed mine2'
+            history.save()
 
         update_history.assert_called_once()
+
+
+class GalaxyGetRequestCacheTest(TestCase):
+    """
+    galaxylib.get_request_cache - stored under response.url but looked up
+    by a URL containing the API key, which stopped matching once bioblend
+    moved the key to a header, so it never hit. Goes through the real
+    Django cache, so each hit is also a real pickle round trip.
+    """
+    BASE = 'http://fake-galaxy.example.org/api'
+
+    @staticmethod
+    def _response(body=b'{"id": "w1"}', status_code=200):
+        response = requests.Response()
+        response.status_code = status_code
+        response._content = body
+        response.url = 'http://fake-galaxy.example.org/no-key-in-this-url'
+        return response
+
+    def _get_twice(self, url, response=None, gi=None, **kwargs):
+        gi = gi or GalaxyInstance('http://fake-galaxy.example.org', key='k1')
+        with patch('bioblend.galaxyclient.GalaxyClient.make_get_request',
+                   return_value=(self._response() if response is None
+                                 else response)) as get:
+            gi.make_get_request(url, **kwargs)
+            second = gi.make_get_request(url, **kwargs)
+        return get.call_count, second
+
+    def test_workflow_definition_is_served_from_cache(self):
+        calls, second = self._get_twice(self.BASE + '/workflows/w1')
+        self.assertEqual(calls, 1)
+        self.assertEqual(second.json(), {'id': 'w1'})
+
+    def test_tool_definition_is_served_from_cache(self):
+        calls, _ = self._get_twice(self.BASE + '/tools/mafft')
+        self.assertEqual(calls, 1)
+        calls, _ = self._get_twice(
+            self.BASE + '/tools/toolshed.example.org/repos/o/mafft/1.0')
+        self.assertEqual(calls, 1)
+
+    def test_live_state_is_never_cached(self):
+        for path in ('/histories/h1', '/histories/h1/contents',
+                     '/datasets/d1', '/jobs/j1', '/workflows',
+                     '/tools/mafft/build'):
+            calls, _ = self._get_twice(self.BASE + path)
+            self.assertEqual(calls, 2, path)
+
+    def test_maintenance_page_is_never_cached(self):
+        calls, _ = self._get_twice(
+            self.BASE + '/workflows/w1', self._response(b'<html>Maintenance'))
+        self.assertEqual(calls, 2)
+
+    def test_error_response_is_never_cached(self):
+        calls, _ = self._get_twice(
+            self.BASE + '/workflows/w1',
+            self._response(b'{"err": 1}', status_code=403))
+        self.assertEqual(calls, 2)
+
+    def test_nocache_instances_always_reach_galaxy(self):
+        gi = GalaxyInstance('http://fake-galaxy.example.org', key='k1')
+        gi.nocache = True
+        calls, _ = self._get_twice(self.BASE + '/workflows/w1', gi=gi)
+        self.assertEqual(calls, 2)
+
+    def test_entries_are_isolated_by_api_key_and_params(self):
+        url = self.BASE + '/tools/mafft'
+        gi1 = GalaxyInstance('http://fake-galaxy.example.org', key='k1')
+        gi2 = GalaxyInstance('http://fake-galaxy.example.org', key='k2')
+        with patch('bioblend.galaxyclient.GalaxyClient.make_get_request',
+                   return_value=self._response()) as get:
+            gi1.make_get_request(url)
+            gi2.make_get_request(url)
+            gi1.make_get_request(url, params={'io_details': True})
+        self.assertEqual(get.call_count, 3)

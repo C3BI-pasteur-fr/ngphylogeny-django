@@ -91,6 +91,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # Must stay last - see NGPhylogeny_fr/middleware.py's own docstring.
+    'NGPhylogeny_fr.middleware.GalaxyUnavailableMiddleware',
 ]
 
 SESSION_ENGINE = 'django.contrib.sessions.backends.cached_db'
@@ -189,6 +191,12 @@ CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
         'LOCATION': 'ngphylo_cache_table',
+        # Django's default is 300, then it culls a third of the table,
+        # lowest cache_key first and regardless of expiry - too small
+        # for workspace.views.resolve_dataset_tools' per-history entries
+        # to survive exactly when they matter most (many histories open
+        # at once).
+        'OPTIONS': {'MAX_ENTRIES': 10000},
     }
 }
 

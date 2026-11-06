@@ -1,5 +1,8 @@
+import hashlib
 import json
+import re
 from functools import wraps
+from urllib.parse import urlsplit
 
 import requests
 from bioblend.galaxy import GalaxyInstance as BioblendGalaxyInstance
@@ -9,24 +12,56 @@ from requests import Request
 from requests_toolbelt import MultipartEncoder
 
 
+def is_cacheable_url(url):
+    """
+    Default-deny: only tool and workflow definitions, which nothing here
+    edits in place. Anything carrying live state (dataset/job/history
+    status) must stay fresh, and /build depends on the history it's asked
+    about.
+    """
+    path = urlsplit(url).path
+    return (bool(re.search(r'/api/workflows/[^/]+$', path))
+            or ('/api/tools/' in path and not path.endswith('/build')))
+
+
+def is_cacheable_response(response):
+    """
+    Galaxy's maintenance page arrives as a 200 with an HTML body - caching
+    that would keep showing an outage for a full timeout after it ended.
+    """
+    if response.status_code != 200:
+        return False
+    try:
+        response.json()
+    except ValueError:
+        return False
+    return True
+
+
 def get_request_cache(func):
     @wraps(func)
     def wrapper(self, url, **kwargs):
 
-        if hasattr(self, "nocache"):
+        if hasattr(self, "nocache") or not is_cacheable_url(url):
             return func(self, url, **kwargs)
 
+        # Built from the request itself, never from response.url: bioblend
+        # sends the API key as a header, so it isn't in the response's
+        # URL, and this cache could never hit when it was stored that
+        # way. Hashed so the key isn't readable in the cache table.
         params = dict(kwargs.get('params') or {})
         params['key'] = self.key
-        pre_req = Request('GET', url, params=params).prepare()
+        request_url = Request('GET', url, params=params).prepare().url
+        cache_key = 'galaxy_get:%s' % hashlib.sha256(
+            request_url.encode()).hexdigest()
 
-        c = cache.get(pre_req.url)
-        if c:
-            return c
-        else:
-            r = func(self, url, **kwargs)
-            cache.set(r.url, r)
-        return r
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+        response = func(self, url, **kwargs)
+        if is_cacheable_response(response):
+            cache.set(cache_key, response)
+        return response
     return wrapper
 
 

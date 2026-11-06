@@ -5,6 +5,7 @@ from datetime import timedelta
 from unittest.mock import Mock, patch
 
 import requests
+from bioblend.galaxy.client import ConnectionError
 from django.contrib.auth.models import User
 from django.core import mail, signing
 from django.core.cache import cache
@@ -17,6 +18,7 @@ from django.utils import timezone
 
 from blast.models import BlastRun
 from galaxy.models import GalaxyUser, Server
+from galaxy.outage import galaxy_polling_paused, pause_galaxy_polling
 from tools.models import Tool
 from workflows.models import Workflow
 from workspace.emails import build_job_completion_email, send_job_completion_email
@@ -27,7 +29,8 @@ from workspace.reports import (WEEKLY_TO_MONTHLY_SPAN_DAYS,
                                 gather_period_totals, gather_user_growth,
                                 render_report_html)
 from workspace.reports import _gather_all
-from workspace.tasks import (deleteoldgalaxyhistory, send_daily_report,
+from workspace.tasks import (LOCK_EXPIRE_SHORT, deleteoldgalaxyhistory,
+                              launchmonitorworkspaces, send_daily_report,
                               updateworkspacestatus)
 from workspace.rocrate import build_rocrate_metadata
 from workspace.views import (PERMALINK_SALT, build_citations, delete_history,
@@ -1118,6 +1121,7 @@ class HistoryPartialRefreshTemplateTest(TestCase):
         ]
         obj.history_info = {'id': 'fakehist123', 'name': 'Test run'}
         obj.finished = finished
+        obj.monitored = True
         obj.name = 'Test run'
         obj.email = ''
         obj.workflow = None
@@ -1406,6 +1410,61 @@ class ResolveDatasetToolsTest(TestCase):
         # The whole point: a tool already known locally shouldn't need a
         # Galaxy API call at all to get its name.
         gi.tools.show_tool.assert_not_called()
+
+    def test_second_poll_makes_no_galaxy_calls(self):
+        """
+        The real load problem: every 10s poll re-fetched provenance for
+        every dataset, though a dataset's tool never changes.
+        """
+        gi = Mock()
+        gi.histories.show_dataset_provenance.return_value = {'tool_id': 'unknown_tool'}
+        gi.tools.show_tool.return_value = {'name': 'Unknown Tool'}
+
+        first = resolve_dataset_tools(gi, self.server, 'hist1', ['d1', 'd2'])
+        gi.histories.show_dataset_provenance.reset_mock()
+        gi.tools.show_tool.reset_mock()
+        second = resolve_dataset_tools(gi, self.server, 'hist1', ['d1', 'd2'])
+
+        self.assertEqual(first, second)
+        gi.histories.show_dataset_provenance.assert_not_called()
+        gi.tools.show_tool.assert_not_called()
+
+    def test_only_a_new_dataset_is_fetched(self):
+        gi = Mock()
+        gi.histories.show_dataset_provenance.return_value = {'tool_id': 'mafft'}
+        resolve_dataset_tools(gi, self.server, 'hist1', ['d1'])
+        gi.histories.show_dataset_provenance.reset_mock()
+
+        dataset_tool_ids, _ = resolve_dataset_tools(
+            gi, self.server, 'hist1', ['d1', 'd2'])
+
+        self.assertEqual(dataset_tool_ids, {'d1': 'mafft', 'd2': 'mafft'})
+        gi.histories.show_dataset_provenance.assert_called_once_with(
+            'hist1', 'd2', follow=False)
+
+    def test_failed_or_unassigned_dataset_is_retried_on_the_next_poll(self):
+        gi = Mock()
+        gi.histories.show_dataset_provenance.side_effect = [
+            ConnectionError('boom'), {'tool_id': None}]
+        dataset_tool_ids, _ = resolve_dataset_tools(
+            gi, self.server, 'hist1', ['d1', 'd2'])
+        self.assertEqual(dataset_tool_ids, {})
+
+        gi.histories.show_dataset_provenance.side_effect = None
+        gi.histories.show_dataset_provenance.return_value = {'tool_id': 'mafft'}
+        dataset_tool_ids, _ = resolve_dataset_tools(
+            gi, self.server, 'hist1', ['d1', 'd2'])
+        self.assertEqual(dataset_tool_ids, {'d1': 'mafft', 'd2': 'mafft'})
+
+    def test_cache_is_per_history(self):
+        gi = Mock()
+        gi.histories.show_dataset_provenance.return_value = {'tool_id': 'mafft'}
+        resolve_dataset_tools(gi, self.server, 'hist1', ['d1'])
+        gi.histories.show_dataset_provenance.reset_mock()
+
+        resolve_dataset_tools(gi, self.server, 'hist2', ['d1'])
+
+        gi.histories.show_dataset_provenance.assert_called_once()
 
     def test_falls_back_to_galaxy_for_an_unknown_tool(self):
         gi = Mock()
@@ -2406,3 +2465,214 @@ class WorkspaceDeleteViewTest(TestCase):
         self.assertTrue(h.deleted)
         self.assertTrue(workflow.deleted)
         mock_delete_workflow.assert_called_once_with('wf1')
+
+
+class GalaxyLoadTest(TestCase):
+    """
+    What one monitoring cycle or page view actually asks of Galaxy - see
+    CLAUDE.md's "Cutting Galaxy load" section. Every test here counts real
+    bioblend client calls.
+    """
+    RUNNING = [
+        {'id': 'd1', 'hid': 1, 'name': 'in', 'state': 'ok', 'visible': True},
+        {'id': 'd2', 'hid': 2, 'name': 'out', 'state': 'running',
+         'visible': True},
+    ]
+    DONE = [
+        {'id': 'd1', 'hid': 1, 'name': 'in', 'state': 'ok', 'visible': True},
+        {'id': 'd2', 'hid': 2, 'name': 'out', 'state': 'ok', 'visible': True},
+    ]
+
+    def setUp(self):
+        with patch('galaxy.models.requests.get',
+                   return_value=Mock(status_code=200,
+                                      json=lambda: {'version_major': '25.1'})):
+            self.server = Server.objects.create(
+                url='http://fake-galaxy.example.org', current=True)
+        self.user = User.objects.create_user('admin')
+        GalaxyUser.objects.create(
+            user=self.user, galaxy_server=self.server, api_key='fakekey',
+            anonymous=True)
+
+    @staticmethod
+    def _gi():
+        gi = Mock()
+        gi.tools.show_tool.return_value = {'name': 'MAFFT'}
+        return gi
+
+    def _history(self, history_id='hist1', **kwargs):
+        fields = dict(
+            history=history_id, name='Run', email='', user=self.user,
+            monitored=True, finished=False, source_ip='127.0.0.1',
+            workflow_category='OneClick', workflow_steps='',
+            galaxy_server=self.server,
+            history_content_json=json.dumps(self.RUNNING),
+            history_info_json=json.dumps({'id': history_id}))
+        fields.update(kwargs)
+        return WorkspaceHistory.objects.create(**fields)
+
+    def _cycle(self, contents, history_id='hist1'):
+        """One updateworkspacestatus run; returns (show_history, update_history) mocks."""
+        def show_history(history_id, contents_flag=False, **kwargs):
+            return contents if kwargs.get('contents') else {
+                'id': history_id, 'update_time': '2026-11-06T10:00:00'}
+
+        with patch('bioblend.galaxy.histories.HistoryClient.show_history',
+                   side_effect=lambda hid, **kw: show_history(hid, **kw)) as show, \
+             patch('bioblend.galaxy.histories.HistoryClient.update_history') as put:
+            updateworkspacestatus(history_id)
+        return show, put
+
+    def test_running_cycle_is_a_single_contents_read(self):
+        self._history()
+        show, put = self._cycle(self.RUNNING)
+        show.assert_called_once_with('hist1', contents=True)
+        put.assert_not_called()
+
+    def test_finishing_cycle_fetches_history_metadata_once(self):
+        self._history()
+        show, put = self._cycle(self.DONE)
+        self.assertEqual(show.call_count, 2)
+        put.assert_not_called()
+        w = WorkspaceHistory.objects.get(history='hist1')
+        self.assertTrue(w.finished)
+        self.assertEqual(json.loads(w.history_info_json)['update_time'],
+                         '2026-11-06T10:00:00')
+
+    def test_failed_metadata_fetch_retries_rather_than_finishing(self):
+        self._history()
+        with patch('bioblend.galaxy.histories.HistoryClient.show_history',
+                   side_effect=[self.DONE, ConnectionError('boom')]):
+            updateworkspacestatus('hist1')
+        self.assertFalse(WorkspaceHistory.objects.get(history='hist1').finished)
+
+    def test_finished_or_unmonitored_history_makes_no_galaxy_call(self):
+        self._history('finished', finished=True)
+        self._history('unmonitored', monitored=False)
+        self._history('deleted', deleted=True)
+        for history_id in ('finished', 'unmonitored', 'deleted'):
+            show, _ = self._cycle(self.RUNNING, history_id)
+            show.assert_not_called()
+
+    def test_second_cycle_within_the_lock_makes_no_galaxy_call(self):
+        self._history()
+        self._cycle(self.RUNNING)
+        show, _ = self._cycle(self.RUNNING)
+        show.assert_not_called()
+
+    def test_lock_limits_checks_to_every_30_seconds(self):
+        self.assertEqual(LOCK_EXPIRE_SHORT, 30)
+
+    def test_only_a_real_rename_reaches_galaxy(self):
+        with patch('bioblend.galaxy.histories.HistoryClient.update_history') as put:
+            w = self._history()
+            put.assert_not_called()
+
+            w = WorkspaceHistory.objects.get(history='hist1')
+            w.email = 'a@example.org'
+            w.save()
+            put.assert_not_called()
+
+            w.name = 'Renamed'
+            w.save()
+            put.assert_called_once_with(history_id='hist1', name='Renamed')
+
+            w.save()
+            put.assert_called_once()
+
+    def test_page_view_only_queues_monitoring_for_a_running_history(self):
+        self._history('running')
+        self._history('finished', finished=True)
+        self._history('unmonitored', monitored=False)
+        with patch('workspace.views.updateworkspacestatus.delay') as delay, \
+             patch('bioblend.galaxy.histories.HistoryClient.show_dataset_provenance',
+                   return_value={'tool_id': 'mafft'}), \
+             patch('bioblend.galaxy.tools.ToolClient.show_tool',
+                   return_value={'name': 'MAFFT'}):
+            for history_id in ('running', 'finished', 'unmonitored'):
+                self.client.get(reverse('history_content_refresh',
+                                        kwargs={'history_id': history_id}))
+        delay.assert_called_once_with('running')
+
+    def test_client_polling_stops_for_an_unmonitored_history(self):
+        self._history('unmonitored', monitored=False)
+        self._history('running')
+        with patch('workspace.views.updateworkspacestatus.delay'), \
+             patch('bioblend.galaxy.histories.HistoryClient.show_dataset_provenance',
+                   return_value={'tool_id': 'mafft'}), \
+             patch('bioblend.galaxy.tools.ToolClient.show_tool',
+                   return_value={'name': 'MAFFT'}):
+            unmonitored = self.client.get(reverse(
+                'history_content_refresh', kwargs={'history_id': 'unmonitored'}))
+            running = self.client.get(reverse(
+                'history_content_refresh', kwargs={'history_id': 'running'}))
+        stop = 'clearInterval(window.historyRefreshTimer)'
+        self.assertContains(unmonitored, stop)
+        self.assertNotContains(running, stop)
+
+    def test_outage_pauses_monitoring_for_every_history(self):
+        self._history('hist1')
+        self._history('hist2')
+        with patch('bioblend.galaxy.histories.HistoryClient.show_history',
+                   side_effect=ConnectionError(
+                       "GET: invalid JSON : b'<html>'", status_code=200)):
+            updateworkspacestatus('hist1')
+        self.assertTrue(galaxy_polling_paused())
+
+        show, _ = self._cycle(self.RUNNING, 'hist2')
+        show.assert_not_called()
+        with patch('workspace.tasks.updateworkspacestatus.delay') as delay:
+            launchmonitorworkspaces()
+        delay.assert_not_called()
+
+    def test_a_real_galaxy_4xx_does_not_pause_monitoring(self):
+        self._history()
+        with patch('bioblend.galaxy.histories.HistoryClient.show_history',
+                   side_effect=ConnectionError(
+                       "GET: error 403: b'Access denied'", status_code=403)):
+            updateworkspacestatus('hist1')
+        self.assertFalse(galaxy_polling_paused())
+
+    def test_two_outage_failures_stop_the_poll_but_keep_cached_datasets(self):
+        gi = self._gi()
+        gi.histories.show_dataset_provenance.return_value = {'tool_id': 'mafft'}
+        resolve_dataset_tools(gi, self.server, 'hist1', ['d1'])
+
+        gi.histories.show_dataset_provenance.reset_mock()
+        gi.histories.show_dataset_provenance.side_effect = ConnectionError('down')
+        dataset_tool_ids, _ = resolve_dataset_tools(
+            gi, self.server, 'hist1', ['d2', 'd3', 'd4', 'd5', 'd1'])
+
+        self.assertEqual(gi.histories.show_dataset_provenance.call_count, 2)
+        self.assertEqual(dataset_tool_ids, {'d1': 'mafft'})
+        self.assertTrue(galaxy_polling_paused())
+
+    def test_one_failing_dataset_does_not_block_the_others(self):
+        gi = self._gi()
+        gi.histories.show_dataset_provenance.side_effect = [
+            ConnectionError('one bad dataset'), {'tool_id': 'mafft'},
+            ConnectionError('another'), {'tool_id': 'mafft'}]
+        dataset_tool_ids, _ = resolve_dataset_tools(
+            gi, self.server, 'hist1', ['d1', 'd2', 'd3', 'd4'])
+        self.assertEqual(dataset_tool_ids, {'d2': 'mafft', 'd4': 'mafft'})
+        self.assertFalse(galaxy_polling_paused())
+
+    def test_4xx_answers_never_stop_the_poll(self):
+        gi = self._gi()
+        gi.histories.show_dataset_provenance.side_effect = [
+            ConnectionError('gone', status_code=404),
+            ConnectionError('gone', status_code=404),
+            ConnectionError('gone', status_code=404),
+            {'tool_id': 'mafft'}]
+        dataset_tool_ids, _ = resolve_dataset_tools(
+            gi, self.server, 'hist1', ['d1', 'd2', 'd3', 'd4'])
+        self.assertEqual(dataset_tool_ids, {'d4': 'mafft'})
+        self.assertFalse(galaxy_polling_paused())
+
+    def test_paused_polling_makes_no_provenance_calls(self):
+        pause_galaxy_polling()
+        gi = self._gi()
+        dataset_tool_ids, _ = resolve_dataset_tools(
+            gi, self.server, 'hist1', ['d1'])
+        self.assertEqual(dataset_tool_ids, {})
+        gi.histories.show_dataset_provenance.assert_not_called()

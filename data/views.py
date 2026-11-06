@@ -332,7 +332,7 @@ def remove_file_from_session(request, file_id):
     data = gi.datasets.show_dataset(dataset_id=file_id)
     if isinstance(data, dict):
         if not request.session.get('files'):
-            request.session.files={}
+            request.session['files'] = {}
         fdict = request.session['files']
         if file_id in fdict:
             del fdict[file_id]

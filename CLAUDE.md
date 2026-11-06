@@ -76,6 +76,7 @@ directory to tell you anything, and always run `makemigrations` before
   `GalaxyUser` (per-Django-user Galaxy API key, with an `anonymous=True` flag
   marking the shared key used for anonymous visitors). `galaxylib.py` wraps
   `bioblend.galaxy.GalaxyInstance`, adding Django-cache-backed GET caching
+  (tool and workflow definitions only - see `is_cacheable_url`)
   and a `GalaxyInstanceAnonymous` variant that authenticates via a Galaxy
   session cookie instead of an API key (for anonymous users).
 - **`tools`** — mirrors Galaxy's tool definitions locally (`Tool`,
@@ -433,9 +434,9 @@ run.
 shows a horizontal chain of colored boxes above the existing dataset
 table - one box per tool step, green/blue/gray/red for
 finished/running/pending/error. Feasible cheaply because the data was
-already there: `object.history_content` (fetched fresh on every page
-load by `WorkspaceHistoryObjectMixin.get_object()`/
-`updateworkspacestatus`) already carries each Galaxy dataset's real-time
+already there: `object.history_content` (kept up to date by
+`updateworkspacestatus`, which `WorkspaceHistoryObjectMixin.get_object()`
+queues for a run still in progress) already carries each Galaxy dataset's real-time
 `state`, and `WorkflowGalaxyFactory` chains tools by matching EDAM
 formats step-to-step, so these workflows are strictly linear (no
 branches) - a straight left-to-right chain is an accurate
@@ -1714,7 +1715,7 @@ the fix isn't to route around Galaxy, just to fail predictably with a
 clear message instead of Django's generic 500.
 
 `workflows/views/generic.py` now defines `GALAXY_UNREACHABLE_EXCEPTIONS`
-(`bioblend.galaxy.client.ConnectionError` + `requests.exceptions.
+(since moved to `galaxy/outage.py`; `bioblend.galaxy.client.ConnectionError` + `requests.exceptions.
 RequestException` - the same broadened pair already used throughout
 `workspace/views.py`, see the "pod restart" section above for why
 `ConnectionError` alone isn't enough - a `ReadTimeout` from
@@ -1732,7 +1733,8 @@ existing `super().get(...)`/`self.get_context_data(...)` call in a
 helper - no other behavior changed.
 
 **Deliberately not extended to every other Galaxy call site in this
-app** (the workflow-maker form, rerun, the A La Carte POST path, actual
+app, a decision since superseded by `GalaxyUnavailableMiddleware` - see
+"Worker pool saturation" below** (the workflow-maker form, rerun, the A La Carte POST path, actual
 job submission) - those are either POST-triggered (a user actively
 submitting work already expects some risk of failure, a materially
 different situation from just browsing a list) or weren't part of the
@@ -3209,7 +3211,8 @@ caught because nothing exercised that path before real accounts
 existed. `connection_galaxy` now always looks up the one
 `GalaxyUser(anonymous=True)` row for the current Galaxy server,
 regardless of who's logged in. `WorkspaceHistory.get_galaxy_user()`
-(called by `rename()` on every `save()`) mirrors this: prefers a
+(called by `rename()`, which `save()` now only calls when the name
+changes) mirrors this: prefers a
 personal `GalaxyUser` row if one happens to exist (backwards
 compatible with any pre-existing one) *and has a real `api_key`* -
 found live against the real local dev DB, which still had leftover
@@ -3222,7 +3225,10 @@ pre-existing no-op behavior for anonymous visitors exactly (the
 previous version had no `else` branch here at all) - changing that as a
 side effect broke a good chunk of this file's own existing test
 fixtures, which create anonymous-session `WorkspaceHistory` rows
-without mocking `rename()`'s real Galaxy call.
+without mocking `rename()`'s real Galaxy call. That no-op only ever held
+for such fixtures: real anonymous histories get the shared anonymous user
+from `create_history()`, so they did rename - see "Cutting Galaxy load"
+below.
 
 **A real production incident from this exact change, caught live**: a
 real user (`flemoine`) created a local account and submitted a
@@ -4602,3 +4608,213 @@ investigation) dropped to **0**. This doesn't make the code fix
 unnecessary - the scheduled 00:00 UTC run will go back to running both
 tasks concurrently again on every future night until the fixed image is
 actually deployed.
+
+### Worker pool saturation: a pod restart from ordinary class-sized traffic, then a Galaxy outage
+
+Real production incident, 2026-11-06, diagnosed from the live pod's logs
+(`kubectl logs` plus `--previous`, the `/status` probe rhythm, and
+`WorkspaceHistory` rows for who was submitting). Reported as "problems due
+to high traffic", which turned out to be two unrelated events 22 minutes
+apart that looked like one, and traffic that wasn't actually high.
+
+**The overload.** From 09:47 UTC, 63 `automaker` runs arrived from two
+institutional networks, in a pattern that looks like classes. The number of
+histories being polled went from ~8 to ~40, and `/workspace/history/<id>/refresh`
+averaged ~9s instead of ~1s. Only about 100 requests a minute, but summing
+each request's own duration gave ~13 of the 16 slots busy (8 processes x 2
+threads), with peak minutes at ~950 of a possible 960 worker-seconds. That's
+the number that mattered, not requests per second, and it's only visible by
+adding up the `generated N bytes in M msecs` durations per minute. `/status`
+waits for those same slots, so its normal 10s rhythm broke up from 10:01
+(gaps up to 16s), even though each `/status` itself took under 0.5s once
+it finally ran - the time was all queueing. Liveness `timeoutSeconds: 3`
+x `failureThreshold: 3` then failed. The cluster's events had already
+expired, so the failed probe itself was never observed directly: it's
+inferred from that timing. **What's still unknown** is why `/refresh` got 9x
+slower - a slower Galaxy under load or the pod's single CPU core; these logs
+can't separate the two.
+
+**The restart was worse than it needed to be.** The log shows `...brutally
+killing workers...` / `binary reloading uWSGI...` at 10:12:11, then the
+container's exit (137, reason `Error`, **not** `OOMKilled` - easy to misread
+as a memory problem given the earlier incident) exactly 30s later. uWSGI's
+default treats SIGTERM as a brutal *reload*, not a stop: it re-execs itself
+in place, Kubernetes keeps waiting for an exit that never comes, then
+SIGKILLs at the grace period's end. Two outages per restart, and every
+rollout pays that same 30s wait. Fixed with `--die-on-term`.
+
+**Relaxing the liveness probe** (`timeoutSeconds: 5`, `failureThreshold:
+12`) was the deliberate alternative to adding a replica, since killing a
+saturated-but-alive process drops every in-flight request and the same load
+returns immediately. 12 x 10s lines up with uwsgi's 120s `--harakiri`: past
+that, any genuinely stuck worker has already been replaced, so a still-
+failing probe means something's really wrong. `readinessProbe` went to
+`timeoutSeconds: 5`, `failureThreshold: 6` for a related reason: with one
+replica, failing readiness empties the Service, so visitors get an ingress
+error rather than a slow page, and the pool gets little relief from it. It stays
+at 60s against liveness's 120s, so a pod that's really stuck stops receiving
+traffic before it's restarted.
+
+**Reducing the actual load.** `resolve_dataset_tools()` (see the step-chain
+section's `N` calls per poll) now caches per history: the tool that produced
+a dataset never changes once Galaxy reports it, so each dataset needs one
+provenance call ever rather than one per 10s poll. Caching any non-empty
+`tool_id`, not only finished datasets, is what actually helps a running
+workflow: its pending steps' datasets already exist from the moment of
+invocation (see the step-chain section). Unresolved or failed datasets aren't
+cached, so they retry on the next poll exactly as before. One cache key per
+history, not per dataset: Django's `DatabaseCache` default `MAX_ENTRIES` is
+300, then it culls a third of the table lowest `cache_key` first - 40
+histories x 11 datasets would have exceeded that on its own - and that
+default was raised to 10000 regardless, because `history_...` sorts before
+`https...`, so these keys would otherwise be evicted first by
+other cache writes, under load, exactly when they matter.
+
+**`galaxylib.get_request_cache` had been silently dead since the bioblend
+bump.** It looked entries up by a URL containing `?key=...` but stored them
+under `response.url`, which stopped containing the key once bioblend moved
+auth to an `x-api-key` header. Confirmed on prod: 0 of 93 cache rows contained
+`key=`. So nothing ever hit, and every web-side Galaxy GET paid a pointless DB
+write. Correcting only the key would have been a regression, not a fix, since
+that dead state is the only one this codebase has been verified against since
+the bump: dataset/job state in web views would go up to 300s stale (only
+Celery tasks set `nocache`), and worse, Galaxy's maintenance page (a 200) and
+error responses would be cached, so the site would keep showing an outage for
+5 minutes after Galaxy recovered. Caching is therefore default-deny
+(`is_cacheable_url`: tool and workflow definitions only, never `/build`,
+which depends on its history - nothing here calls `update_workflow`, so those
+definitions don't change in place), and only valid JSON 200s are stored
+(`is_cacheable_response`). The key is a hash of the request URL including the
+API key, so it isn't readable in the cache table. Note `cached is not None`:
+a `requests.Response` with an error status is falsy.
+
+**`remove_file_from_session` 500'd with `KeyError: 'files'`** (15 times that
+morning) whenever the session had no files: `request.session.files = {}` set
+a plain attribute rather than the session key. Nested session mutations like
+the `del fdict[file_id]` right after it do persist here, but only because
+`connection_galaxy` assigns `request.session['galaxy_server']` on every
+request, which marks the session modified.
+
+**The Galaxy outage.** From 10:34, `galaxy.pasteur.fr` served its maintenance
+page, and ~220 requests 500'd. `GalaxyUnavailableMiddleware`
+(`NGPhylogeny_fr/middleware.py`) now handles this everywhere through
+`process_exception`, rather than the per-view try/except of "Workflow
+list/form pages 500'd when Galaxy itself is unreachable" - that section's
+deliberate decision not to cover POST paths and data views is superseded,
+since this incident showed they're where the errors actually land
+(`/data/displayraw`, `POST /workflows/alacarte`, `/data/export_to_itol`). The
+existing per-view handlers are left in place, harmless.
+
+The real responses weren't the 503 that older section's tests modelled: the
+proxy answered **200 with an HTML body** (146 errors, "invalid JSON") or a
+**302** to the maintenance page on POST (77), so filtering on "is this a 5xx"
+would have missed nearly all of it. `is_galaxy_outage()` instead excludes
+only 4xx: a real answer from Galaxy (the 8 `403 Access denied` here, a stale
+dataset id) still surfaces as a normal 500, rather than being misreported as
+"try again in a few minutes" and vanishing from error logs. It's a judgment
+call that a non-JSON 200 means an outage - nothing else in Galaxy's JSON API
+is expected to produce one.
+
+Regression tests: `workspace.tests.ResolveDatasetToolsTest` (a second poll
+makes zero Galaxy calls; only a new dataset is fetched; a failed or
+not-yet-assigned dataset retries; per-history isolation) and
+`workflows.tests.GalaxyUnavailableTest` (the real 200/302 shapes, a
+`ReadTimeout`, and a 403 still raising), `galaxy.tests.GalaxyGetRequestCacheTest`
+and `data.tests.RemoveFileFromSessionTest`. Confirmed these catch the bugs by
+disabling the fixes and re-running them - they fail, then pass again once
+restored. `--die-on-term` and the probe values
+have no test: they're only exercised by a real cluster.
+
+### Cutting Galaxy load: a hidden PUT on every save, and backing off during outages
+
+Follow-up to "Worker pool saturation" above, once the per-poll provenance
+calls were cached: what's left of the polling chain, measured by running the
+real task/views against a test database with bioblend's client methods
+counted (not estimated from reading the code). One running history with a page
+open cost **24 Galaxy calls a minute**: 2 GET + 2 PUT per cycle, every ~10s.
+It's now about 2 a minute, or 1 with no page open.
+
+**The PUT was the surprise.** `WorkspaceHistory.save()` called `rename()`
+unconditionally, and `updateworkspacestatus` saves twice per cycle, so every
+running history sent Galaxy two writes per cycle for a name that hadn't
+changed. `get_galaxy_user()`'s docstring claimed this no-ops for anonymous
+visitors because `self.user` would be `None` - it isn't: `create_history()`
+assigns them the shared anonymous user (0 of 4,173 prod rows from one week
+had a `NULL` `user_id`). So the comment had been wrong for as long as that
+assignment existed, for every history, and it also fired a pointless PUT on
+histories `deleteoldgalaxyhistory` had just purged. `save()` now only renames
+when `name` differs from what was loaded (`_galaxy_name`, set in `__init__`
+via `__dict__`, so a deferred field can't trigger a query mid-init); a new row
+needs none, since `create_history()` names it after what Galaxy just created.
+
+**Each cycle now reads contents only.** `show_history(id)` was fetched every
+cycle but nothing depended on it: finish detection only reads contents, and
+`history_info` is only read for the id, the name, and `create_time`/
+`update_time` in `workspace/rocrate.py`. Before dropping it, the concern that
+contents might not list every step was checked against real data rather than
+assumed: `history_info_json` stores Galaxy's own `state_ids` (every dataset id
+per state), so comparing it with the contents stored by the same cycle across
+the 3,000 most recent prod runs gave 2,999 identical sets, 0 datasets missing
+from `state_ids`, and one run with 3 ids only in `state_ids` - consistent with
+it being fetched a moment after contents, while new datasets were appearing.
+Unfinished runs' contents did show pending steps (`new`/`queued`). Metadata is
+still fetched by `initializeworkspacejob` and once when a run finishes, for
+`update_time`, *before* `finished` is saved so a failure there retries.
+`update_time` from a mid-run row is now only as fresh as `initializeworkspacejob`,
+which nothing reads until the run has finished.
+
+**Page views no longer cause pointless monitoring.** `get_object()` queued
+`updateworkspacestatus` for every history viewed, finished or not (and before
+even checking the id exists), and the task made both Galaxy calls before
+discovering that `w.monitored and not w.finished` meant it would discard the
+result. The task now checks the database first, and `get_object()` only queues
+for a run that's actually going. The re-fetch of `w` after the Galaxy call is
+deliberately kept, rather than reusing a row loaded before it: the saves that
+follow write every field, so a stale `w` would overwrite an email or name
+changed during a call that can last up to `GALAXY_REQUEST_TIMEOUT`.
+An unmonitored history (72 in 14 days - an upload with no run, a failed
+submission) also kept its page polling forever, since `finished` could never
+become true; both polling checks in the templates now stop for those as well.
+
+**`LOCK_EXPIRE_SHORT` is 30s, not 9.** The lock is never released on purpose
+(`#release_lock()` is commented out in the task), which makes it a per-history
+rate limit: a page's own 10s polling only ever reads the database, so Galaxy
+sees at most one check per 30s however many tabs are open. The visible cost is
+that status can lag by up to about 40s (30s lock plus the next 10s poll tick).
+
+**Backing off during an outage** (`galaxy/outage.py`).
+`GALAXY_UNREACHABLE_EXCEPTIONS`/`is_galaxy_outage` moved here from
+`workflows/views/generic.py`, because `workspace/views.py` now needs them and
+`generic.py` imports `workspace.views`. Two separate mechanisms:
+- A 60s pause of *background* polling (`pause_galaxy_polling()`), set when a
+  monitoring cycle hits an outage or a poll hits repeated ones: no monitoring
+  tasks get queued and no uncached provenance is fetched. Anything a visitor
+  explicitly asks for still goes through. Doing nothing here meant 2,008
+  monitoring tasks in 82 minutes of this morning's maintenance window, all
+  bound to fail, and on a Galaxy that's merely struggling rather than cleanly
+  down, retrying at full rate is the worst possible behaviour.
+  `checkblastruns` deliberately ignores this: BLAST can use a different Galaxy
+  server (`settings.BLASTS`), so this pause says nothing about it.
+- `resolve_dataset_tools` stops calling Galaxy for the rest of a poll after
+  `MAX_CONSECUTIVE_GALAXY_FAILURES` (2) outage-shaped failures in a row: each
+  can hold a request slot for 30s, so 11 datasets could take over 5 minutes,
+  past uwsgi's 120s harakiri. Not on the first failure, and 4xx never counts:
+  otherwise one dataset that permanently errors, sitting early in the list,
+  would stop every dataset after it from ever resolving, and pause polling
+  site-wide on every poll. Datasets already cached still resolve regardless.
+
+Test coverage: `workspace.tests.GalaxyLoadTest`, which asserts exact bioblend
+calls per cycle/page view rather than behaviour alone. Each of the five
+changes was individually reverted to confirm a test fails. The two
+`galaxy.tests.AccountPageOwnHistoriesTest` shared-key tests used row creation
+to trigger `rename()`, so they now perform a real rename instead. Not verified
+against a live Galaxy: `galaxy.pasteur.fr` was in maintenance throughout.
+
+Candidates identified but not done: pausing polling in hidden tabs and slowing
+it with run age; browser cache headers for finished datasets, and fewer repeat
+`show_dataset` calls in `display_msa`/`display_raw` (3 calls + a download per
+view); not duplicating the workflow per OneClick run (which needs a guard
+first: `deleteoldgalaxyhistory` deletes a history's linked workflow, so without
+one it would delete the *base* workflow from Galaxy); and caching A La Carte's
+`/build` per tool to avoid a temporary history per build, if its result turns
+out not to depend on the history.

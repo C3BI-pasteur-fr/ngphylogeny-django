@@ -131,28 +131,18 @@ class WorkspaceHistory(models.Model):
 
     def get_galaxy_user(self):
         """
-        Every authenticated visitor now authenticates to Galaxy through
-        the same single, shared key regardless of which NGPhylogeny
-        account owns this history (see galaxy.decorator.
-        connection_galaxy) - nothing creates a personal, per-user
-        GalaxyUser row anymore, so an authenticated owner's own row
-        almost never exists. Falls back to the shared anonymous
-        GalaxyUser instead of raising GalaxyUser.DoesNotExist (a plain
-        .get() used to do exactly that) - rename() below calls this on
-        every single save(), so that used to mean every save() of a
-        history owned by a real account would crash outright once this
-        fell back to the shared key elsewhere. A personal row is still
-        preferred first if one happens to exist (e.g. from before this
-        change), for backwards compatibility.
+        Every visitor authenticates to Galaxy through the same single,
+        shared key regardless of which NGPhylogeny account owns this
+        history (see galaxy.decorator.connection_galaxy) - nothing
+        creates a personal, per-user GalaxyUser row anymore, so an
+        owner's own row almost never exists. Falls back to the shared
+        anonymous GalaxyUser instead of raising GalaxyUser.DoesNotExist.
+        A personal row is still preferred first if one happens to exist
+        (e.g. from before this change), for backwards compatibility.
 
-        Deliberately still returns None (no fallback at all) for a
-        history with no self.user - i.e. a session-only, not-logged-in
-        submission - preserving this method's pre-existing behavior for
-        that case exactly (the previous version had no else branch
-        here at all, so rename() below already silently no-ops for
-        every anonymous-visitor history and always has; that's
-        unrelated to the shared-key change and not something to alter
-        as a side effect of it).
+        Returns None for a history with no self.user - in practice never
+        the case for a real run: create_history() assigns the shared
+        anonymous user to not-logged-in visitors.
 
         Only prefers a personal row when it actually has an api_key -
         caught live against the real local dev DB: it still had two
@@ -183,10 +173,21 @@ class WorkspaceHistory(models.Model):
             gi.histories.update_history(history_id=self.history,
                                         name=self.name)
 
+    def __init__(self, *args, **kwargs):
+        super(WorkspaceHistory, self).__init__(*args, **kwargs)
+        # __dict__, not self.name: reading a deferred field here would
+        # trigger a query from inside __init__.
+        self._galaxy_name = self.__dict__.get('name')
+
     def save(self, *args, **kwargs):
-        if self.name:
+        # Only an actual rename: this used to send Galaxy a PUT on every
+        # save, twice per monitoring cycle for every running history (see
+        # CLAUDE.md's "Cutting Galaxy load" section). A new row needs none,
+        # create_history() names it after the history Galaxy just made.
+        if self.pk and self.name and self.name != self._galaxy_name:
             self.rename()
         super(WorkspaceHistory, self).save(*args, **kwargs)
+        self._galaxy_name = self.name
 
     class Meta:
         verbose_name_plural = "Workspace histories"

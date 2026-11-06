@@ -1,6 +1,9 @@
 from django.conf import settings
 from django.template.response import TemplateResponse
 
+from galaxy.outage import is_galaxy_outage
+from workflows.views.generic import galaxy_unavailable_response
+
 
 class MaintenanceModeMiddleware:
     """
@@ -52,3 +55,27 @@ class MaintenanceModeMiddleware:
             return TemplateResponse(
                 request, 'maintenance.html', status=503).render()
         return self.get_response(request)
+
+
+class GalaxyUnavailableMiddleware:
+    """
+    Turns a Galaxy outage raised by any view into the friendly 503 page
+    instead of a 500 - one place rather than a try/except around each of
+    the many views that call Galaxy. Only outages, see is_galaxy_outage:
+    anything else still propagates to Django's normal 500 handling.
+
+    Must stay last in MIDDLEWARE (settings/base.py): process_exception
+    runs innermost-first, and the page needs the session/auth/messages
+    middleware to have already run for base.html to render.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        return self.get_response(request)
+
+    def process_exception(self, request, exception):
+        if is_galaxy_outage(exception):
+            return galaxy_unavailable_response(request)
+        return None
