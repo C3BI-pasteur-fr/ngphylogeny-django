@@ -5000,4 +5000,7 @@ isn't what broke goalign (above), but it made the failures look like a race
 for a while. Runs were redone sequentially, and every single tool was run
 once directly through the Galaxy API (`gi.tools.run_tool`, a separate
 "warmup single tools" history) so the first real visitors don't wait
-several minutes per tool for conda.
+several minutes per tool for conda. All passed: the 4 OneClick workflows,
+and Clustal Omega, MUSCLE, Gblocks, Noisy, trimAl, Fasta to Phylip, Booster
+and MrBayes (15s to 2 minutes each once dependencies were in place). TNT
+was skipped: no package or image exists for it (licence).
