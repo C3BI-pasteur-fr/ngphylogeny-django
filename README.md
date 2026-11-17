@@ -163,6 +163,10 @@ production-like behavior, but then something needs to serve `STATIC_ROOT`
 for every request instead of routing normally (see
 `NGPhylogeny_fr/middleware.py`). Off by default; safe to flip on/off
 without a rebuild since it's just an env var.
+`NGPHYLO_MAINTENANCE_ALTERNATE_URL` (optional) adds a box on that page
+pointing visitors at a temporary instance (on Kubernetes, the
+`MAINTENANCE_ALTERNATE_URL` GitLab CI/CD variable). Left empty, the page
+shows only its generic message.
 
 `NGPHYLO_PASTEUR_BLAST_ENABLED=True` activates the Institut Pasteur Galaxy
 BLAST server option and deactivates NCBI's public one at the same time -

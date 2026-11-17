@@ -212,6 +212,9 @@ build:
 #     the next deploy - re-run/retry the deploy job to flip it either way,
 #     changing the GitLab CI/CD variable alone doesn't affect an
 #     already-running pod.
+#   - MAINTENANCE_ALTERNATE_URL (plain, optional): URL of a temporary
+#     instance, shown on the maintenance page while MAINTENANCE is on.
+#     Left unset, the page shows only its generic message.
 #   - PASTEUR_BLAST_ENABLED (plain, optional): "true" activates the
 #     Pasteur Galaxy BLAST server option (settings.BLASTS['pasteur']
 #     ['activated'], off by default) and deactivates NCBI's public server

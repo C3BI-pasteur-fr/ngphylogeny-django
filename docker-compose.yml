@@ -44,6 +44,7 @@ x-django-env: &django-env
   # "True" serves templates/maintenance.html (503) for every request
   # instead of routing normally - see NGPhylogeny_fr/middleware.py.
   NGPHYLO_MAINTENANCE_MODE: "${NGPHYLO_MAINTENANCE_MODE:-False}"
+  NGPHYLO_MAINTENANCE_ALTERNATE_URL: "${NGPHYLO_MAINTENANCE_ALTERNATE_URL:-}"
   # "True" activates the Pasteur Galaxy BLAST server option and
   # deactivates NCBI's public one at the same time (mutually exclusive,
   # not independently toggleable) - see settings/base.py's BLASTS dict.

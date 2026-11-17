@@ -30,6 +30,14 @@
       NGPhylogeny.fr is currently under maintenance.<br/><br/>
 
       We'll be back shortly. Thank you for your patience.<br/>
+
+      {% if alternate_url %}
+      <div class="alert alert-info" style="max-width:640px;margin:20px auto;font-size:13pt;">
+        In the meantime, a temporary instance of NGPhylogeny.fr is available at<br/>
+        <a href="{{ alternate_url }}"><strong>{{ alternate_url }}</strong></a><br/>
+        <small>Analyses run there are separate from this site: your account and previous analyses are not available on it.</small>
+      </div>
+      {% endif %}
       
       <img src="{% static 'images/maintenance.png' %}"/>
     </div>

@@ -262,6 +262,12 @@ DEFAULT_FROM_EMAIL = os.environ.get(
 NGPHYLO_MAINTENANCE_MODE = (
     os.environ.get('NGPHYLO_MAINTENANCE_MODE', '').lower() == 'true')
 
+# Optional: a URL shown on the maintenance page pointing visitors at a
+# temporary instance while this one is down (e.g. while Galaxy is). Empty
+# (the default) shows the plain generic message only.
+NGPHYLO_MAINTENANCE_ALTERNATE_URL = os.environ.get(
+    'NGPHYLO_MAINTENANCE_ALTERNATE_URL', '')
+
 # "true" (case-insensitive, same reasoning as NGPHYLO_MAINTENANCE_MODE
 # above) re-enables public account sign-up (account.views.
 # AccountCreateView) - off by default for now. See

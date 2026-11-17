@@ -1229,6 +1229,14 @@ every other CI/CD variable here - re-run/retry the deploy job to flip it
 either way, changing the GitLab variable alone doesn't touch an
 already-running pod.
 
+The message stays generic, and anything incident-specific goes through an
+optional setting instead: `NGPHYLO_MAINTENANCE_ALTERNATE_URL` (the
+`MAINTENANCE_ALTERNATE_URL` GitLab variable, `web` only) adds a box on the
+page linking to a temporary instance, and nothing when empty. Added on
+2026-11-17 while galaxy.pasteur.fr was down: a standalone NGPhylogeny +
+Galaxy (`docker-compose.standalone.yml`) was brought up on an IFB Cloud VM
+as a temporary production instance and prod pointed at it.
+
 **Pasteur BLAST activation**: `settings.BLASTS['pasteur']['activated']`
 (gates the Pasteur Galaxy BLAST server option throughout `blast/models.py`
 - 6 separate checks) is env-var driven the same way, via

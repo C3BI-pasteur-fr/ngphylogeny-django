@@ -217,6 +217,10 @@ spec:
             # maintenance mode stays off.
             - name: NGPHYLO_MAINTENANCE_MODE
               value: "${MAINTENANCE}"
+            # Optional URL of a temporary instance, shown on the maintenance
+            # page while maintenance mode is on. Empty = no such message.
+            - name: NGPHYLO_MAINTENANCE_ALTERNATE_URL
+              value: "${MAINTENANCE_ALTERNATE_URL}"
             # Also set on celery-worker (launch_pasteur_blast/
             # checkblastruns in blast/tasks.py read this too) - not on
             # celery-beat/init, which never touch settings.BLASTS.

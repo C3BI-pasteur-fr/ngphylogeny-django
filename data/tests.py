@@ -460,6 +460,21 @@ class MaintenanceModeTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateNotUsed(response, 'maintenance.html')
 
+    @override_settings(NGPHYLO_MAINTENANCE_MODE=True,
+                       NGPHYLO_MAINTENANCE_ALTERNATE_URL='https://temp.example.org')
+    def test_alternate_url_is_shown_when_set(self):
+        response = self.client.get('/')
+        self.assertEqual(response.status_code, 503)
+        self.assertContains(response, 'href="https://temp.example.org"',
+                            status_code=503)
+
+    @override_settings(NGPHYLO_MAINTENANCE_MODE=True,
+                       NGPHYLO_MAINTENANCE_ALTERNATE_URL='')
+    def test_no_alternate_message_by_default(self):
+        response = self.client.get('/')
+        self.assertNotContains(response, 'temporary instance',
+                               status_code=503)
+
     @override_settings(NGPHYLO_MAINTENANCE_MODE=False)
     def test_maintenance_mode_off_routes_normally(self):
         response = self.client.get('/')

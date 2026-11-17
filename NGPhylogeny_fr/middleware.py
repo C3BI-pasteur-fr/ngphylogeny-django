@@ -53,7 +53,9 @@ class MaintenanceModeMiddleware:
             # assertTemplateUsed in tests before ever reaching a real
             # deployment with MAINTENANCE=true.
             return TemplateResponse(
-                request, 'maintenance.html', status=503).render()
+                request, 'maintenance.html',
+                {'alternate_url': settings.NGPHYLO_MAINTENANCE_ALTERNATE_URL},
+                status=503).render()
         return self.get_response(request)
 
 
