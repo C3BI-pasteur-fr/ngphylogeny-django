@@ -4936,3 +4936,68 @@ Regression tests: `tools.tests.ToolFormNumericBoundsTest`,
 `account.tests`' login stylesheet test (`css/login.css` never existed, and
 `STATIC_URL` isn't in the template context). Each fix was removed in turn to
 confirm a test fails.
+
+### A standalone instance as temporary production while galaxy.pasteur.fr was down
+
+On 2026-11-17 galaxy.pasteur.fr went down, and with it everything
+NGPhylogeny.fr does (it runs nothing itself - see "What this is"). Prod was
+put in maintenance mode, and `docker-compose.standalone.yml` (NGPhylogeny +
+its own Galaxy) was brought up on an IFB Cloud VM as a temporary production
+instance, at `https://cc-ifb-corecloud-vm344.in2p3.fr` (`134.158.249.89`).
+The maintenance page links to it through `NGPHYLO_MAINTENANCE_ALTERNATE_URL`
+(see "Maintenance mode" above). README.md's "Standalone as a temporary
+production instance" has the overlay and steps.
+
+**The standalone file is a test stack, not a production one, and the overlay
+is what changes that.** As written it runs `settings.local` (`DEBUG=True`,
+tracebacks shown to visitors), Django's `runserver`, the public
+`admin`/`password` and fixed Galaxy keys as defaults, and publishes Django
+and Galaxy on all interfaces. It also never passes `NGPHYLO_SECRET_KEY`, so
+`settings/base.py`'s committed fallback key would be used. The overlay sets
+`DJANGO_SETTINGS_MODULE` directly (the `NGPHYLO_SETTINGS_MODULE` trap - see
+that section above), runs the same uwsgi options as `manifest.yaml`, binds
+`web`/`galaxy` to localhost, and puts Caddy in front for TLS.
+
+**Copied from prod, deliberately not:** email, retention and account
+settings were read straight from the running prod pods into the VM's `.env`,
+without passing through any log. Pasteur BLAST was turned off there, since
+it runs on the very Galaxy that was down; BLAST goes to NCBI instead.
+Accounts and histories were not copied: histories live in a Galaxy this
+instance can't reach, so the two instances are separate and the maintenance
+page says so.
+
+**A fresh tool import resets every size limit to unlimited.** `importtools`
+creates `Tool` rows with `max_nbseq`/`max_boot`/`max_length_x_nbseq` at `-1`.
+Prod's values were copied by tool name (versions differ between prod's
+toolshed tools and the standalone's local wrappers, names don't).
+
+**The first VM had port 443 closed, the second didn't.** On `134.214.213.103`
+Let's Encrypt failed with "Timeout during connect (likely firewall problem)"
+while `ufw` was inactive and iptables accepted everything: the block was the
+cloud's own security group, which can't be seen from inside the VM. Testing
+the new VM from outside first (`nc -vz <ip> 443`) separated "refused"
+(reachable, nothing listening yet - fine) from "timed out" (filtered).
+Port 80 is filtered on the second VM; Caddy gets its certificate over 443
+alone (TLS-ALPN-01), so only the http-to-https redirect is missing.
+
+**`goalign 0.3.0` is no longer on bioconda, which broke most tools on a
+fresh Galaxy** (fixed in `NGPhylogeny_fr_galaxytools`, commit `ec1f7a6`).
+Eight wrappers pinned it (FastME, FastTree, BMGE, Gblocks, Clustal Omega,
+MrBayes, TNT, Fasta to Phylip); PhyML pinned 0.3.1 and worked. With one
+version missing, Galaxy can't build the tool's mulled container and falls
+back to a versionless conda env (`__goalign@_uv_`). The conda bundled in
+`quay.io/bgruening/galaxy:latest` creates that env empty: `conda create
+--name __goalign@_uv_ 'goalign=*'` even *removed* goalign when it was
+installed by hand first. Galaxy then treats the empty env as installed, so
+every job of those tools failed with `goalign: command not found`, every
+time. Reinstalling the env by hand doesn't help, since Galaxy recreates it
+empty on the next job; pinning `0.3.1` does. Not explained: the same
+FastME run succeeded on the first VM, with the same image and wrappers.
+
+**Warm up tools one at a time.** The four OneClick workflows were first run
+simultaneously, and their dependency installs ran concurrently too. That
+isn't what broke goalign (above), but it made the failures look like a race
+for a while. Runs were redone sequentially, and every single tool was run
+once directly through the Galaxy API (`gi.tools.run_tool`, a separate
+"warmup single tools" history) so the first real visitors don't wait
+several minutes per tool for conda.

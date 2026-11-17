@@ -279,6 +279,88 @@ Re-running `docker compose -f docker-compose.standalone.yml up -d` (without
 already exist by name, and NGPhylogeny's own `init` is idempotent for the
 same reasons the regular `docker-compose.yml` deployment is (see CLAUDE.md).
 
+### Standalone as a temporary production instance
+
+The standalone stack can serve real traffic while the production Galaxy is
+down (done on 2026-11-17, see CLAUDE.md). It needs an overlay next to
+`docker-compose.standalone.yml` on the server, plus a `.env` and a
+`Caddyfile`. Only ports 443 (and 80, if open) are public; Django and Galaxy
+listen on localhost only.
+
+`docker-compose.prod.yml`:
+
+```yaml
+x-prod-env: &prod-env
+  DJANGO_SETTINGS_MODULE: NGPhylogeny_fr.settings.prod
+  NGPHYLO_SECRET_KEY: "${NGPHYLO_SECRET_KEY}"
+  NGPHYLO_HTTPS_HOST: "${NGPHYLO_HTTPS_HOST}"
+
+services:
+  db:            {restart: unless-stopped}
+  redis:         {restart: unless-stopped}
+  galaxy:
+    restart: unless-stopped
+    ports: !override
+      - "127.0.0.1:8080:80"
+  init:          {environment: *prod-env}
+  celery-worker: {environment: *prod-env, restart: unless-stopped}
+  celery-beat:   {environment: *prod-env, restart: unless-stopped}
+  web:
+    environment: *prod-env
+    restart: unless-stopped
+    command: ["uwsgi", "--http", ":8000", "--module", "NGPhylogeny_fr.wsgi", "--master",
+              "--processes", "8", "--threads", "2", "--harakiri", "120", "--die-on-term"]
+    ports: !override
+      - "127.0.0.1:8000:8000"
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [web]
+
+volumes:
+  caddy-data:
+  caddy-config:
+```
+
+`Caddyfile` (the host name must resolve to the server, for Let's Encrypt;
+port 443 alone is enough to get the certificate):
+
+```
+<hostname> {
+    request_body {
+        max_size 60MB
+    }
+    reverse_proxy web:8000
+}
+```
+
+`.env` holds random values for `NGPHYLO_ADMIN_PASSWORD`,
+`GALAXY_ADMIN_PASSWORD`, `GALAXY_ADMIN_KEY`, `GALAXY_BOOTSTRAP_KEY` and
+`NGPHYLO_SECRET_KEY`, plus `NGPHYLO_HTTPS_HOST=<hostname>`. The defaults in
+`docker-compose.standalone.yml` (`admin`/`password`, fixed keys) are for
+local testing only. Copy production's email, retention and account
+settings into it as well, and set `NGPHYLO_PASTEUR_BLAST_ENABLED=False`
+if the Pasteur Galaxy is the one that's down, so BLAST goes to NCBI.
+
+```
+docker compose -f docker-compose.standalone.yml -f docker-compose.prod.yml up -d --build
+```
+
+Then, before announcing it:
+
+- **Copy the tool size limits** (`max_nbseq`, `max_boot`,
+  `max_length_x_nbseq`) from production: a fresh tool import sets them all
+  to `-1`, unlimited.
+- **Warm up every tool, one at a time**: run each OneClick workflow and each
+  single tool once, sequentially. Galaxy installs each tool's dependencies on
+  first use, which takes several minutes, and simultaneous first runs can
+  leave a broken conda environment behind (see CLAUDE.md).
+
 ## Kubernetes (GitLab CI)
 
 `.gitlab-ci.yml`'s `build`/`deploy-dev`/`deploy-prod` stages build this
