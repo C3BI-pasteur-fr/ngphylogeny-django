@@ -86,6 +86,9 @@ services:
       - ${GALAXYTOOLS_DIR:-../NGPhylogeny_fr_galaxytools}/tools:/local_tools
       - ngphylo-standalone-galaxy-export:/export
       - ngphylo-standalone-galaxy-docker:/var/lib/docker
+      # Makes Galaxy reuse the tool images it builds instead of rebuilding
+      # them on every job - see that file's own comment.
+      - ${GALAXYTOOLS_DIR:-../NGPhylogeny_fr_galaxytools}/config/container_resolvers_conf.yml:/etc/galaxy/container_resolvers_conf.yml:ro
       - ngphylo-standalone-galaxy-data:/data
     environment:
       GALAXY_CONFIG_TOOL_CONFIG_FILE: "/etc/galaxy/tool_conf.xml,/local_tools/tool_conf.xml"

@@ -5004,3 +5004,26 @@ several minutes per tool for conda. All passed: the 4 OneClick workflows,
 and Clustal Omega, MUSCLE, Gblocks, Noisy, trimAl, Fasta to Phylip, Booster
 and MrBayes (15s to 2 minutes each once dependencies were in place). TNT
 was skipped: no package or image exists for it (licence).
+
+**The disk filled two days in, and what it left broken** (2026-11-19). The
+VM's 774G disk was 100% full: Galaxy's internal Docker held 12,910 stopped
+containers and 1,628 untagged images, because Galaxy rebuilt a tool's
+mulled image on every job and never reused the ones it had built. Its
+container resolver list only checks the `biocontainers` namespace for
+already-built images. `docker-compose.standalone.yml` now mounts
+`NGPhylogeny_fr_galaxytools/config/container_resolvers_conf.yml`, which
+adds a `cached_mulled` entry for the `local` namespace - see that repo's
+CLAUDE.md for the details, including the intermittent `command not found`
+job failures the same rebuilds caused. The standalone file has no
+`docker-prune` sidecar either, unlike the galaxytools compose file: the
+VM prunes from a host cron every 30 minutes instead.
+
+Freeing the disk didn't bring everything back. Two things stayed broken
+and left analyses on "Analysis is being initialized on the Galaxy server"
+for hours: the Celery worker container had crashed and Docker's restart
+had failed on the full disk, yet `docker ps` still showed it `Up`; and
+Slurm, inside the Galaxy container, had drained its only node
+(`SlurmdSpoolDir is full`), which stays drained until resumed by hand, so
+every job sat `queued`. After any disk-full incident, check `docker exec
+<container> true` for every container and `sinfo -R` inside Galaxy.
+IFB_CLOUD.md (untracked) has the commands.
