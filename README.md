@@ -360,6 +360,14 @@ Then, before announcing it:
   single tool once, sequentially. Galaxy installs each tool's dependencies on
   first use, which takes several minutes, and simultaneous first runs can
   leave a broken conda environment behind (see CLAUDE.md).
+- **Add a host cron to clean up Galaxy's internal Docker**: this stack has
+  no `docker-prune` sidecar, and every image build leaves its containers
+  behind. Every 30 minutes, e.g. in `/etc/cron.d/galaxy-container-prune`:
+  ```
+  */30 * * * * root docker exec ngphylo-standalone-galaxy sh -c "docker container prune -f --filter until=10m && docker image prune -f" >> /var/log/galaxy-container-prune.log 2>&1
+  ```
+  Never `image prune -a`: it would delete `local/phyml-sms-full` and
+  `local/noisy-full`, which are built on the server and can't be pulled.
 
 ## Kubernetes (GitLab CI)
 
